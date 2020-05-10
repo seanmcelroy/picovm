@@ -92,7 +92,7 @@ namespace agent_playground
                 case Agent.E_INVALID:
                     throw new Exception($"ERROR: Unknown bytecode!");
                 case 0:
-                    Console.WriteLine("Program terminated.");
+                    Console.WriteLine("\r\n\r\nProgram terminated.");
                     break;
             }
 

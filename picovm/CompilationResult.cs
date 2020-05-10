@@ -14,7 +14,7 @@ namespace agent_playground
 
         public byte[] textSegment;
 
-        public Dictionary<string, ushort> textLabelsOffsets;
+        public Dictionary<string, uint> textLabelsOffsets;
         public List<BytecodeTextSymbol> textSymbolReferenceOffsets;
 
         public byte[] dataSegment;

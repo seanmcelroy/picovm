@@ -137,7 +137,7 @@ namespace agent_playground
             }
             else
             {
-                foreach (var missing in ret.textSymbolReferenceOffsets.Where(tsr => !ret.dataSymbolOffsets.ContainsKey(tsr.name)))
+                foreach (var missing in ret.textSymbolReferenceOffsets.Where(tsr => !ret.dataSymbolOffsets.ContainsKey(tsr.name) && !ret.textLabelsOffsets.ContainsKey(tsr.name)))
                     ret.errors.Add(new CompilationError($"Symbol {missing.name} in program code is undefined by the data section", fileName));
                 if (ret.errors.Count > 0)
                     return ret;
@@ -150,7 +150,24 @@ namespace agent_playground
                 foreach (var ds in ret.dataSymbolOffsets)
                     ds.Value.dataSegmentOffset += (ushort)ret.dataSegmentBase;
 
-                foreach (var tsr in ret.textSymbolReferenceOffsets)
+                // Perform data replacements
+                foreach (var tsr in ret.textSymbolReferenceOffsets.Where(tsr => ret.textLabelsOffsets.ContainsKey(tsr.name)))
+                {
+                    var labelOffsetAddress = ret.textLabelsOffsets[tsr.name];
+                    var labelOffsetAddressBytes = BitConverter.GetBytes(labelOffsetAddress);
+                    if (labelOffsetAddressBytes.Length != tsr.referenceLength)
+                        throw new InvalidOperationException($"Address size reserved for symbol {tsr.name} is {tsr.referenceLength}, but needed {labelOffsetAddressBytes.Length}");
+
+                    for (var i = 0; i < 4; i++)
+                    {
+                        if (ret.textSegment[tsr.textSegmentReferenceOffset + i] != 0xEE)
+                            throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.name} which did not contain placeholder values!");
+                    }
+                    Array.Copy(labelOffsetAddressBytes, 0, ret.textSegment, tsr.textSegmentReferenceOffset, tsr.referenceLength);
+                }
+
+                // Perform data replacements
+                foreach (var tsr in ret.textSymbolReferenceOffsets.Where(tsr => ret.dataSymbolOffsets.ContainsKey(tsr.name)))
                 {
                     var dataSymbol = ret.dataSymbolOffsets[tsr.name];
                     var dataSymbolAddress = dataSymbol.dataSegmentOffset;
@@ -174,11 +191,22 @@ namespace agent_playground
                                         case 2:
                                             // 2 to 2, straight array copy.
                                             Array.Copy(ret.dataSegment, dataSymbolAddress - (int)ret.dataSegmentBase, ret.textSegment, tsr.textSegmentReferenceOffset, 2);
+                                            for (var i = 0; i < 2; i++)
+                                            {
+                                                if (ret.textSegment[tsr.textSegmentReferenceOffset + i] != 0xFF)
+                                                    throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.name} which did not contain placeholder values!");
+                                            }
                                             break;
                                         case 4:
                                             // 2 to 4 upsize
                                             var dataSymbolValue = BitConverter.ToUInt16(ret.dataSegment, (int)(dataSymbolAddress - ret.dataSegmentBase));
                                             var tsrValue = Convert.ToUInt32(dataSymbolValue);
+                                            // Validate we're overwriting the right place
+                                            for (var i = 0; i < 4; i++)
+                                            {
+                                                if (ret.textSegment[tsr.textSegmentReferenceOffset + i] != 0xFF)
+                                                    throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.name} which did not contain placeholder values!");
+                                            }
                                             Array.Copy(BitConverter.GetBytes(tsrValue), 0, ret.textSegment, tsr.textSegmentReferenceOffset, 4);
                                             break;
                                         default:
@@ -224,24 +252,33 @@ namespace agent_playground
         {
             if (operand.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
                 return uint.Parse(operand.Substring(2), System.Globalization.NumberStyles.HexNumber);
-            else
-                return uint.Parse(operand);
+
+            if (BytecodeCompiler.NUMERALS.Any(c => c == operand[0]) && operand.EndsWith("h", StringComparison.OrdinalIgnoreCase))
+                return uint.Parse(operand.Substring(0, operand.Length - 1), System.Globalization.NumberStyles.HexNumber);
+
+            return uint.Parse(operand);
         }
 
         private static ushort ParseUInt16Constant(string operand)
         {
             if (operand.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
                 return ushort.Parse(operand.Substring(2), System.Globalization.NumberStyles.HexNumber);
-            else
-                return ushort.Parse(operand);
+
+            if (BytecodeCompiler.NUMERALS.Any(c => c == operand[0]) && operand.EndsWith("h", StringComparison.OrdinalIgnoreCase))
+                return ushort.Parse(operand.Substring(0, operand.Length - 1), System.Globalization.NumberStyles.HexNumber);
+
+            return ushort.Parse(operand);
         }
 
         private static byte ParseByteConstant(string operand)
         {
             if (operand.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
                 return byte.Parse(operand.Substring(2), System.Globalization.NumberStyles.HexNumber);
-            else
-                return byte.Parse(operand);
+
+            if (BytecodeCompiler.NUMERALS.Any(c => c == operand[0]) && operand.EndsWith("h", StringComparison.OrdinalIgnoreCase))
+                return byte.Parse(operand.Substring(0, operand.Length - 1), System.Globalization.NumberStyles.HexNumber);
+
+            return byte.Parse(operand);
         }
 
         private CompileTextSectionResult CompileTextSectionLinesToBytecode(IEnumerable<string> programLines)
@@ -249,7 +286,7 @@ namespace agent_playground
             ushort offsetBytes = 0;
 
             var bytecode = new List<byte>();
-            var labelsOffsets = new Dictionary<string, ushort>();
+            var labelsOffsets = new Dictionary<string, uint>();
             var symbolReferenceOffsets = new List<BytecodeTextSymbol>();
 
             foreach (var programLine in programLines)
@@ -329,7 +366,7 @@ namespace agent_playground
                                             bytecode.Add((byte)Bytecode.MOV_REG_MEM);
                                             offsetBytes++;
 
-                                            var regDst = registers[dst];
+                                            var regDst = registers[dst.ToUpperInvariant()];
                                             bytecode.Add((byte)regDst);
                                             offsetBytes++;
 
@@ -360,7 +397,7 @@ namespace agent_playground
                                             bytecode.Add((byte)Bytecode.MOV_REG_CON);
                                             offsetBytes++;
 
-                                            var dstReg = registers[dst];
+                                            var dstReg = registers[dst.ToUpperInvariant()];
                                             bytecode.Add((byte)dstReg);
                                             offsetBytes++;
 
@@ -445,6 +482,38 @@ namespace agent_playground
                     var abc = Add(lineParts[lineParts.Length - 2], lineParts[lineParts.Length - 1]);
                     bytecode.AddRange(abc);
                     offsetBytes += (ushort)abc.Length;
+                }
+                else if (instruction == "AND")
+                {
+                    var abc = And(lineParts[lineParts.Length - 2], lineParts[lineParts.Length - 1]);
+                    bytecode.AddRange(abc);
+                    offsetBytes += (ushort)abc.Length;
+                }
+                else if (
+                    string.Compare("JZ", instruction, StringComparison.InvariantCulture) == 0 ||
+                    string.Compare("JMP", instruction, StringComparison.InvariantCulture) == 0)
+                {
+                    var operand = lineParts[lineParts.Length - 1];
+
+                    if (string.Compare("JZ", instruction, StringComparison.InvariantCulture) == 0)
+                        bytecode.Add((byte)Bytecode.JZ);
+                    else if (string.Compare("JMP", instruction, StringComparison.InvariantCulture) == 0)
+                        bytecode.Add((byte)Bytecode.JMP);
+                    offsetBytes++;
+
+                    var textSymbol = new BytecodeTextSymbol
+                    {
+                        name = operand,
+                        textSegmentInstructionOffset = (ushort)(offsetBytes - 1),
+                        textSegmentReferenceOffset = offsetBytes,
+                        referenceLength = 4
+                    };
+
+                    for (var i = 0; i < textSymbol.referenceLength; i++)
+                        bytecode.Add((byte)0xEE); // UNRESOLVED SYMBOL FOR LABEL
+
+                    symbolReferenceOffsets.Add(textSymbol);
+                    offsetBytes += textSymbol.referenceLength;
                 }
                 else
                     throw new Exception($"ERROR: Cannot compile: {line}");
@@ -692,6 +761,8 @@ namespace agent_playground
                 return ParameterType.Constant;
             if (operand.StartsWith("0x", StringComparison.OrdinalIgnoreCase) && ulong.TryParse(operand.Substring(2), System.Globalization.NumberStyles.HexNumber, System.Globalization.NumberFormatInfo.InvariantInfo, out ulong operandlh))
                 return ParameterType.Constant;
+            if (NUMERALS.Any(c => c == operand[0]) && operand.EndsWith("h", StringComparison.OrdinalIgnoreCase))
+                return ParameterType.Constant;
             if (System.Text.RegularExpressions.Regex.IsMatch(operand, @"\w[\w\d]+"))
                 return ParameterType.Variable;
             return ParameterType.Unknown;
@@ -706,15 +777,40 @@ namespace agent_playground
             {
                 case ParameterType.RegisterReference:
                     {
+                        var o1Reg = registers[operand1.ToUpperInvariant()];
                         switch (o2Type)
                         {
                             case ParameterType.Constant:
                                 {
-                                    var ret = new byte[6];
-                                    ret[0] = (byte)Bytecode.ADD_REG_CON;
-                                    ret[1] = (byte)registers[operand1];
-                                    Array.Copy(BitConverter.GetBytes(ParseUInt32Constant(operand2)), 0, ret, 2, 4);
-                                    return ret;
+                                    if (o1Reg == Register.EAX || o1Reg == Register.EBX || o1Reg == Register.ECX || o1Reg == Register.EDX)
+                                    {
+                                        var ret = new byte[6];
+                                        ret[0] = (byte)Bytecode.ADD_REG_CON;
+                                        ret[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                        Array.Copy(BitConverter.GetBytes(ParseUInt32Constant(operand2)), 0, ret, 2, 4);
+                                        return ret;
+                                    }
+                                    else if (o1Reg == Register.AX || o1Reg == Register.BX || o1Reg == Register.CX || o1Reg == Register.DX)
+                                    {
+                                        var ret = new byte[4];
+                                        ret[0] = (byte)Bytecode.ADD_REG_CON;
+                                        ret[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                        Array.Copy(BitConverter.GetBytes(ParseUInt16Constant(operand2)), 0, ret, 2, 2);
+                                        return ret;
+                                    }
+                                    else if (o1Reg == Register.AH || o1Reg == Register.AL
+                                        || o1Reg == Register.BH || o1Reg == Register.BL
+                                        || o1Reg == Register.CH || o1Reg == Register.CL
+                                        || o1Reg == Register.DH || o1Reg == Register.DL)
+                                    {
+                                        var ret = new byte[3];
+                                        ret[0] = (byte)Bytecode.ADD_REG_CON;
+                                        ret[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                        ret[2] = ParseByteConstant(operand2);
+                                        return ret;
+                                    }
+
+                                    throw new NotImplementedException();
                                 }
                         }
                     }
@@ -727,7 +823,7 @@ namespace agent_playground
                                 {
                                     var ret = new byte[6];
                                     ret[0] = (byte)Bytecode.ADD_MEM_CON;
-                                    ret[1] = (byte)registers[operand1.TrimStart('[').TrimEnd(']')];
+                                    ret[1] = (byte)registers[operand1.TrimStart('[').TrimEnd(']').ToUpperInvariant()];
                                     Array.Copy(BitConverter.GetBytes(ParseUInt32Constant(operand2)), 0, ret, 2, 4);
                                     return ret;
                                 }
@@ -741,6 +837,61 @@ namespace agent_playground
             throw new Exception($"ERROR: Unable to parse ADD into an opcode");
         }
 
+        private byte[] And(string operand1, string operand2)
+        {
+            var o1Type = GetOperandType(operand1);
+            var o2Type = GetOperandType(operand2);
+
+            switch (o1Type)
+            {
+                case ParameterType.RegisterReference:
+                    {
+                        var o1Reg = registers[operand1.ToUpperInvariant()];
+                        switch (o2Type)
+                        {
+                            case ParameterType.Constant:
+                                {
+                                    if (o1Reg == Register.EAX || o1Reg == Register.EBX || o1Reg == Register.ECX || o1Reg == Register.EDX)
+                                    {
+                                        var ret = new byte[6];
+                                        ret[0] = (byte)Bytecode.AND_REG_CON;
+                                        ret[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                        Array.Copy(BitConverter.GetBytes(ParseUInt32Constant(operand2)), 0, ret, 2, 4);
+                                        return ret;
+                                    }
+                                    else if (o1Reg == Register.AX || o1Reg == Register.BX || o1Reg == Register.CX || o1Reg == Register.DX)
+                                    {
+                                        var ret = new byte[4];
+                                        ret[0] = (byte)Bytecode.AND_REG_CON;
+                                        ret[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                        Array.Copy(BitConverter.GetBytes(ParseUInt16Constant(operand2)), 0, ret, 2, 2);
+                                        return ret;
+                                    }
+                                    else if (o1Reg == Register.AH || o1Reg == Register.AL
+                                        || o1Reg == Register.BH || o1Reg == Register.BL
+                                        || o1Reg == Register.CH || o1Reg == Register.CL
+                                        || o1Reg == Register.DH || o1Reg == Register.DL)
+                                    {
+                                        var ret = new byte[3];
+                                        ret[0] = (byte)Bytecode.AND_REG_CON;
+                                        ret[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                        ret[2] = ParseByteConstant(operand2);
+                                        return ret;
+                                    }
+
+                                    throw new NotImplementedException();
+                                }
+                            default:
+                                throw new NotImplementedException();
+                        }
+                    }
+                default:
+                    throw new Exception($"ERROR: Unable to parse AND parameters into an opcode, unhandled operand: {operand1}");
+            }
+
+            throw new Exception($"ERROR: Unable to parse AND into an opcode");
+        }
+
         private byte[] Pop(string operand)
         {
             var ret = new byte[2];
@@ -751,13 +902,13 @@ namespace agent_playground
                 case ParameterType.RegisterReference:
                     {
                         ret[0] = (byte)Bytecode.POP_REG;
-                        ret[1] = (byte)registers[operand];
+                        ret[1] = (byte)registers[operand.ToUpperInvariant()];
                         break;
                     }
                 case ParameterType.RegisterAddress:
                     {
                         ret[0] = (byte)Bytecode.POP_MEM;
-                        ret[1] = (byte)registers[operand.TrimStart('[').TrimEnd(']')];
+                        ret[1] = (byte)registers[operand.TrimStart('[').TrimEnd(']').ToUpperInvariant()];
                         break;
                     }
                 default:

@@ -36,5 +36,13 @@ namespace agent_playground
 
         [Description("ADD_REG_CON")]
         ADD_REG_CON = 22,
+
+        [Description("AND_REG_CON")]
+        AND_REG_CON = 23,
+
+        [Description("JZ")]
+        JZ = 31,
+        [Description("JMP")]
+        JMP = 32
     }
 }

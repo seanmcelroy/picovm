@@ -34,6 +34,8 @@ namespace agent_playground
 
         private ulong[] registers = new ulong[16];
 
+        private bool[] flags = new bool[2];
+
         private readonly byte[] memory = new byte[65535];
 
         private uint instructionPointer = 0;
@@ -311,14 +313,15 @@ namespace agent_playground
             } while (i > 0);
         }
 
-        public void KernelInterrupt()
+        // Processes the interrupt, returns whether the process should be terminated.
+        public bool KernelInterrupt()
         {
             // Linux-y interrupt syscalls
             var syscall = ReadExtendedRegister(Register.EAX);
             switch (syscall)
             {
                 case 1: // sys_exit
-                    break;
+                    return true;
                 case 4: // sys_write
                     var fd = ReadExtendedRegister(Register.EBX);
                     var outputIndex = ReadExtendedRegister(Register.ECX);
@@ -332,16 +335,14 @@ namespace agent_playground
                     {
                         case 1: // STDOUT
                             Console.Out.Write(outputString);
-                            break;
+                            return false;
                         case 2: // STDERR
                             Console.Error.Write(outputString);
-                            break;
+                            return false;
                         default:
                             Dump();
                             throw new InvalidOperationException($"Unknown file descriptor for sys_write: {fd}");
                     }
-
-                    break;
                 default:
                     throw new InvalidOperationException($"Unknown syscall number during kernel interrupt: {syscall}");
             }
@@ -432,6 +433,46 @@ namespace agent_playground
 
                         break;
                     }
+                case Bytecode.AND_REG_CON:
+                    {
+                        var operand1 = (Register)memory[instructionPointer];
+                        instructionPointer++;
+
+                        if (operand1 == Register.EAX || operand1 == Register.EBX || operand1 == Register.ECX || operand1 == Register.EDX)
+                        {
+                            var operand1value = ReadExtendedRegister(operand1);
+                            var operand2value = BitConverter.ToUInt32(memory, (int)instructionPointer);
+                            instructionPointer += 4;
+                            var val = operand1value & operand2value;
+                            flags[(int)Flag.ZERO_FLAG] = val == 0;
+                            WriteExtendedRegister(operand1, val);
+                        }
+                        else if (operand1 == Register.AX || operand1 == Register.BX || operand1 == Register.CX || operand1 == Register.DX)
+                        {
+                            var operand1value = ReadRegister(operand1);
+                            var operand2value = BitConverter.ToUInt16(memory, (int)instructionPointer);
+                            instructionPointer += 2;
+                            var val = (ushort)(operand1value & operand2value);
+                            flags[(int)Flag.ZERO_FLAG] = val == 0;
+                            WriteRegister(operand1, val);
+                        }
+                        else if (operand1 == Register.AH || operand1 == Register.AL
+                            || operand1 == Register.BH || operand1 == Register.BL
+                            || operand1 == Register.CH || operand1 == Register.CL
+                            || operand1 == Register.DH || operand1 == Register.DL)
+                        {
+                            var operand1value = ReadHalfRegister(operand1);
+                            var operand2value = memory[(int)instructionPointer];
+                            instructionPointer++;
+                            var val = (byte)(operand1value & operand2value);
+                            flags[(int)Flag.ZERO_FLAG] = val == 0;
+                            WriteHalfRegister(operand1, val);
+                        }
+                        else
+                            throw new InvalidOperationException($"ERROR: AND cannot handle the type of register targeted: {operand1}");
+
+                        break;
+                    }
                 case Bytecode.INT:
                     {
                         // Interrupt number
@@ -440,13 +481,11 @@ namespace agent_playground
 
                         switch (interruptVector)
                         {
+                            // Linux kernel interrupt
                             case 0x80:
-                                {
-                                    // Linux kernel
-                                    Console.WriteLine("INTERRUPT - Linux syscall 0x80");
-                                    KernelInterrupt();
-                                    break;
-                                }
+                                if (KernelInterrupt())
+                                    return 0;
+                                break;
                         }
 
                         break;
@@ -697,6 +736,21 @@ namespace agent_playground
                         instructionPointer += 4;
                         StackPush(val);
 
+                        break;
+                    }
+                case Bytecode.JMP:
+                    {
+                        var loc = BitConverter.ToUInt32(memory, (int)instructionPointer);
+                        instructionPointer = loc;
+                        break;
+                    }
+                case Bytecode.JZ:
+                    {
+                        var loc = BitConverter.ToUInt32(memory, (int)instructionPointer);
+                        if (flags[(int)Flag.ZERO_FLAG])
+                            instructionPointer = loc;
+                        else
+                            instructionPointer += 4;
                         break;
                     }
                 default:
