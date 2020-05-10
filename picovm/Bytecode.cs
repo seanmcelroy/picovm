@@ -8,12 +8,16 @@ namespace agent_playground
 
         [Description("END")]
         END = 1,
+
+        [Description("INT")]
+        INT = 2,
+
         [Description("MOV_REG_REG")]
-        MOV_REG_REG = 2,
+        MOV_REG_REG = 3,
         [Description("MOV_REG_MEM")]
-        MOV_REG_MEM = 3,
+        MOV_REG_MEM = 4,
         [Description("MOV_REG_CON")]
-        MOV_REG_CON = 4,
+        MOV_REG_CON = 5,
 
         [Description("PUSH_REG")]
         PUSH_REG = 10,

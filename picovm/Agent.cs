@@ -51,13 +51,6 @@ namespace agent_playground
             Array.Copy(program, memory, program.Length);
         }
 
-        internal byte[] SliceMemory(uint startIndex, uint length)
-        {
-            var ret = new byte[length];
-            Array.Copy(memory, startIndex, ret, 0, length);
-            return ret;
-        }
-
         public uint ReadExtendedRegister(Register reference)
         {
             // http://www.cs.virginia.edu/~evans/cs216/guides/x86.html
@@ -78,6 +71,18 @@ namespace agent_playground
                         ret = (uint)(u64 & uint.MaxValue);
                     }
                     break;
+                case Register.ECX:
+                    {
+                        var u64 = registers[R_ECX];
+                        ret = (uint)(u64 & uint.MaxValue);
+                    }
+                    break;
+                case Register.EDX:
+                    {
+                        var u64 = registers[R_EDX];
+                        ret = (uint)(u64 & uint.MaxValue);
+                    }
+                    break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown extended register {reference}!");
             }
@@ -93,6 +98,15 @@ namespace agent_playground
             {
                 case Register.AX:
                     ret = (ushort)(registers[R_EAX] & (ulong)ushort.MaxValue);
+                    break;
+                case Register.BX:
+                    ret = (ushort)(registers[R_EBX] & (ulong)ushort.MaxValue);
+                    break;
+                case Register.CX:
+                    ret = (ushort)(registers[R_ECX] & (ulong)ushort.MaxValue);
+                    break;
+                case Register.DX:
+                    ret = (ushort)(registers[R_EDX] & (ulong)ushort.MaxValue);
                     break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
@@ -112,6 +126,24 @@ namespace agent_playground
                     break;
                 case Register.AL:
                     ret = (byte)(registers[R_EAX] & (ulong)0x00FF);
+                    break;
+                case Register.BH:
+                    ret = (byte)((registers[R_EBX] & (ulong)0xFF00) >> 8);
+                    break;
+                case Register.BL:
+                    ret = (byte)(registers[R_EBX] & (ulong)0x00FF);
+                    break;
+                case Register.CH:
+                    ret = (byte)((registers[R_ECX] & (ulong)0xFF00) >> 8);
+                    break;
+                case Register.CL:
+                    ret = (byte)(registers[R_ECX] & (ulong)0x00FF);
+                    break;
+                case Register.DH:
+                    ret = (byte)((registers[R_EDX] & (ulong)0xFF00) >> 8);
+                    break;
+                case Register.DL:
+                    ret = (byte)(registers[R_EDX] & (ulong)0x00FF);
                     break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
@@ -139,6 +171,22 @@ namespace agent_playground
 
                     }
                     break;
+                case Register.ECX:
+                    {
+                        const uint hi = 0;
+                        var lo = value;
+                        registers[R_ECX] = (ulong)hi << 32 | lo;
+
+                    }
+                    break;
+                case Register.EDX:
+                    {
+                        const uint hi = 0;
+                        var lo = value;
+                        registers[R_EDX] = (ulong)hi << 32 | lo;
+
+                    }
+                    break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown extended register {reference}!");
             }
@@ -156,6 +204,15 @@ namespace agent_playground
                 case Register.AX:
                     registers[R_EAX] = registers[R_EAX] & ~((ulong)ushort.MaxValue) | (ulong)value;
                     break;
+                case Register.BX:
+                    registers[R_EBX] = registers[R_EBX] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    break;
+                case Register.CX:
+                    registers[R_ECX] = registers[R_ECX] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    break;
+                case Register.DX:
+                    registers[R_EDX] = registers[R_EDX] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
             }
@@ -171,6 +228,24 @@ namespace agent_playground
                     break;
                 case Register.AL:
                     registers[R_EAX] = registers[R_EAX] & ~((ulong)0x00FF) | (ulong)value;
+                    break;
+                case Register.BH:
+                    registers[R_EBX] = registers[R_EBX] & ~((ulong)0xFF00) | ((ulong)value << 8);
+                    break;
+                case Register.BL:
+                    registers[R_EBX] = registers[R_EBX] & ~((ulong)0x00FF) | (ulong)value;
+                    break;
+                case Register.CH:
+                    registers[R_ECX] = registers[R_ECX] & ~((ulong)0xFF00) | ((ulong)value << 8);
+                    break;
+                case Register.CL:
+                    registers[R_ECX] = registers[R_ECX] & ~((ulong)0x00FF) | (ulong)value;
+                    break;
+                case Register.DH:
+                    registers[R_EDX] = registers[R_EDX] & ~((ulong)0xFF00) | ((ulong)value << 8);
+                    break;
+                case Register.DL:
+                    registers[R_EDX] = registers[R_EDX] & ~((ulong)0x00FF) | (ulong)value;
                     break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
@@ -210,7 +285,10 @@ namespace agent_playground
         public void Dump()
         {
             Console.WriteLine();
-            Console.WriteLine($"EAX: 0x{ReadExtendedRegister(Register.EAX):X4} ({ReadExtendedRegister(Register.EAX).ToString().PadLeft(2)})\tEBX: 0x{ReadExtendedRegister(Register.EBX):X4} ({ReadExtendedRegister(Register.EBX)})");
+            Console.Write($"EAX: 0x{ReadExtendedRegister(Register.EAX):X4} ({ReadExtendedRegister(Register.EAX).ToString().PadLeft(2)})\t");
+            Console.Write($"EBX: 0x{ReadExtendedRegister(Register.EBX):X4} ({ReadExtendedRegister(Register.EBX)})\t");
+            Console.Write($"ECX: 0x{ReadExtendedRegister(Register.ECX):X4} ({ReadExtendedRegister(Register.ECX)})\t");
+            Console.WriteLine($"EDX: 0x{ReadExtendedRegister(Register.EDX):X4} ({ReadExtendedRegister(Register.EDX)})");
             Console.WriteLine($"EIP: 0x{instructionPointer:X4} ({instructionPointer})\tESP: 0x{stackPointer:X4} ({stackPointer})");
             Console.WriteLine("(Stack)");
             var i = (uint)memory.Length;
@@ -233,6 +311,42 @@ namespace agent_playground
             } while (i > 0);
         }
 
+        public void KernelInterrupt()
+        {
+            // Linux-y interrupt syscalls
+            var syscall = ReadExtendedRegister(Register.EAX);
+            switch (syscall)
+            {
+                case 1: // sys_exit
+                    break;
+                case 4: // sys_write
+                    var fd = ReadExtendedRegister(Register.EBX);
+                    var outputIndex = ReadExtendedRegister(Register.ECX);
+                    var outputLength = ReadExtendedRegister(Register.EDX);
+
+                    var outputBytes = new byte[outputLength];
+                    Array.Copy(memory, outputIndex, outputBytes, 0, outputLength);
+                    var outputString = System.Text.Encoding.ASCII.GetString(outputBytes);
+
+                    switch (fd)
+                    {
+                        case 1: // STDOUT
+                            Console.Out.Write(outputString);
+                            break;
+                        case 2: // STDERR
+                            Console.Error.Write(outputString);
+                            break;
+                        default:
+                            Dump();
+                            throw new InvalidOperationException($"Unknown file descriptor for sys_write: {fd}");
+                    }
+
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unknown syscall number during kernel interrupt: {syscall}");
+            }
+        }
+
         public int? Tick()
         {
             var instruction = (Bytecode)memory[instructionPointer];
@@ -249,7 +363,7 @@ namespace agent_playground
                         var operand1 = (Register)memory[instructionPointer];
                         instructionPointer++;
 
-                        if (operand1 == Register.EAX || operand1 == Register.EBX)
+                        if (operand1 == Register.EAX || operand1 == Register.EBX || operand1 == Register.ECX || operand1 == Register.EDX)
                         {
                             var operand1value = ReadExtendedRegister(operand1);
                             instructionPointer++;
@@ -257,7 +371,7 @@ namespace agent_playground
                             instructionPointer += 4;
                             WriteExtendedRegister(operand1, operand1value + operand2value);
                         }
-                        else if (operand1 == Register.AX)
+                        else if (operand1 == Register.AX || operand1 == Register.BX || operand1 == Register.CX || operand1 == Register.DX)
                         {
                             var operand1value = ReadRegister(operand1);
                             instructionPointer++;
@@ -265,7 +379,10 @@ namespace agent_playground
                             instructionPointer += 2;
                             WriteRegister(operand1, ((ushort)(operand1value + operand2value)));
                         }
-                        else if (operand1 == Register.AH || operand1 == Register.AL)
+                        else if (operand1 == Register.AH || operand1 == Register.AL
+                            || operand1 == Register.BH || operand1 == Register.BL
+                            || operand1 == Register.CH || operand1 == Register.CL
+                            || operand1 == Register.DH || operand1 == Register.DL)
                         {
                             var operand1value = ReadHalfRegister(operand1);
                             instructionPointer++;
@@ -283,7 +400,7 @@ namespace agent_playground
                         var operand1 = (Register)memory[instructionPointer];
                         instructionPointer++;
 
-                        if (operand1 == Register.EAX || operand1 == Register.EBX)
+                        if (operand1 == Register.EAX || operand1 == Register.EBX || operand1 == Register.ECX || operand1 == Register.EDX)
                         {
                             var loc = ReadExtendedRegister(operand1);
                             var operand1value = BitConverter.ToUInt32(memory, (int)loc);
@@ -291,7 +408,7 @@ namespace agent_playground
                             instructionPointer += 4;
                             Array.Copy(BitConverter.GetBytes(operand1value + operand2value), 0, memory, loc, 4);
                         }
-                        else if (operand1 == Register.AX)
+                        else if (operand1 == Register.AX || operand1 == Register.BX || operand1 == Register.CX || operand1 == Register.DX)
                         {
                             var loc = ReadRegister(operand1);
                             var operand1value = BitConverter.ToUInt16(memory, (int)loc);
@@ -299,7 +416,10 @@ namespace agent_playground
                             instructionPointer += 2;
                             Array.Copy(BitConverter.GetBytes((ushort)(operand1value + operand2value)), 0, memory, loc, 2);
                         }
-                        else if (operand1 == Register.AH || operand1 == Register.AL)
+                        else if (operand1 == Register.AH || operand1 == Register.AL
+                            || operand1 == Register.BH || operand1 == Register.BL
+                            || operand1 == Register.CH || operand1 == Register.CL
+                            || operand1 == Register.DH || operand1 == Register.DL)
                         {
                             var loc = ReadHalfRegister(operand1);
                             var operand1value = memory[(int)loc];
@@ -312,6 +432,25 @@ namespace agent_playground
 
                         break;
                     }
+                case Bytecode.INT:
+                    {
+                        // Interrupt number
+                        var interruptVector = memory[(int)instructionPointer];
+                        instructionPointer++;
+
+                        switch (interruptVector)
+                        {
+                            case 0x80:
+                                {
+                                    // Linux kernel
+                                    Console.WriteLine("INTERRUPT - Linux syscall 0x80");
+                                    KernelInterrupt();
+                                    break;
+                                }
+                        }
+
+                        break;
+                    }
                 case Bytecode.MOV_REG_REG:
                     {
                         var dst = (Register)memory[instructionPointer];
@@ -319,38 +458,50 @@ namespace agent_playground
                         var src = (Register)memory[instructionPointer];
                         instructionPointer++;
 
-                        if (src == Register.EAX || src == Register.EBX)
+                        if (src == Register.EAX || src == Register.EBX || src == Register.ECX || src == Register.EDX)
                         {
                             var srcVal = ReadExtendedRegister(src);
-                            if (src == Register.EAX || src == Register.EBX)
+                            if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
                                 WriteExtendedRegister(dst, srcVal);
-                            else if (src == Register.AX)
+                            else if (dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX)
                                 throw new InvalidOperationException("ERROR: MOV dst is a word but source is a dword");
-                            else if (src == Register.AH || src == Register.AL)
+                            else if (dst == Register.AH || dst == Register.AL
+                                || dst == Register.BH || dst == Register.BL
+                                || dst == Register.CH || dst == Register.CL
+                                || dst == Register.DH || dst == Register.DL)
                                 throw new InvalidOperationException("ERROR: MOV dst is a byte but source is a dword");
                             else
                                 throw new InvalidOperationException("ERROR: Unrecognized register for MOV dst");
                         }
-                        else if (src == Register.AX)
+                        else if (src == Register.AX || src == Register.BX || src == Register.CX || src == Register.DX)
                         {
                             var srcVal = ReadRegister(src);
-                            if (src == Register.EAX || src == Register.EBX)
+                            if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
                                 WriteExtendedRegister(dst, srcVal);
-                            else if (src == Register.AX)
+                            else if (dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX)
                                 WriteRegister(dst, srcVal);
-                            else if (src == Register.AH || src == Register.AL)
+                            else if (dst == Register.AH || dst == Register.AL
+                                || dst == Register.BH || dst == Register.BL
+                                || dst == Register.CH || dst == Register.CL
+                                || dst == Register.DH || dst == Register.DL)
                                 throw new InvalidOperationException("ERROR: MOV dst is a byte but source is a word");
                             else
                                 throw new InvalidOperationException("ERROR: Unrecognized register for MOV dst");
                         }
-                        else if (src == Register.AH || src == Register.AL)
+                        else if (src == Register.AH || src == Register.AL
+                            || src == Register.BH || src == Register.BL
+                            || src == Register.CH || src == Register.CL
+                            || src == Register.DH || src == Register.DL)
                         {
                             var srcVal = ReadHalfRegister(src);
-                            if (src == Register.EAX || src == Register.EBX)
+                            if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
                                 WriteExtendedRegister(dst, srcVal);
-                            else if (src == Register.AX)
+                            else if (dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX)
                                 WriteRegister(dst, srcVal);
-                            else if (src == Register.AH || src == Register.AL)
+                            else if (dst == Register.AH || dst == Register.AL
+                                || dst == Register.BH || dst == Register.BL
+                                || dst == Register.CH || dst == Register.CL
+                                || dst == Register.DH || dst == Register.DL)
                                 WriteHalfRegister(dst, srcVal);
                             else
                                 throw new InvalidOperationException("ERROR: Unrecognized register for MOV dst");
@@ -368,31 +519,31 @@ namespace agent_playground
                         var dst = (Register)memory[instructionPointer];
                         instructionPointer++;
 
-                        var src = (Register)memory[instructionPointer];
-                        instructionPointer++;
-
-                        if (src == Register.EAX || src == Register.EBX)
+                        if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
                         {
-                            var loc = ReadExtendedRegister(src);
-                            var val = BitConverter.ToUInt32(memory, (int)loc);
-                            WriteExtendedRegister(dst, val);
+                            var loc = BitConverter.ToUInt32(memory, (int)instructionPointer);
+                            instructionPointer += 4;
+                            WriteExtendedRegister(dst, loc);
                         }
-                        else if (src == Register.AX)
+                        else if (dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX)
                         {
-                            var loc = ReadRegister(src);
-                            var val = BitConverter.ToUInt16(memory, (int)loc);
-                            WriteRegister(dst, val);
+                            var loc = BitConverter.ToUInt16(memory, (int)instructionPointer);
+                            instructionPointer += 2;
+                            WriteRegister(dst, loc);
                         }
-                        else if (src == Register.AH || src == Register.AL)
+                        else if (dst == Register.AH || dst == Register.AL
+                            || dst == Register.BH || dst == Register.BL
+                            || dst == Register.CH || dst == Register.CL
+                            || dst == Register.DH || dst == Register.DL)
                         {
-                            var loc = ReadHalfRegister(src);
-                            var val = memory[(int)loc];
-                            WriteHalfRegister(dst, val);
+                            var loc = memory[instructionPointer];
+                            instructionPointer++;
+                            WriteHalfRegister(dst, loc);
                         }
                         else
                         {
                             Dump();
-                            throw new InvalidOperationException("ERROR: Unrecognized register for MOV src");
+                            throw new InvalidOperationException($"ERROR: Unrecognized register for MOV dst: {dst}");
                         }
 
                         break;
@@ -402,19 +553,22 @@ namespace agent_playground
                         var dst = (Register)memory[instructionPointer];
                         instructionPointer++;
 
-                        if (dst == Register.EAX || dst == Register.EBX)
+                        if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
                         {
                             var val = BitConverter.ToUInt32(memory, (int)instructionPointer);
                             instructionPointer += 4;
                             WriteExtendedRegister(dst, val);
                         }
-                        else if (dst == Register.AX)
+                        else if (dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX)
                         {
                             var val = BitConverter.ToUInt16(memory, (int)instructionPointer);
                             instructionPointer += 2;
                             WriteRegister(dst, val);
                         }
-                        else if (dst == Register.AH || dst == Register.AL)
+                        else if (dst == Register.AH || dst == Register.AL
+                            || dst == Register.BH || dst == Register.BL
+                            || dst == Register.CH || dst == Register.CL
+                            || dst == Register.DH || dst == Register.DL)
                         {
                             var val = memory[(int)instructionPointer];
                             instructionPointer++;
@@ -432,11 +586,14 @@ namespace agent_playground
                         var operand = (Register)memory[instructionPointer];
                         instructionPointer++;
 
-                        if (operand == Register.EAX || operand == Register.EBX)
+                        if (operand == Register.EAX || operand == Register.EBX || operand == Register.ECX || operand == Register.EDX)
                             WriteExtendedRegister(operand, StackPop32());
-                        else if (operand == Register.AX)
+                        else if (operand == Register.AX || operand == Register.BX || operand == Register.CX || operand == Register.DX)
                             WriteRegister(operand, StackPop16());
-                        else if (operand == Register.AH || operand == Register.AL)
+                        else if (operand == Register.AH || operand == Register.AL
+                            || operand == Register.BH || operand == Register.BL
+                            || operand == Register.CH || operand == Register.CL
+                            || operand == Register.DH || operand == Register.DL)
                             WriteHalfRegister(operand, StackPop8());
                         else
                         {
@@ -451,17 +608,20 @@ namespace agent_playground
                         var operand = (Register)memory[instructionPointer];
                         instructionPointer++;
 
-                        if (operand == Register.EAX || operand == Register.EBX)
+                        if (operand == Register.EAX || operand == Register.EBX || operand == Register.ECX || operand == Register.EDX)
                         {
                             var loc = ReadExtendedRegister(operand);
                             Array.Copy(BitConverter.GetBytes(StackPop32()), 0, memory, loc, 4);
                         }
-                        else if (operand == Register.AX)
+                        else if (operand == Register.AX || operand == Register.BX || operand == Register.CX || operand == Register.DX)
                         {
                             var loc = ReadRegister(operand);
                             Array.Copy(BitConverter.GetBytes(StackPop16()), 0, memory, loc, 2);
                         }
-                        else if (operand == Register.AH || operand == Register.AL)
+                        else if (operand == Register.AH || operand == Register.AL
+                            || operand == Register.BH || operand == Register.BL
+                            || operand == Register.CH || operand == Register.CL
+                            || operand == Register.DH || operand == Register.DL)
                         {
                             var loc = ReadHalfRegister(operand);
                             memory[(int)loc] = StackPop8();
@@ -478,11 +638,14 @@ namespace agent_playground
                     {
                         var operand = (Register)memory[instructionPointer];
                         instructionPointer++;
-                        if (operand == Register.EAX || operand == Register.EBX)
+                        if (operand == Register.EAX || operand == Register.EBX || operand == Register.ECX || operand == Register.EDX)
                             StackPush(ReadExtendedRegister(operand));
-                        else if (operand == Register.AX)
+                        else if (operand == Register.AX || operand == Register.BX || operand == Register.CX || operand == Register.DX)
                             StackPush(ReadRegister(operand));
-                        else if (operand == Register.AH || operand == Register.AL)
+                        else if (operand == Register.AH || operand == Register.AL
+                            || operand == Register.BH || operand == Register.BL
+                            || operand == Register.CH || operand == Register.CL
+                            || operand == Register.DH || operand == Register.DL)
                             StackPush(ReadHalfRegister(operand));
                         else
                         {
@@ -497,19 +660,22 @@ namespace agent_playground
                         var operand = (Register)memory[instructionPointer];
                         instructionPointer++;
 
-                        if (operand == Register.EAX || operand == Register.EBX)
+                        if (operand == Register.EAX || operand == Register.EBX || operand == Register.ECX || operand == Register.EDX)
                         {
                             var loc = ReadExtendedRegister(operand);
                             var val = BitConverter.ToUInt32(memory, (int)loc);
                             StackPush(val);
                         }
-                        else if (operand == Register.AX)
+                        else if (operand == Register.AX || operand == Register.BX || operand == Register.CX || operand == Register.DX)
                         {
                             var loc = ReadRegister(operand);
                             var val = BitConverter.ToUInt16(memory, (int)loc);
                             StackPush(val);
                         }
-                        else if (operand == Register.AH || operand == Register.AL)
+                        else if (operand == Register.AH || operand == Register.AL
+                            || operand == Register.BH || operand == Register.BL
+                            || operand == Register.CH || operand == Register.CL
+                            || operand == Register.DH || operand == Register.DL)
                         {
                             var loc = ReadHalfRegister(operand);
                             var val = memory[(int)loc];
@@ -534,7 +700,8 @@ namespace agent_playground
                         break;
                     }
                 default:
-                    Console.WriteLine($"ERROR: Unknown bytecode {instruction} EIP={instructionPointer - 1}!");
+                    Console.Error.WriteLine($"ERROR: Unknown bytecode {instruction} EIP={instructionPointer - 1}!");
+                    Dump();
                     ret = E_INVALID;
                     break;
             }

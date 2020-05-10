@@ -7,17 +7,42 @@ namespace agent_playground
         Unknown = 0,
 
         [Description("EAX")]
-        EAX = 1,
+        EAX = 101,
         [Description("AX")]
-        AX = 2,
+        AX = 102,
         [Description("AH")]
-        AH = 3,
+        AH = 103,
         [Description("AL")]
-        AL = 4,
+        AL = 104,
 
         [Description("EBX")]
-        EBX = 10,
+        EBX = 105,
+        [Description("BX")]
+        BX = 106,
+        [Description("BH")]
+        BH = 107,
+        [Description("BL")]
+        BL = 108,
+
+        [Description("ECX")]
+        ECX = 109,
+        [Description("CX")]
+        CX = 110,
+        [Description("CH")]
+        CH = 111,
+        [Description("CL")]
+        CL = 112,
+
+        [Description("EDX")]
+        EDX = 113,
+        [Description("DX")]
+        DX = 114,
+        [Description("DH")]
+        DH = 115,
+        [Description("DL")]
+        DL = 116,
+
         [Description("ESP")]
-        ESP = 20
+        ESP = 120
     }
 }

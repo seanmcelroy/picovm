@@ -11,7 +11,7 @@ namespace agent_playground
             Console.WriteLine(" (c) 2020 Sean McElroy");
             Console.WriteLine(" Released under the MIT License; all rights reserved.");
             Console.WriteLine();
-            Console.WriteLine(" Usage: picovm <src.asm>");
+            Console.WriteLine(" Usage: picovm <src.asm> <a.out>");
 
             if (args.Length == 0)
             {
@@ -25,6 +25,20 @@ namespace agent_playground
                 return -2;
             }
 
+            if (args.Length == 1)
+            {
+                Console.Error.WriteLine("No destination output file provided.");
+                return -3;
+            }
+
+            if (System.IO.File.Exists(args[1]))
+            {
+                Console.Error.WriteLine($"Executable output file {args[0]} already exists.");
+                // DEBUG
+                System.IO.File.Delete(args[1]);
+                //return -4;
+            }
+
             string[] programText;
             try
             {
@@ -36,28 +50,37 @@ namespace agent_playground
                 return -3;
             }
 
-            /*var programText = new string[] {
-                "MOV EAX, 4294967295", // copy the value 11111111111111111111111111111111 into eax
-                "MOV AX, 0", // copy the value 0000000000000000 into ax
-                "MOV AH, 170", // copy the value 10101010 (0xAA) into ah
-                "MOV AL, 85", // copy the value 01010101 (0x55) into al
-                "MOV EBX, 5", // copy the value 5 into ebx
-                "MOV EAX, EBX", // copy the value in ebx into eax
-                "PUSH 4", // push 4 on the stack
-                "PUSH EAX", // push eax (5) on the stack
-                "PUSH 6", // push 6 on the stack
-                "POP EBX", // pop stack (6) into ebx
-                "POP EBX", // pop stack (5) into ebx
-                "POP [EBX]", // pop stack (4) into [ebx] memory location = 5
-                "ADD [EBX], 10", // add 10 to the value in [ebx] which would change 4 to 14
-                "PUSH [EBX]", // push [ebx] memory location=5 value=14 onto the stack
-                "END"
-            };*/
+            // Compile.
+            CompilationResult compilation;
+            {
+                Console.Out.WriteLine($"Compiling source file: {args[0]}");
+                var compiler = new BytecodeCompiler();
+                var fileName = (new System.IO.FileInfo(args[0])).Name;
+                compilation = compiler.Compile(fileName, programText);
+            }
 
-            var compiler = new Compiler();
-            var programCode = compiler.Compile(programText);
+            // Package.
+            {
+                var packageFormat = CompilerOutputType.AOut32;
+                Console.Out.WriteLine($"Packaging bytecode as: {Enum.GetName(typeof(CompilerOutputType), packageFormat)}");
+                var fileName = args[1];
+                switch (packageFormat)
+                {
+                    case CompilerOutputType.AOut32:
+                        var packager = new PackagerAOut32(compilation);
+                        packager.WriteFile(fileName);
+                        break;
+                    default:
+                        throw new InvalidOperationException($"Unknown packaging format: {packageFormat}");
+                }
+            }
 
-            var agent = new Agent(programCode.ToArray());
+            // Loader
+            var image = new byte[compilation.textSegmentSize + compilation.dataSegmentSize];
+            Array.Copy(compilation.textSegment, 0, image, compilation.textSegmentBase, compilation.textSegmentSize);
+            Array.Copy(compilation.dataSegment, 0, image, compilation.dataSegmentBase, compilation.dataSegmentSize);
+
+            var agent = new Agent(image);
             int? ret;
             do
             {

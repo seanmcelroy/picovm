@@ -9,22 +9,25 @@ namespace agent_playground.Tests
         [Fact]
         public void GetOperand_Constant()
         {
-            Xunit.Assert.Equal(Compiler.ParameterType.Constant, Compiler.GetOperandType("4294945365"));
-            Xunit.Assert.Equal(Compiler.ParameterType.Constant, Compiler.GetOperandType("2863315917"));
+            Xunit.Assert.Equal(BytecodeCompiler.ParameterType.Constant, BytecodeCompiler.GetOperandType("4294945365"));
+            Xunit.Assert.Equal(BytecodeCompiler.ParameterType.Constant, BytecodeCompiler.GetOperandType("2863315917"));
         }
 
         [Fact]
         public void MOV_REG_CON_Simple()
         {
             var programText = new string[] {
+                "section	.text",
+                "global _start",
+                "_start:",
                 "MOV EAX, 4294967295", // copy the value 11111111111111111111111111111111 into eax
                 "END"
             };
 
-            var compiler = new Compiler();
-            var bytecode = compiler.Compile(programText);
+            var compiler = new BytecodeCompiler();
+            var compiled = compiler.Compile("UNIT_TEST", programText);
 
-            var agent = new Agent(bytecode);
+            var agent = new Agent(compiled.textSegment);
             var ret = agent.Tick();
             Xunit.Assert.Null(ret);
             Xunit.Assert.Equal(4294967295, agent.ReadExtendedRegister(Register.EAX));
@@ -37,6 +40,9 @@ namespace agent_playground.Tests
         public void MOV_REG_CON_Overlayed()
         {
             var programText = new string[] {
+                "section	.text",
+                "global _start",
+                "_start:",
                 "MOV EAX, 4294967295", // copy the value 11111111111111111111111111111111 into eax
                 "MOV AX, 0", // copy the value 0000000000000000 into ax
                 "MOV AH, 170", // copy the value 10101010 (0xAA) into ah
@@ -45,10 +51,10 @@ namespace agent_playground.Tests
                 "END"
             };
 
-            var compiler = new Compiler();
-            var bytecode = compiler.Compile(programText);
+            var compiler = new BytecodeCompiler();
+            var compiled = compiler.Compile("UNIT_TEST", programText);
 
-            var agent = new Agent(bytecode);
+            var agent = new Agent(compiled.textSegment);
             var ret = agent.Tick();
             Xunit.Assert.Null(ret);
             Xunit.Assert.Equal((uint)0xFFFFFFFF, agent.ReadExtendedRegister(Register.EAX));
@@ -88,6 +94,9 @@ namespace agent_playground.Tests
         public void PUSH_POP_Overlayed()
         {
             var programText = new string[] {
+                "section	.text",
+                "global _start",
+                "_start:",
                 "PUSH 4294945365", // push the value 1111 1111 1111 1111 1010 1010 0101 0101‬ (FFFF AA55‬) onto the stack
                 "POP EAX", // pop it back into eax
                 "PUSH 2863315917", // push the value 1010 1010 1010 1010 1011 1011 1100 1101 (AAAA BBCD‬) onto the stack
@@ -95,10 +104,10 @@ namespace agent_playground.Tests
                 "END"
             };
 
-            var compiler = new Compiler();
-            var bytecode = compiler.Compile(programText);
+            var compiler = new BytecodeCompiler();
+            var compiled = compiler.Compile("UNIT_TEST", programText);
 
-            var agent = new Agent(bytecode);
+            var agent = new Agent(compiled.textSegment);
             var ret = agent.Tick();
 
             // PUSH 4294945365
