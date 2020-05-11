@@ -31,10 +31,10 @@ A small set of unit tests are included in the picovm.Tests directory
 
 # Project maturity
 
-:ballot_box_with_check: .asm file parsed into bytecode
-:ballot_box_with_check: 32/16/8-bit registers and MOV instruction handled
-:ballot_box_with_check: Data segment with directives DB and EQU
-:ballot_box_with_check: Constant value inline expansion
-:ballot_box_with_check: Interrupt vectors, initial sys_write syscall
-:ballot_box_with_check: BSS segment, initial sys_read syscall
-:black_square_button: Separate compliation and loader
+* :ballot_box_with_check: .asm file parsed into bytecode
+* :ballot_box_with_check: 32/16/8-bit registers and MOV instruction handled
+* :ballot_box_with_check: Data segment with directives DB and EQU
+* :ballot_box_with_check: Constant value inline expansion
+* :ballot_box_with_check: Interrupt vectors, initial sys_write syscall
+* :ballot_box_with_check: BSS segment, initial sys_read syscall
+* :black_square_button: Separate compliation and loader

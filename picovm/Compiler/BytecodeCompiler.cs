@@ -48,7 +48,9 @@ namespace picovm.Compiler
             KeyValuePair<SectionType, List<string>> currentSection = default(KeyValuePair<SectionType, List<string>>);
 
             ushort lineNumber = 0;
-            // var dataSegmentStarted = false;
+
+            var macros = new List<Macro>();
+            var inMacroDefinition = false;
             foreach (var programLine in programLines)
             {
                 lineNumber++;
@@ -59,6 +61,32 @@ namespace picovm.Compiler
                 if (string.IsNullOrWhiteSpace(line))
                     continue;
 
+                // Macros
+                if (line.TrimStart(' ', '\t').StartsWith("%macro"))
+                {
+                    inMacroDefinition = true;
+                    var macroParts = line.Substring(line.IndexOf("%macro") + 6).Split(' ', '\t', StringSplitOptions.RemoveEmptyEntries);
+                    macros.Add(new Macro
+                    {
+                        name = macroParts[0],
+                        parameterCount = byte.Parse(macroParts[1]),
+                        macroLines = new List<string>()
+                    });
+                    continue;
+                }
+                else if (inMacroDefinition)
+                {
+                    if (line.TrimStart(' ', '\t').StartsWith("%endmacro"))
+                    {
+                        inMacroDefinition = false;
+                        continue;
+                    }
+
+                    macros.Last().macroLines.Add(line);
+                    continue;
+                }
+
+                // Sections
                 if (line.StartsWith("section", StringComparison.OrdinalIgnoreCase))
                 {
                     // New section
@@ -600,6 +628,48 @@ namespace picovm.Compiler
                         throw new InvalidOperationException($"Unable to encode operand to data bytes: {operand}");
                     }
                 }
+                else if (string.Compare("dq", dataAllocationDirective.Mnemonic, StringComparison.InvariantCultureIgnoreCase) == 0)
+                {
+                    var operands = dataAllocationDirective.Operands.Select(o => CompilerDataAllocationDirective.UnboxParsedOperand(o)).ToArray();
+                    foreach (var operand in operands)
+                    {
+                        var ov = operand;
+
+                        if (ov.GetType() == typeof(string))
+                        {
+                            if (double.TryParse((string)ov, out double ovDouble))
+                                ov = ovDouble;
+                            else if (float.TryParse((string)ov, out float ovFloat))
+                                ov = ovFloat;
+                            else
+                                throw new InvalidOperationException($"Unable to parse string as numeric value: {ov}");
+                        }
+
+                        if (ov.GetType() == typeof(double))
+                        {
+                            var longBytes = BitConverter.GetBytes((double)ov); // This is an array of 8 bytes
+                            bytecode.AddRange(longBytes);
+                            offsetBytes += 8;
+                            continue;
+                        }
+                        else if (ov.GetType() == typeof(float))
+                        {
+                            var longBytes = BitConverter.GetBytes(Convert.ToDouble((float)ov)); // This is an array of 8 bytes
+                            bytecode.AddRange(longBytes);
+                            offsetBytes += 8;
+                            continue;
+                        }
+                        else if (ov.GetType() == typeof(byte))
+                        {
+                            var longBytes = BitConverter.GetBytes(Convert.ToUInt64((byte)ov)); // This is an array of 8 bytes
+                            bytecode.AddRange(longBytes);
+                            offsetBytes += 8;
+                            continue;
+                        }
+
+                        throw new InvalidOperationException($"Unable to encode operand to data bytes: {operand}");
+                    }
+                }
                 else if (string.Compare("equ", dataAllocationDirective.Mnemonic, StringComparison.InvariantCultureIgnoreCase) == 0)
                 {
                     // Convert infix to RPN for easy processing
@@ -717,6 +787,33 @@ namespace picovm.Compiler
                         length = bssAllocationDirective.Size
                     });
                 }
+                else if (string.Compare("resw", bssAllocationDirective.Mnemonic, StringComparison.InvariantCultureIgnoreCase) == 0)
+                {
+                    symbols.Add(new BytecodeBssSymbol
+                    {
+                        name = bssAllocationDirective.Label,
+                        type = BytecodeBssSymbol.BssType.Word,
+                        length = bssAllocationDirective.Size
+                    });
+                }
+                else if (string.Compare("resd", bssAllocationDirective.Mnemonic, StringComparison.InvariantCultureIgnoreCase) == 0)
+                {
+                    symbols.Add(new BytecodeBssSymbol
+                    {
+                        name = bssAllocationDirective.Label,
+                        type = BytecodeBssSymbol.BssType.DoubleWord,
+                        length = bssAllocationDirective.Size
+                    });
+                }
+                else if (string.Compare("resq", bssAllocationDirective.Mnemonic, StringComparison.InvariantCultureIgnoreCase) == 0)
+                {
+                    symbols.Add(new BytecodeBssSymbol
+                    {
+                        name = bssAllocationDirective.Label,
+                        type = BytecodeBssSymbol.BssType.QuadWord,
+                        length = bssAllocationDirective.Size
+                    });
+                }
                 else
                     throw new InvalidOperationException($"Unknown mnemonic: {bssAllocationDirective.Mnemonic}");
             }
@@ -783,7 +880,7 @@ namespace picovm.Compiler
 
                 if (c == ',' || i == operandLine.Length - 1)
                 {
-                    if (i == lastYield.Value)
+                    if (lastYield != null && i == lastYield.Value)
                     {
                         // Delimiter seen right after another yielded element (probably end of a quoted string).  Skip along.
                         lastYield++;
@@ -791,7 +888,7 @@ namespace picovm.Compiler
                     }
 
                     // Yield it back
-                    yield return operandLine.Substring(lastYield.Value, i - lastYield.Value + 1);
+                    yield return operandLine.Substring(lastYield ?? 0, i - (lastYield ?? 0) + 1).TrimEnd(',');
                     lastYield = i + 1;
                     continue;
                 }

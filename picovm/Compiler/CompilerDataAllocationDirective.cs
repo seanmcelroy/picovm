@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 
 namespace picovm.Compiler
 {
@@ -26,6 +27,15 @@ namespace picovm.Compiler
             var ret = new CompilerDataAllocationDirective();
 
             var lineParts = directiveLine.Split(new char[] { ' ', '\t', ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+            // Ignore whitespace between the first token and the second if the second is a colon.  Poorly formatted label.
+            if (lineParts.Length > 2 && lineParts[1].Length == 1 && lineParts[1][0] == ':')
+            {
+                var respin = new List<string>(new string[] { lineParts.Take(2).Aggregate((c, n) => c + n) });
+                respin.AddRange(lineParts.Skip(2));
+                lineParts = respin.ToArray();
+            }
+
             if (SYMBOLS.Any(s => string.Compare(s, lineParts[0], StringComparison.InvariantCultureIgnoreCase) != 0 &&
                 SYMBOLS.Any(s => string.Compare(s, lineParts[1], StringComparison.InvariantCultureIgnoreCase) == 0)))
                 ret.Label = lineParts[0].TrimEnd(':');
@@ -78,6 +88,8 @@ namespace picovm.Compiler
                     return parsedU32;
                 if (UInt64.TryParse(operandPart, NumberStyles.Integer, NumberFormatInfo.InvariantInfo, out ulong parsedU64))
                     return parsedU64;
+                if (double.TryParse(operandPart, NumberStyles.Number, NumberFormatInfo.InvariantInfo, out double parsedDouble))
+                    return parsedDouble;
             }
 
             if (operandPart.StartsWith('\'') && operandPart.EndsWith('\'') && operandPart.Length >= 2)
@@ -128,7 +140,35 @@ namespace picovm.Compiler
                 {"(",0},
             };
 
-            foreach (var infix in tokens)
+            // Some tokens may be run together with no whitespacing, but are separated by operators.
+            var operators = precedence.Select(k => k.Key[0]).ToArray();
+            var respinList = new List<string>();
+            foreach (var token in tokens)
+            {
+                if (operators.Any(o => token.Contains(o)))
+                {
+                    var sb = new StringBuilder();
+                    var j = 0;
+                    for (var i = 0; i < token.Length; i++)
+                    {
+                        var c = token[i];
+                        var matchOperator = operators.SingleOrDefault(o => c == o);
+                        if (!default(char).Equals(matchOperator))
+                        {
+                            if (i > 0)
+                                respinList.Add(token.Substring(j, i));
+                            respinList.Add(c.ToString());
+                            j = i;
+                        }
+                    }
+                    if (j + 1 < token.Length)
+                        respinList.Add(token.Substring(j + 1));
+                }
+                else
+                    respinList.Add(token);
+            }
+
+            foreach (var infix in respinList)
             {
                 object infixValue;
                 if (string.Compare("$", infix, StringComparison.InvariantCulture) == 0)
