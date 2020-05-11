@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
-namespace agent_playground
+namespace picovm.Compiler
 {
     public sealed class CompilerDataAllocationDirective
     {

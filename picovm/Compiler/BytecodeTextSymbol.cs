@@ -1,4 +1,4 @@
-namespace agent_playground
+namespace picovm.Compiler
 {
     public struct BytecodeTextSymbol
     {
@@ -8,5 +8,7 @@ namespace agent_playground
         // The offset for the actual symbol.  At this address, should be 0xFF as a placeholder until the symbol is resolved through substitution
         public ushort textSegmentReferenceOffset;
         public byte referenceLength;
+
+        public override string ToString() => $"Symbol:{name} refOffset:{textSegmentReferenceOffset}, len={referenceLength}";
     }
 }

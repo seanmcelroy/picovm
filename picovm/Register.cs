@@ -1,6 +1,6 @@
 using System.ComponentModel;
 
-namespace agent_playground
+namespace picovm
 {
     public enum Register : byte
     {

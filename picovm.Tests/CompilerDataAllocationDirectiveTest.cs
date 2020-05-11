@@ -1,8 +1,7 @@
-using System.Linq;
 using Xunit;
-using agent_playground;
+using picovm.Compiler;
 
-namespace agent_playground.Tests
+namespace picovm.Tests
 {
     public class CompilerDataAllocationDirectiveTest
     {

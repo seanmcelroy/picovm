@@ -1,11 +1,13 @@
-using System;
+using picovm.Compiler;
+using picovm.VM;
 using Xunit;
-using agent_playground;
 
-namespace agent_playground.Tests
+namespace picovm.Tests
 {
     public class AgentTest
     {
+        private static Linux32Kernel kernel = new Linux32Kernel();
+
         [Fact]
         public void GetOperand_Constant()
         {
@@ -27,7 +29,7 @@ namespace agent_playground.Tests
             var compiler = new BytecodeCompiler();
             var compiled = compiler.Compile("UNIT_TEST", programText);
 
-            var agent = new Agent(compiled.textSegment);
+            var agent = new Agent(kernel, compiled.textSegment);
             var ret = agent.Tick();
             Xunit.Assert.Null(ret);
             Xunit.Assert.Equal(4294967295, agent.ReadExtendedRegister(Register.EAX));
@@ -54,7 +56,7 @@ namespace agent_playground.Tests
             var compiler = new BytecodeCompiler();
             var compiled = compiler.Compile("UNIT_TEST", programText);
 
-            var agent = new Agent(compiled.textSegment);
+            var agent = new Agent(kernel, compiled.textSegment);
             var ret = agent.Tick();
             Xunit.Assert.Null(ret);
             Xunit.Assert.Equal((uint)0xFFFFFFFF, agent.ReadExtendedRegister(Register.EAX));
@@ -107,7 +109,7 @@ namespace agent_playground.Tests
             var compiler = new BytecodeCompiler();
             var compiled = compiler.Compile("UNIT_TEST", programText);
 
-            var agent = new Agent(compiled.textSegment);
+            var agent = new Agent(kernel, compiled.textSegment);
             var ret = agent.Tick();
 
             // PUSH 4294945365

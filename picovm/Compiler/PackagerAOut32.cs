@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace agent_playground
+namespace picovm.Compiler
 {
     public sealed class PackagerAOut32
     {
@@ -10,7 +10,6 @@ namespace agent_playground
         {
             this.compilationResult = compilationResult;
         }
-
 
         public void WriteFile(string filename)
         {

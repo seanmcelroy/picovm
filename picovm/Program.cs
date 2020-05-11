@@ -1,7 +1,8 @@
 ﻿using System;
-using System.Linq;
+using picovm.Compiler;
+using picovm.VM;
 
-namespace agent_playground
+namespace picovm
 {
     class Program
     {
@@ -47,7 +48,7 @@ namespace agent_playground
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"Error while attempting to read input file: {ex.Message}");
-                return -3;
+                return -5;
             }
 
             // Compile.
@@ -57,6 +58,12 @@ namespace agent_playground
                 var compiler = new BytecodeCompiler();
                 var fileName = (new System.IO.FileInfo(args[0])).Name;
                 compilation = compiler.Compile(fileName, programText);
+
+                if (compilation.errors.Count > 0)
+                {
+                    Console.Error.WriteLine($"Compilation failed with {compilation.errors.Count} errors.");
+                    return -6;
+                }
             }
 
             // Package.
@@ -76,11 +83,13 @@ namespace agent_playground
             }
 
             // Loader
-            var image = new byte[compilation.textSegmentSize + compilation.dataSegmentSize];
+            var image = new byte[compilation.textSegmentSize + compilation.dataSegmentSize + compilation.bssSegmentSize];
             Array.Copy(compilation.textSegment, 0, image, compilation.textSegmentBase, compilation.textSegmentSize);
             Array.Copy(compilation.dataSegment, 0, image, compilation.dataSegmentBase, compilation.dataSegmentSize);
 
-            var agent = new Agent(image);
+            Console.Out.WriteLine("Emulating Linux 32-bit kernel syscall interface");
+            var kernel = new Linux32Kernel();
+            var agent = new Agent(kernel, image);
             int? ret;
             do
             {
@@ -89,7 +98,7 @@ namespace agent_playground
             } while (ret == null);
             switch (ret)
             {
-                case Agent.E_INVALID:
+                case -666:
                     throw new Exception($"ERROR: Unknown bytecode!");
                 case 0:
                     Console.WriteLine("\r\n\r\nProgram terminated.");

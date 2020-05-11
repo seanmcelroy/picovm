@@ -1,7 +1,6 @@
-using System.ComponentModel;
 using System.Collections.Generic;
 
-namespace agent_playground
+namespace picovm.Compiler
 {
     public sealed class CompileTextSectionResult
     {

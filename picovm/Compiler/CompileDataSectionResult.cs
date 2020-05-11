@@ -1,13 +1,13 @@
 using System.Collections.Generic;
 
-namespace agent_playground
+namespace picovm.Compiler
 {
-    public sealed class CompileDataSection
+    public sealed class CompileDataSectionResult
     {
         public byte[] Bytecode { get; private set; }
         public Dictionary<string, BytecodeDataSymbol> SymbolOffsets { get; private set; }
 
-        public CompileDataSection(byte[] bytecode, Dictionary<string, BytecodeDataSymbol> symbolOffsets)
+        public CompileDataSectionResult(byte[] bytecode, Dictionary<string, BytecodeDataSymbol> symbolOffsets)
         {
             this.Bytecode = bytecode;
             this.SymbolOffsets = symbolOffsets;

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 
-namespace agent_playground
+namespace picovm.Compiler
 {
     public class BytecodeCompiler
     {
@@ -48,7 +48,7 @@ namespace agent_playground
             KeyValuePair<SectionType, List<string>> currentSection = default(KeyValuePair<SectionType, List<string>>);
 
             ushort lineNumber = 0;
-            var dataSegmentStarted = false;
+            // var dataSegmentStarted = false;
             foreach (var programLine in programLines)
             {
                 lineNumber++;
@@ -64,16 +64,21 @@ namespace agent_playground
                     // New section
                     if (line.IndexOf(".text", StringComparison.OrdinalIgnoreCase) > -1)
                     {
-                        if (dataSegmentStarted)
-                            throw new InvalidOperationException("Currently the compiler only supports data sections after all text sections");
+                        // if (dataSegmentStarted)
+                        //     throw new InvalidOperationException("Currently the compiler only supports data sections after all text sections");
 
                         currentSection = new KeyValuePair<SectionType, List<string>>(SectionType.Text, new List<string>());
                         sections.Add(currentSection.Key, currentSection.Value);
                     }
                     else if (line.IndexOf(".data", StringComparison.OrdinalIgnoreCase) > -1)
                     {
-                        dataSegmentStarted = true;
+                        //  dataSegmentStarted = true;
                         currentSection = new KeyValuePair<SectionType, List<string>>(SectionType.Data, new List<string>());
+                        sections.Add(currentSection.Key, currentSection.Value);
+                    }
+                    else if (line.IndexOf(".bss", StringComparison.OrdinalIgnoreCase) > -1)
+                    {
+                        currentSection = new KeyValuePair<SectionType, List<string>>(SectionType.BSS, new List<string>());
                         sections.Add(currentSection.Key, currentSection.Value);
                     }
                     else
@@ -124,6 +129,11 @@ namespace agent_playground
                         ret.dataSegmentSize = (uint)constGeneration.Bytecode.Length;
                         ret.dataSymbolOffsets = constGeneration.SymbolOffsets;
                         break;
+                    case SectionType.BSS:
+                        var bssGeneration = CompileBssSectionLines(section.Value);
+                        ret.bssSymbols = bssGeneration.Symbols;
+                        ret.bssSegmentSize = Convert.ToUInt32(bssGeneration.Symbols.Sum(s => s.Size()));
+                        break;
                     default:
                         throw new NotImplementedException($"Unable to generate compiled output for section type: {section.Key}");
                 }
@@ -137,8 +147,11 @@ namespace agent_playground
             }
             else
             {
-                foreach (var missing in ret.textSymbolReferenceOffsets.Where(tsr => !ret.dataSymbolOffsets.ContainsKey(tsr.name) && !ret.textLabelsOffsets.ContainsKey(tsr.name)))
-                    ret.errors.Add(new CompilationError($"Symbol {missing.name} in program code is undefined by the data section", fileName));
+                foreach (var missing in ret.textSymbolReferenceOffsets
+                    .Where(tsr => !ret.dataSymbolOffsets.ContainsKey(tsr.name)
+                               && !ret.textLabelsOffsets.ContainsKey(tsr.name)
+                               && !ret.bssSymbols.Any(bss => string.Compare(bss.name, tsr.name, StringComparison.InvariantCultureIgnoreCase) == 0)))
+                    ret.errors.Add(new CompilationError($"Symbol {missing.name} in program code is undefined by the data and BSS sections", fileName));
                 if (ret.errors.Count > 0)
                     return ret;
 
@@ -150,7 +163,7 @@ namespace agent_playground
                 foreach (var ds in ret.dataSymbolOffsets)
                     ds.Value.dataSegmentOffset += (ushort)ret.dataSegmentBase;
 
-                // Perform data replacements
+                // Perform text/label replacements
                 foreach (var tsr in ret.textSymbolReferenceOffsets.Where(tsr => ret.textLabelsOffsets.ContainsKey(tsr.name)))
                 {
                     var labelOffsetAddress = ret.textLabelsOffsets[tsr.name];
@@ -164,6 +177,7 @@ namespace agent_playground
                             throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.name} which did not contain placeholder values!");
                     }
                     Array.Copy(labelOffsetAddressBytes, 0, ret.textSegment, tsr.textSegmentReferenceOffset, tsr.referenceLength);
+                    Console.Out.WriteLine($"\tLBL {tsr.name}->{labelOffsetAddress}");
                 }
 
                 // Perform data replacements
@@ -241,8 +255,26 @@ namespace agent_playground
                         if (dataSymbolAddressBytes.Length != tsr.referenceLength)
                             throw new InvalidOperationException($"Address size reserved for symbol {tsr.name} is {tsr.referenceLength}, but needed {dataSymbolAddressBytes.Length}");
                         Array.Copy(dataSymbolAddressBytes, 0, ret.textSegment, tsr.textSegmentReferenceOffset, tsr.referenceLength);
+                        Console.Out.WriteLine($"\tDS {tsr.name}->{dataSymbolAddress}");
                     }
                 }
+
+                // Perform BSS reference replacements
+                var tsrBss = ret.textSymbolReferenceOffsets.Where(tsr => ret.bssSymbols.Exists(bss => string.Compare(bss.name, tsr.name, StringComparison.InvariantCultureIgnoreCase) == 0)).ToArray();
+                foreach (var tsr in tsrBss)
+                {
+                    var bss = ret.bssSymbols.Single(bss => string.Compare(bss.name, tsr.name, StringComparison.InvariantCultureIgnoreCase) == 0);
+                    var bssIndex = ret.bssSymbols.IndexOf(bss);
+                    uint bssOffset = (ret.textSegmentBase + ret.textSegmentSize) + (ret.dataSegmentSize) + (uint)ret.bssSymbols.Take(bssIndex).Sum(b => b.Size());
+                    for (var i = 0; i < 4; i++)
+                    {
+                        if (ret.textSegment[tsr.textSegmentReferenceOffset + i] != 0xFF)
+                            throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.name} which did not contain placeholder values!");
+                    }
+                    Array.Copy(BitConverter.GetBytes(bssOffset), 0, ret.textSegment, tsr.textSegmentReferenceOffset, 4);
+                    Console.Out.WriteLine($"\tBSS {bss.name}->{bssOffset}");
+                }
+
             }
 
             return ret;
@@ -522,7 +554,7 @@ namespace agent_playground
             return new CompileTextSectionResult(bytecode.ToArray(), labelsOffsets, symbolReferenceOffsets);
         }
 
-        private CompileDataSection CompileDataSectionLines(IEnumerable<string> dataLines)
+        private CompileDataSectionResult CompileDataSectionLines(IEnumerable<string> dataLines)
         {
             ushort offsetBytes = 0;
 
@@ -663,7 +695,33 @@ namespace agent_playground
                     throw new InvalidOperationException($"Unknown mnemonic: {dataAllocationDirective.Mnemonic}");
             }
 
-            return new CompileDataSection(bytecode.ToArray(), symbolOffsets);
+            return new CompileDataSectionResult(bytecode.ToArray(), symbolOffsets);
+        }
+
+        private CompileBssSectionResult CompileBssSectionLines(IEnumerable<string> dataLines)
+        {
+            var symbols = new List<BytecodeBssSymbol>();
+
+            foreach (var dataLine in dataLines)
+            {
+                // Knock off any comments
+                var line = dataLine.Split(';')[0].Trim();
+                var bssAllocationDirective = CompilerBssAllocationDirective.ParseLine(line);
+
+                if (string.Compare("resb", bssAllocationDirective.Mnemonic, StringComparison.InvariantCultureIgnoreCase) == 0)
+                {
+                    symbols.Add(new BytecodeBssSymbol
+                    {
+                        name = bssAllocationDirective.Label,
+                        type = BytecodeBssSymbol.BssType.Byte,
+                        length = bssAllocationDirective.Size
+                    });
+                }
+                else
+                    throw new InvalidOperationException($"Unknown mnemonic: {bssAllocationDirective.Mnemonic}");
+            }
+
+            return new CompileBssSectionResult(symbols);
         }
 
         public static IEnumerable<string> ParseOperandLine(string operandLine)

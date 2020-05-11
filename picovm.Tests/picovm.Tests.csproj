@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
-    <RootNamespace>agent_playground.Tests</RootNamespace>
+    <RootNamespace>picovm.Tests</RootNamespace>
 
     <IsPackable>false</IsPackable>
   </PropertyGroup>

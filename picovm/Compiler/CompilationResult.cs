@@ -1,7 +1,6 @@
-using System.ComponentModel;
 using System.Collections.Generic;
 
-namespace agent_playground
+namespace picovm.Compiler
 {
     public sealed class CompilationResult
     {
@@ -20,6 +19,8 @@ namespace agent_playground
         public byte[] dataSegment;
 
         public Dictionary<string, BytecodeDataSymbol> dataSymbolOffsets;
+
+        public List<BytecodeBssSymbol> bssSymbols;
 
         public readonly List<CompilationError> errors = new List<CompilationError>();
 

@@ -1,14 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using picovm.Compiler;
 
-namespace agent_playground
+namespace picovm.VM
 {
 
     public class Agent
     {
-        public const int E_INVALID = -1;
-
         #region Registers
         // General registers
         public const byte R_EAX = 0;
@@ -36,24 +35,26 @@ namespace agent_playground
 
         private bool[] flags = new bool[2];
 
-        private readonly byte[] memory = new byte[65535];
+        private byte[] memory = new byte[65535];
 
         private uint instructionPointer = 0;
         private uint stackPointer = 65535;
 
         public uint StackPointer => this.stackPointer;
 
-        public Agent(IEnumerable<byte> program)
+        private readonly IKernel kernel;
+
+        public Agent(IKernel kernel, IEnumerable<byte> program) : this(kernel, program.ToArray())
         {
-            var programArray = program.ToArray();
-            Array.Copy(programArray, memory, programArray.Length);
         }
-        public Agent(byte[] program)
+
+        public Agent(IKernel kernel, byte[] program)
         {
+            this.kernel = kernel;
             Array.Copy(program, memory, program.Length);
         }
 
-        public uint ReadExtendedRegister(Register reference)
+        public static uint ReadExtendedRegister(ulong[] registers, Register reference)
         {
             // http://www.cs.virginia.edu/~evans/cs216/guides/x86.html
 
@@ -90,6 +91,8 @@ namespace agent_playground
             }
             return ret;
         }
+
+        public uint ReadExtendedRegister(Register reference) => ReadExtendedRegister(this.registers, reference);
 
         public ushort ReadRegister(Register reference)
         {
@@ -153,7 +156,7 @@ namespace agent_playground
             return ret;
         }
 
-        public void WriteExtendedRegister(Register reference, uint value)
+        public static void WriteExtendedRegister(ulong[] registers, Register reference, uint value)
         {
             switch (reference)
             {
@@ -186,6 +189,48 @@ namespace agent_playground
                         const uint hi = 0;
                         var lo = value;
                         registers[R_EDX] = (ulong)hi << 32 | lo;
+
+                    }
+                    break;
+                default:
+                    throw new InvalidOperationException($"ERROR: Unknown extended register {reference}!");
+            }
+        }
+
+        public void WriteExtendedRegister(Register reference, uint value) => WriteExtendedRegister(this.registers, reference, value);
+
+        public static void WriteExtendedRegister(ulong[] registers, Register reference, int value)
+        {
+            switch (reference)
+            {
+                case Register.EAX:
+                    {
+                        const int hi = 0;
+                        var lo = value;
+                        registers[R_EAX] = (ulong)(hi << 32 | lo);
+                    }
+                    break;
+                case Register.EBX:
+                    {
+                        const int hi = 0;
+                        var lo = value;
+                        registers[R_EBX] = (ulong)(hi << 32 | lo);
+
+                    }
+                    break;
+                case Register.ECX:
+                    {
+                        const int hi = 0;
+                        var lo = value;
+                        registers[R_ECX] = (ulong)(hi << 32 | lo);
+
+                    }
+                    break;
+                case Register.EDX:
+                    {
+                        const int hi = 0;
+                        var lo = value;
+                        registers[R_EDX] = (ulong)(hi << 32 | lo);
 
                     }
                     break;
@@ -311,41 +356,6 @@ namespace agent_playground
                 Console.WriteLine($"{i}\t: {output}");
                 i -= 8;
             } while (i > 0);
-        }
-
-        // Processes the interrupt, returns whether the process should be terminated.
-        public bool KernelInterrupt()
-        {
-            // Linux-y interrupt syscalls
-            var syscall = ReadExtendedRegister(Register.EAX);
-            switch (syscall)
-            {
-                case 1: // sys_exit
-                    return true;
-                case 4: // sys_write
-                    var fd = ReadExtendedRegister(Register.EBX);
-                    var outputIndex = ReadExtendedRegister(Register.ECX);
-                    var outputLength = ReadExtendedRegister(Register.EDX);
-
-                    var outputBytes = new byte[outputLength];
-                    Array.Copy(memory, outputIndex, outputBytes, 0, outputLength);
-                    var outputString = System.Text.Encoding.ASCII.GetString(outputBytes);
-
-                    switch (fd)
-                    {
-                        case 1: // STDOUT
-                            Console.Out.Write(outputString);
-                            return false;
-                        case 2: // STDERR
-                            Console.Error.Write(outputString);
-                            return false;
-                        default:
-                            Dump();
-                            throw new InvalidOperationException($"Unknown file descriptor for sys_write: {fd}");
-                    }
-                default:
-                    throw new InvalidOperationException($"Unknown syscall number during kernel interrupt: {syscall}");
-            }
         }
 
         public int? Tick()
@@ -483,7 +493,7 @@ namespace agent_playground
                         {
                             // Linux kernel interrupt
                             case 0x80:
-                                if (KernelInterrupt())
+                                if (kernel.HandleInterrupt(ref registers, ref memory))
                                     return 0;
                                 break;
                         }
@@ -756,7 +766,7 @@ namespace agent_playground
                 default:
                     Console.Error.WriteLine($"ERROR: Unknown bytecode {instruction} EIP={instructionPointer - 1}!");
                     Dump();
-                    ret = E_INVALID;
+                    ret = -666;
                     break;
             }
 

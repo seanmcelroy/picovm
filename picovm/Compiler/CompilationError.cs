@@ -1,6 +1,4 @@
-using System.ComponentModel;
-
-namespace agent_playground
+namespace picovm.Compiler
 {
     public sealed class CompilationError
     {
