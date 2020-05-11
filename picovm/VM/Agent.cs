@@ -10,10 +10,10 @@ namespace picovm.VM
     {
         #region Registers
         // General registers
-        public const byte R_EAX = 0;
-        public const byte R_EBX = 1;
-        public const byte R_ECX = 2;
-        public const byte R_EDX = 3;
+        public const byte R_A = 0;
+        public const byte R_B = 1;
+        public const byte R_C = 2;
+        public const byte R_D = 3;
         // Segment registers
         public const byte R_CS = 4;
         public const byte R_DS = 5;
@@ -22,13 +22,13 @@ namespace picovm.VM
         public const byte R_GS = 8;
         public const byte R_SS = 9;
         // Index and pointers
-        public const byte R_ESI = 10;
-        public const byte R_EDI = 11;
-        public const byte R_EBP = 12;
-        public const byte R_EIP = 13;
-        public const byte R_ESP = 14;
+        public const byte R_SI = 10;
+        public const byte R_DI = 11;
+        public const byte R_BP = 12;
+        public const byte R_IP = 13;
+        public const byte R_SP = 14;
         // Indicator
-        public const byte R_EFLAGS = 15;
+        public const byte R_FLAGS = 15;
         #endregion
 
         private ulong[] registers = new ulong[16];
@@ -54,6 +54,25 @@ namespace picovm.VM
             Array.Copy(program, memory, program.Length);
         }
 
+        public static ulong ReadR64Register(ulong[] registers, Register reference)
+        {
+            switch (reference)
+            {
+                case Register.RAX:
+                    return registers[R_A];
+                case Register.RBX:
+                    return registers[R_B];
+                case Register.RCX:
+                    return registers[R_C];
+                case Register.RDX:
+                    return registers[R_D];
+                default:
+                    throw new InvalidOperationException($"ERROR: Unknown x64 register {reference}!");
+            }
+        }
+
+        public ulong ReadR64Register(Register reference) => ReadR64Register(this.registers, reference);
+
         public static uint ReadExtendedRegister(ulong[] registers, Register reference)
         {
             // http://www.cs.virginia.edu/~evans/cs216/guides/x86.html
@@ -64,25 +83,25 @@ namespace picovm.VM
             {
                 case Register.EAX:
                     {
-                        var u64 = registers[R_EAX];
+                        var u64 = registers[R_A];
                         ret = (uint)(u64 & uint.MaxValue);
                     }
                     break;
                 case Register.EBX:
                     {
-                        var u64 = registers[R_EBX];
+                        var u64 = registers[R_B];
                         ret = (uint)(u64 & uint.MaxValue);
                     }
                     break;
                 case Register.ECX:
                     {
-                        var u64 = registers[R_ECX];
+                        var u64 = registers[R_C];
                         ret = (uint)(u64 & uint.MaxValue);
                     }
                     break;
                 case Register.EDX:
                     {
-                        var u64 = registers[R_EDX];
+                        var u64 = registers[R_D];
                         ret = (uint)(u64 & uint.MaxValue);
                     }
                     break;
@@ -102,16 +121,16 @@ namespace picovm.VM
             switch (reference)
             {
                 case Register.AX:
-                    ret = (ushort)(registers[R_EAX] & (ulong)ushort.MaxValue);
+                    ret = (ushort)(registers[R_A] & (ulong)ushort.MaxValue);
                     break;
                 case Register.BX:
-                    ret = (ushort)(registers[R_EBX] & (ulong)ushort.MaxValue);
+                    ret = (ushort)(registers[R_B] & (ulong)ushort.MaxValue);
                     break;
                 case Register.CX:
-                    ret = (ushort)(registers[R_ECX] & (ulong)ushort.MaxValue);
+                    ret = (ushort)(registers[R_C] & (ulong)ushort.MaxValue);
                     break;
                 case Register.DX:
-                    ret = (ushort)(registers[R_EDX] & (ulong)ushort.MaxValue);
+                    ret = (ushort)(registers[R_D] & (ulong)ushort.MaxValue);
                     break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
@@ -127,34 +146,57 @@ namespace picovm.VM
             switch (reference)
             {
                 case Register.AH:
-                    ret = (byte)((registers[R_EAX] & (ulong)0xFF00) >> 8);
+                    ret = (byte)((registers[R_A] & (ulong)0xFF00) >> 8);
                     break;
                 case Register.AL:
-                    ret = (byte)(registers[R_EAX] & (ulong)0x00FF);
+                    ret = (byte)(registers[R_A] & (ulong)0x00FF);
                     break;
                 case Register.BH:
-                    ret = (byte)((registers[R_EBX] & (ulong)0xFF00) >> 8);
+                    ret = (byte)((registers[R_B] & (ulong)0xFF00) >> 8);
                     break;
                 case Register.BL:
-                    ret = (byte)(registers[R_EBX] & (ulong)0x00FF);
+                    ret = (byte)(registers[R_B] & (ulong)0x00FF);
                     break;
                 case Register.CH:
-                    ret = (byte)((registers[R_ECX] & (ulong)0xFF00) >> 8);
+                    ret = (byte)((registers[R_C] & (ulong)0xFF00) >> 8);
                     break;
                 case Register.CL:
-                    ret = (byte)(registers[R_ECX] & (ulong)0x00FF);
+                    ret = (byte)(registers[R_C] & (ulong)0x00FF);
                     break;
                 case Register.DH:
-                    ret = (byte)((registers[R_EDX] & (ulong)0xFF00) >> 8);
+                    ret = (byte)((registers[R_D] & (ulong)0xFF00) >> 8);
                     break;
                 case Register.DL:
-                    ret = (byte)(registers[R_EDX] & (ulong)0x00FF);
+                    ret = (byte)(registers[R_D] & (ulong)0x00FF);
                     break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
             }
             return ret;
         }
+
+        public static void WriteR64Register(ulong[] registers, Register reference, ulong value)
+        {
+            switch (reference)
+            {
+                case Register.RAX:
+                    registers[R_A] = value;
+                    break;
+                case Register.RBX:
+                    registers[R_B] = value;
+                    break;
+                case Register.RCX:
+                    registers[R_C] = value;
+                    break;
+                case Register.RDX:
+                    registers[R_D] = value;
+                    break;
+                default:
+                    throw new InvalidOperationException($"ERROR: Unknown x64 register {reference}!");
+            }
+        }
+
+        public void WriteR64Register(Register reference, ulong value) => WriteR64Register(this.registers, reference, value);
 
         public static void WriteExtendedRegister(ulong[] registers, Register reference, uint value)
         {
@@ -164,7 +206,7 @@ namespace picovm.VM
                     {
                         const uint hi = 0;
                         var lo = value;
-                        registers[R_EAX] = (ulong)hi << 32 | lo;
+                        registers[R_A] = (ulong)hi << 32 | lo;
 
                     }
                     break;
@@ -172,7 +214,7 @@ namespace picovm.VM
                     {
                         const uint hi = 0;
                         var lo = value;
-                        registers[R_EBX] = (ulong)hi << 32 | lo;
+                        registers[R_B] = (ulong)hi << 32 | lo;
 
                     }
                     break;
@@ -180,7 +222,7 @@ namespace picovm.VM
                     {
                         const uint hi = 0;
                         var lo = value;
-                        registers[R_ECX] = (ulong)hi << 32 | lo;
+                        registers[R_C] = (ulong)hi << 32 | lo;
 
                     }
                     break;
@@ -188,7 +230,7 @@ namespace picovm.VM
                     {
                         const uint hi = 0;
                         var lo = value;
-                        registers[R_EDX] = (ulong)hi << 32 | lo;
+                        registers[R_D] = (ulong)hi << 32 | lo;
 
                     }
                     break;
@@ -207,14 +249,14 @@ namespace picovm.VM
                     {
                         const int hi = 0;
                         var lo = value;
-                        registers[R_EAX] = (ulong)(hi << 32 | lo);
+                        registers[R_A] = (ulong)(hi << 32 | lo);
                     }
                     break;
                 case Register.EBX:
                     {
                         const int hi = 0;
                         var lo = value;
-                        registers[R_EBX] = (ulong)(hi << 32 | lo);
+                        registers[R_B] = (ulong)(hi << 32 | lo);
 
                     }
                     break;
@@ -222,7 +264,7 @@ namespace picovm.VM
                     {
                         const int hi = 0;
                         var lo = value;
-                        registers[R_ECX] = (ulong)(hi << 32 | lo);
+                        registers[R_C] = (ulong)(hi << 32 | lo);
 
                     }
                     break;
@@ -230,7 +272,7 @@ namespace picovm.VM
                     {
                         const int hi = 0;
                         var lo = value;
-                        registers[R_EDX] = (ulong)(hi << 32 | lo);
+                        registers[R_D] = (ulong)(hi << 32 | lo);
 
                     }
                     break;
@@ -249,16 +291,16 @@ namespace picovm.VM
             switch (reference)
             {
                 case Register.AX:
-                    registers[R_EAX] = registers[R_EAX] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    registers[R_A] = registers[R_A] & ~((ulong)ushort.MaxValue) | (ulong)value;
                     break;
                 case Register.BX:
-                    registers[R_EBX] = registers[R_EBX] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    registers[R_B] = registers[R_B] & ~((ulong)ushort.MaxValue) | (ulong)value;
                     break;
                 case Register.CX:
-                    registers[R_ECX] = registers[R_ECX] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    registers[R_C] = registers[R_C] & ~((ulong)ushort.MaxValue) | (ulong)value;
                     break;
                 case Register.DX:
-                    registers[R_EDX] = registers[R_EDX] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    registers[R_D] = registers[R_D] & ~((ulong)ushort.MaxValue) | (ulong)value;
                     break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
@@ -271,28 +313,28 @@ namespace picovm.VM
             switch (reference)
             {
                 case Register.AH:
-                    registers[R_EAX] = registers[R_EAX] & ~((ulong)0xFF00) | ((ulong)value << 8);
+                    registers[R_A] = registers[R_A] & ~((ulong)0xFF00) | ((ulong)value << 8);
                     break;
                 case Register.AL:
-                    registers[R_EAX] = registers[R_EAX] & ~((ulong)0x00FF) | (ulong)value;
+                    registers[R_A] = registers[R_A] & ~((ulong)0x00FF) | (ulong)value;
                     break;
                 case Register.BH:
-                    registers[R_EBX] = registers[R_EBX] & ~((ulong)0xFF00) | ((ulong)value << 8);
+                    registers[R_B] = registers[R_B] & ~((ulong)0xFF00) | ((ulong)value << 8);
                     break;
                 case Register.BL:
-                    registers[R_EBX] = registers[R_EBX] & ~((ulong)0x00FF) | (ulong)value;
+                    registers[R_B] = registers[R_B] & ~((ulong)0x00FF) | (ulong)value;
                     break;
                 case Register.CH:
-                    registers[R_ECX] = registers[R_ECX] & ~((ulong)0xFF00) | ((ulong)value << 8);
+                    registers[R_C] = registers[R_C] & ~((ulong)0xFF00) | ((ulong)value << 8);
                     break;
                 case Register.CL:
-                    registers[R_ECX] = registers[R_ECX] & ~((ulong)0x00FF) | (ulong)value;
+                    registers[R_C] = registers[R_C] & ~((ulong)0x00FF) | (ulong)value;
                     break;
                 case Register.DH:
-                    registers[R_EDX] = registers[R_EDX] & ~((ulong)0xFF00) | ((ulong)value << 8);
+                    registers[R_D] = registers[R_D] & ~((ulong)0xFF00) | ((ulong)value << 8);
                     break;
                 case Register.DL:
-                    registers[R_EDX] = registers[R_EDX] & ~((ulong)0x00FF) | (ulong)value;
+                    registers[R_D] = registers[R_D] & ~((ulong)0x00FF) | (ulong)value;
                     break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
@@ -510,7 +552,9 @@ namespace picovm.VM
                         if (src == Register.EAX || src == Register.EBX || src == Register.ECX || src == Register.EDX)
                         {
                             var srcVal = ReadExtendedRegister(src);
-                            if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
+                            if (dst == Register.RAX || dst == Register.RBX || dst == Register.RCX || dst == Register.RDX)
+                                WriteR64Register(dst, srcVal);
+                            else if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
                                 WriteExtendedRegister(dst, srcVal);
                             else if (dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX)
                                 throw new InvalidOperationException("ERROR: MOV dst is a word but source is a dword");
@@ -520,12 +564,14 @@ namespace picovm.VM
                                 || dst == Register.DH || dst == Register.DL)
                                 throw new InvalidOperationException("ERROR: MOV dst is a byte but source is a dword");
                             else
-                                throw new InvalidOperationException("ERROR: Unrecognized register for MOV dst");
+                                throw new InvalidOperationException($"ERROR: Unrecognized register for MOV dst: {dst}");
                         }
                         else if (src == Register.AX || src == Register.BX || src == Register.CX || src == Register.DX)
                         {
                             var srcVal = ReadRegister(src);
-                            if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
+                            if (dst == Register.RAX || dst == Register.RBX || dst == Register.RCX || dst == Register.RDX)
+                                WriteR64Register(dst, srcVal);
+                            else if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
                                 WriteExtendedRegister(dst, srcVal);
                             else if (dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX)
                                 WriteRegister(dst, srcVal);
@@ -535,7 +581,7 @@ namespace picovm.VM
                                 || dst == Register.DH || dst == Register.DL)
                                 throw new InvalidOperationException("ERROR: MOV dst is a byte but source is a word");
                             else
-                                throw new InvalidOperationException("ERROR: Unrecognized register for MOV dst");
+                                throw new InvalidOperationException($"ERROR: Unrecognized register for MOV dst: {dst}");
                         }
                         else if (src == Register.AH || src == Register.AL
                             || src == Register.BH || src == Register.BL
@@ -543,7 +589,9 @@ namespace picovm.VM
                             || src == Register.DH || src == Register.DL)
                         {
                             var srcVal = ReadHalfRegister(src);
-                            if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
+                            if (dst == Register.RAX || dst == Register.RBX || dst == Register.RCX || dst == Register.RDX)
+                                WriteR64Register(dst, srcVal);
+                            else if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
                                 WriteExtendedRegister(dst, srcVal);
                             else if (dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX)
                                 WriteRegister(dst, srcVal);
@@ -553,7 +601,7 @@ namespace picovm.VM
                                 || dst == Register.DH || dst == Register.DL)
                                 WriteHalfRegister(dst, srcVal);
                             else
-                                throw new InvalidOperationException("ERROR: Unrecognized register for MOV dst");
+                                throw new InvalidOperationException($"ERROR: Unrecognized register for MOV dst: {dst}");
                         }
                         else
                         {
@@ -568,7 +616,13 @@ namespace picovm.VM
                         var dst = (Register)memory[instructionPointer];
                         instructionPointer++;
 
-                        if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
+                        if (dst == Register.RAX || dst == Register.RBX || dst == Register.RCX || dst == Register.RDX)
+                        {
+                            var loc = BitConverter.ToUInt64(memory, (int)instructionPointer);
+                            instructionPointer += 8;
+                            WriteR64Register(dst, loc);
+                        }
+                        else if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
                         {
                             var loc = BitConverter.ToUInt32(memory, (int)instructionPointer);
                             instructionPointer += 4;
@@ -602,7 +656,13 @@ namespace picovm.VM
                         var dst = (Register)memory[instructionPointer];
                         instructionPointer++;
 
-                        if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
+                        if (dst == Register.RAX || dst == Register.RBX || dst == Register.RCX || dst == Register.RDX)
+                        {
+                            var val = BitConverter.ToUInt64(memory, (int)instructionPointer);
+                            instructionPointer += 8;
+                            WriteR64Register(dst, val);
+                        }
+                        else if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
                         {
                             var val = BitConverter.ToUInt32(memory, (int)instructionPointer);
                             instructionPointer += 4;
@@ -626,7 +686,7 @@ namespace picovm.VM
                         else
                         {
                             Dump();
-                            throw new InvalidOperationException("ERROR: Unrecognized register for MOV dst");
+                            throw new InvalidOperationException($"ERROR: Unrecognized register for MOV dst: {dst}");
                         }
                         break;
                     }
@@ -763,6 +823,88 @@ namespace picovm.VM
                             instructionPointer += 4;
                         break;
                     }
+                case Bytecode.XOR_REG_REG:
+                    {
+                        var dst = (Register)memory[instructionPointer];
+                        instructionPointer++;
+                        var src = (Register)memory[instructionPointer];
+                        instructionPointer++;
+
+                        if (src == Register.EAX || src == Register.EBX || src == Register.ECX || src == Register.EDX)
+                        {
+                            var srcVal = ReadExtendedRegister(src);
+                            if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
+                            {
+                                var dstVal = ReadExtendedRegister(dst);
+                                WriteExtendedRegister(dst, dstVal ^ srcVal);
+                            }
+                            else if (dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX)
+                                throw new InvalidOperationException("ERROR: XOR dst is a word but source is a dword");
+                            else if (dst == Register.AH || dst == Register.AL
+                                || dst == Register.BH || dst == Register.BL
+                                || dst == Register.CH || dst == Register.CL
+                                || dst == Register.DH || dst == Register.DL)
+                                throw new InvalidOperationException("ERROR: XOR dst is a byte but source is a dword");
+                            else
+                                throw new InvalidOperationException("ERROR: Unrecognized register for XOR dst");
+                        }
+                        else if (src == Register.AX || src == Register.BX || src == Register.CX || src == Register.DX)
+                        {
+                            var srcVal = ReadRegister(src);
+                            if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
+                            {
+                                var dstVal = ReadExtendedRegister(dst);
+                                WriteExtendedRegister(dst, dstVal ^ srcVal);
+                            }
+                            else if (dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX)
+                            {
+                                var dstVal = ReadRegister(dst);
+                                WriteRegister(dst, (ushort)(dstVal ^ srcVal));
+                            }
+                            else if (dst == Register.AH || dst == Register.AL
+                                || dst == Register.BH || dst == Register.BL
+                                || dst == Register.CH || dst == Register.CL
+                                || dst == Register.DH || dst == Register.DL)
+                                throw new InvalidOperationException("ERROR: XOR dst is a byte but source is a word");
+                            else
+                                throw new InvalidOperationException("ERROR: Unrecognized register for XOR dst");
+                        }
+                        else if (src == Register.AH || src == Register.AL
+                            || src == Register.BH || src == Register.BL
+                            || src == Register.CH || src == Register.CL
+                            || src == Register.DH || src == Register.DL)
+                        {
+                            var srcVal = ReadHalfRegister(src);
+                            if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX)
+                            {
+                                var dstVal = ReadExtendedRegister(dst);
+                                WriteExtendedRegister(dst, dstVal ^ srcVal);
+                            }
+                            else if (dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX)
+                            {
+                                var dstVal = ReadRegister(dst);
+                                WriteRegister(dst, (ushort)(dstVal ^ srcVal));
+                            }
+                            else if (dst == Register.AH || dst == Register.AL
+                                || dst == Register.BH || dst == Register.BL
+                                || dst == Register.CH || dst == Register.CL
+                                || dst == Register.DH || dst == Register.DL)
+                            {
+                                var dstVal = ReadHalfRegister(dst);
+                                WriteHalfRegister(dst, (byte)(dstVal ^ srcVal));
+                            }
+                            else
+                                throw new InvalidOperationException("ERROR: Unrecognized register for XOR dst");
+                        }
+                        else
+                        {
+                            Dump();
+                            throw new InvalidOperationException("ERROR: Unrecognized register for XOR src");
+                        }
+
+                        break;
+                    }
+
                 default:
                     Console.Error.WriteLine($"ERROR: Unknown bytecode {instruction} EIP={instructionPointer - 1}!");
                     Dump();

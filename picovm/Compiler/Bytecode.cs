@@ -43,6 +43,9 @@ namespace picovm.Compiler
         [Description("JZ")]
         JZ = 31,
         [Description("JMP")]
-        JMP = 32
+        JMP = 32,
+
+        [Description("XOR_REG_REG")]
+        XOR_REG_REG = 40
     }
 }

@@ -3,23 +3,9 @@ using System.IO;
 
 namespace picovm.VM
 {
-    public class Linux32Kernel : IKernel
+    public sealed class Linux64Kernel : Linux32Kernel
     {
-        // Reference: https://www-numi.fnal.gov/offline_software/srt_public_context/WebDocs/Errors/unix_system_errors.html
-        public enum Errors : int
-        {
-            EBADF = 9,
-            EINVAL = 22
-        }
-
-        public enum FileDescriptors : uint
-        {
-            STDIN = 0,
-            STDOUT = 1,
-            STDERR = 2,
-        }
-
-        public virtual bool HandleInterrupt(ref ulong[] registers, ref byte[] memory)
+        public override bool HandleInterrupt(ref ulong[] registers, ref byte[] memory)
         {
             // Linux-y interrupt syscalls
             // See https://syscalls.kernelgrok.com/

@@ -308,6 +308,17 @@ namespace picovm.Compiler
             return ret;
         }
 
+        private static ulong ParseUInt64Constant(string operand)
+        {
+            if (operand.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                return ulong.Parse(operand.Substring(2), System.Globalization.NumberStyles.HexNumber);
+
+            if (BytecodeCompiler.NUMERALS.Any(c => c == operand[0]) && operand.EndsWith("h", StringComparison.OrdinalIgnoreCase))
+                return ulong.Parse(operand.Substring(0, operand.Length - 1), System.Globalization.NumberStyles.HexNumber);
+
+            return ulong.Parse(operand);
+        }
+
         private static uint ParseUInt32Constant(string operand)
         {
             if (operand.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
@@ -436,10 +447,11 @@ namespace picovm.Compiler
                                                 textSegmentInstructionOffset = instructionOffset,
                                                 textSegmentReferenceOffset = offsetBytes,
                                                 referenceLength =
-                                                    (regDst == Register.EAX || regDst == Register.EBX || regDst == Register.ECX || regDst == Register.EDX) ? (byte)4 :
+                                                    (regDst == Register.RAX || regDst == Register.RBX || regDst == Register.RCX || regDst == Register.RDX) ? (byte)8 :
+                                                    ((regDst == Register.EAX || regDst == Register.EBX || regDst == Register.ECX || regDst == Register.EDX) ? (byte)4 :
                                                     ((regDst == Register.AX || regDst == Register.BX || regDst == Register.CX || regDst == Register.DX) ? (byte)2 :
                                                     ((regDst == Register.AH || regDst == Register.BH || regDst == Register.CH || regDst == Register.DH ||
-                                                      regDst == Register.AL || regDst == Register.BL || regDst == Register.CL || regDst == Register.DL) ? (byte)1 : (byte)0))
+                                                      regDst == Register.AL || regDst == Register.BL || regDst == Register.CL || regDst == Register.DL) ? (byte)1 : (byte)0)))
                                             };
 
                                             if (textSymbol.referenceLength == 0)
@@ -461,7 +473,12 @@ namespace picovm.Compiler
                                             bytecode.Add((byte)dstReg);
                                             offsetBytes++;
 
-                                            if (dstReg == Register.EAX || dstReg == Register.EBX || dstReg == Register.ECX || dstReg == Register.EDX)
+                                            if (dstReg == Register.RAX || dstReg == Register.RBX || dstReg == Register.RCX || dstReg == Register.RDX)
+                                            {
+                                                bytecode.AddRange(BitConverter.GetBytes(ParseUInt64Constant(src)));
+                                                offsetBytes += 8;
+                                            }
+                                            else if (dstReg == Register.EAX || dstReg == Register.EBX || dstReg == Register.ECX || dstReg == Register.EDX)
                                             {
                                                 bytecode.AddRange(BitConverter.GetBytes(ParseUInt32Constant(src)));
                                                 offsetBytes += 4;
@@ -546,6 +563,12 @@ namespace picovm.Compiler
                 else if (instruction == "AND")
                 {
                     var abc = And(lineParts[lineParts.Length - 2], lineParts[lineParts.Length - 1]);
+                    bytecode.AddRange(abc);
+                    offsetBytes += (ushort)abc.Length;
+                }
+                else if (string.Compare("XOR", instruction, StringComparison.InvariantCulture) == 0)
+                {
+                    var abc = XOr(lineParts[lineParts.Length - 2], lineParts[lineParts.Length - 1]);
                     bytecode.AddRange(abc);
                     offsetBytes += (ushort)abc.Length;
                 }
@@ -898,7 +921,7 @@ namespace picovm.Compiler
         }
 
         private static readonly string[] registerNames = new string[] {
-            "EAX", "AX", "AH", "AL",
+            "RAX", "EAX", "AX", "AH", "AL",
             "EBX", "BX", "BH", "BL",
             "ECX", "CX", "CH", "CL",
             "EDX", "DX", "DH", "DL"
@@ -1045,6 +1068,38 @@ namespace picovm.Compiler
             }
 
             throw new Exception($"ERROR: Unable to parse AND into an opcode");
+        }
+
+        private byte[] XOr(string operand1, string operand2)
+        {
+            var o1Type = GetOperandType(operand1);
+            var o2Type = GetOperandType(operand2);
+
+            switch (o1Type)
+            {
+                case ParameterType.RegisterReference:
+                    {
+                        var o1Reg = registers[operand1.ToUpperInvariant()];
+                        switch (o2Type)
+                        {
+                            case ParameterType.RegisterReference:
+                                {
+                                    var o2Reg = registers[operand2.ToUpperInvariant()];
+                                    var ret = new byte[3];
+                                    ret[0] = (byte)Bytecode.XOR_REG_REG;
+                                    ret[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                    ret[2] = (byte)registers[operand2.ToUpperInvariant()];
+                                    return ret;
+                                }
+                            default:
+                                throw new NotImplementedException();
+                        }
+                    }
+                default:
+                    throw new Exception($"ERROR: Unable to parse XOR parameters into an opcode, unhandled operand: {operand1}");
+            }
+
+            throw new Exception($"ERROR: Unable to parse XOR into an opcode");
         }
 
         private byte[] Pop(string operand)

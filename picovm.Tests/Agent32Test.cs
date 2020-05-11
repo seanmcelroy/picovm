@@ -4,7 +4,7 @@ using Xunit;
 
 namespace picovm.Tests
 {
-    public class AgentTest
+    public class Agent32Test
     {
         private static Linux32Kernel kernel = new Linux32Kernel();
 
@@ -93,6 +93,65 @@ namespace picovm.Tests
         }
 
         [Fact]
+        public void MOV_Bonanza32()
+        {
+            var programText = new string[] {
+                "section	.text",
+                "global _start",
+                "_start:",
+                "mov  eax, 0x11112222 ; eax = 0x11112222",
+                "mov  ax, 0x3333      ; eax = 0x11113333 (works, only low 16 bits changed)",
+                "mov  al, 0x44        ; eax = 0x11113344 (works, only low 8 bits changed)",
+                "mov  ah, 0x55        ; eax = 0x11115544 (works, only high 8 bits changed)",
+                "xor  ah, ah          ; eax = 0x11110044 (works, only high 8 bits cleared)",
+                "mov  eax, 0x11112222 ; eax = 0x11112222",
+                "xor  al, al          ; eax = 0x11112200 (works, only low 8 bits cleared)",
+                "mov  eax, 0x11112222 ; eax = 0x11112222",
+                "xor  ax, ax          ; eax = 0x11110000 (works, only low 16 bits cleared)"
+            };
+
+            var compiler = new BytecodeCompiler();
+            var compiled = compiler.Compile("UNIT_TEST", programText);
+
+            var agent = new Agent(kernel, compiled.textSegment);
+            var ret = agent.Tick();
+            Xunit.Assert.Null(ret);
+            Xunit.Assert.Equal((uint)0x11112222, agent.ReadExtendedRegister(Register.EAX));
+
+            ret = agent.Tick();
+            Xunit.Assert.Null(ret);
+            Xunit.Assert.Equal((uint)0x11113333, agent.ReadExtendedRegister(Register.EAX));
+
+            ret = agent.Tick();
+            Xunit.Assert.Null(ret);
+            Xunit.Assert.Equal((uint)0x11113344, agent.ReadExtendedRegister(Register.EAX));
+
+            ret = agent.Tick();
+            Xunit.Assert.Null(ret);
+            Xunit.Assert.Equal((uint)0x11115544, agent.ReadExtendedRegister(Register.EAX));
+
+            ret = agent.Tick();
+            Xunit.Assert.Null(ret);
+            Xunit.Assert.Equal((uint)0x11110044, agent.ReadExtendedRegister(Register.EAX));
+
+            ret = agent.Tick();
+            Xunit.Assert.Null(ret);
+            Xunit.Assert.Equal((uint)0x11112222, agent.ReadExtendedRegister(Register.EAX));
+
+            ret = agent.Tick();
+            Xunit.Assert.Null(ret);
+            Xunit.Assert.Equal((uint)0x11112200, agent.ReadExtendedRegister(Register.EAX));
+
+            ret = agent.Tick();
+            Xunit.Assert.Null(ret);
+            Xunit.Assert.Equal((uint)0x11112222, agent.ReadExtendedRegister(Register.EAX)); // Program should have terminated on the second tick
+
+            ret = agent.Tick();
+            Xunit.Assert.Null(ret);
+            Xunit.Assert.Equal((uint)0x11110000, agent.ReadExtendedRegister(Register.EAX)); // Program should have terminated on the second tick
+        }
+
+        [Fact]
         public void PUSH_POP_Overlayed()
         {
             var programText = new string[] {
@@ -142,6 +201,5 @@ namespace picovm.Tests
             Xunit.Assert.NotNull(ret);
             Xunit.Assert.Equal(0, ret); // Program should have terminated on the second tick
         }
-
     }
 }
