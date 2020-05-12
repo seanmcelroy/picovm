@@ -19,6 +19,9 @@ namespace picovm.Compiler
         [Description("MOV_REG_CON")]
         MOV_REG_CON = 5,
 
+        [Description("MOV_MEM_CON")]
+        MOV_MEM_CON = 6,
+
         [Description("PUSH_REG")]
         PUSH_REG = 10,
         [Description("PUSH_MEM")]

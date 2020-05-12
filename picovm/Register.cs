@@ -52,6 +52,15 @@ namespace picovm
         DL = 119,
 
         [Description("ESP")]
-        ESP = 120
+        SP = 120,
+
+        R8 = 208,
+        R9 = 209,
+        R10 = 210,
+        R11 = 211,
+        R12 = 212,
+        R13 = 213,
+        R14 = 214,
+        R15 = 215
     }
 }

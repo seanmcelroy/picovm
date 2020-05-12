@@ -38,3 +38,6 @@ A small set of unit tests are included in the picovm.Tests directory
 * :ballot_box_with_check: Interrupt vectors, initial sys_write syscall
 * :ballot_box_with_check: BSS segment, initial sys_read syscall
 * :black_square_button: Separate compliation and loader
+* :black_square_button: Output functional a.out binary
+* :black_square_button: Floating-point unit (FPU)
+* :black_square_button: x64 support

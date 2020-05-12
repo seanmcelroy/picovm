@@ -13,7 +13,8 @@ namespace picovm.Compiler
             RegisterReference = 1,
             RegisterAddress = 2,
             Constant = 3,
-            Variable = 4
+            Variable = 4,
+            VariableAddress = 5
         }
 
         private enum SectionType
@@ -288,21 +289,23 @@ namespace picovm.Compiler
                 }
 
                 // Perform BSS reference replacements
-                var tsrBss = ret.textSymbolReferenceOffsets.Where(tsr => ret.bssSymbols.Exists(bss => string.Compare(bss.name, tsr.name, StringComparison.InvariantCultureIgnoreCase) == 0)).ToArray();
-                foreach (var tsr in tsrBss)
+                if (ret.bssSymbols != null)
                 {
-                    var bss = ret.bssSymbols.Single(bss => string.Compare(bss.name, tsr.name, StringComparison.InvariantCultureIgnoreCase) == 0);
-                    var bssIndex = ret.bssSymbols.IndexOf(bss);
-                    uint bssOffset = (ret.textSegmentBase + ret.textSegmentSize) + (ret.dataSegmentSize) + (uint)ret.bssSymbols.Take(bssIndex).Sum(b => b.Size());
-                    for (var i = 0; i < 4; i++)
+                    var tsrBss = ret.textSymbolReferenceOffsets.Where(tsr => ret.bssSymbols.Exists(bss => string.Compare(bss.name, tsr.name, StringComparison.InvariantCultureIgnoreCase) == 0)).ToArray();
+                    foreach (var tsr in tsrBss)
                     {
-                        if (ret.textSegment[tsr.textSegmentReferenceOffset + i] != 0xFF)
-                            throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.name} which did not contain placeholder values!");
+                        var bss = ret.bssSymbols.Single(bss => string.Compare(bss.name, tsr.name, StringComparison.InvariantCultureIgnoreCase) == 0);
+                        var bssIndex = ret.bssSymbols.IndexOf(bss);
+                        uint bssOffset = (ret.textSegmentBase + ret.textSegmentSize) + (ret.dataSegmentSize) + (uint)ret.bssSymbols.Take(bssIndex).Sum(b => b.Size());
+                        for (var i = 0; i < 4; i++)
+                        {
+                            if (ret.textSegment[tsr.textSegmentReferenceOffset + i] != 0xFF)
+                                throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.name} which did not contain placeholder values!");
+                        }
+                        Array.Copy(BitConverter.GetBytes(bssOffset), 0, ret.textSegment, tsr.textSegmentReferenceOffset, 4);
+                        Console.Out.WriteLine($"\tBSS {bss.name}->{bssOffset}");
                     }
-                    Array.Copy(BitConverter.GetBytes(bssOffset), 0, ret.textSegment, tsr.textSegmentReferenceOffset, 4);
-                    Console.Out.WriteLine($"\tBSS {bss.name}->{bssOffset}");
                 }
-
             }
 
             return ret;
@@ -364,15 +367,69 @@ namespace picovm.Compiler
             {
                 // Knock off any comments
                 var line = programLine.Split(';')[0].TrimEnd();
-                var lineParts = line.TrimStart(' ', '\t').Split(new char[] { ' ', '\t', ',' }, StringSplitOptions.RemoveEmptyEntries).ToArray();
 
+                // Fix any missing whitespace between type operators and brackets.
+                line = line.Replace("BYTE[", "BYTE [", StringComparison.InvariantCultureIgnoreCase)
+                            .Replace("BYTE PTR[", "BYTE PTR [", StringComparison.InvariantCultureIgnoreCase)
+                            .Replace("WORD[", "WORD [", StringComparison.InvariantCultureIgnoreCase)
+                            .Replace("WORD PTR[", "WORD PTR [", StringComparison.InvariantCultureIgnoreCase)
+                            .Replace("DWORD[", "DWORD [", StringComparison.InvariantCultureIgnoreCase)
+                            .Replace("DWORD PTR[", "DWORD PTR [", StringComparison.InvariantCultureIgnoreCase)
+                            .Replace("QWORD[", "QWORD [", StringComparison.InvariantCultureIgnoreCase)
+                            .Replace("QWORD PTR[", "QWORD PTR [", StringComparison.InvariantCultureIgnoreCase);
+
+                var lineParts = line.TrimStart(' ', '\t').Split(new char[] { ' ', '\t', ',' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+
+                // Ignore whitespace between the first token and the second if the second is a colon.  Poorly formatted label.
+                if (lineParts.Count > 2 && lineParts[1].Length == 1 && lineParts[1][0] == ':')
+                {
+                    var respin = new List<string>(new string[] { lineParts.Take(2).Aggregate((c, n) => c + n) });
+                    respin.AddRange(lineParts.Skip(2));
+                    lineParts = respin.ToList();
+                }
+
+                // Parse label
                 if (lineParts[0].EndsWith(':'))
                 {
                     labelsOffsets.Add(lineParts[0].TrimEnd(':'), offsetBytes);
-                    if (lineParts.Length == 1)
+                    if (lineParts.Count == 1)
                         continue;
 
-                    line = lineParts.Skip(1).Aggregate((c, n) => $"{c} {n}");
+                    lineParts = lineParts.Skip(1).ToList();
+                }
+
+                // Parse out type hints
+                byte? typeHintSize = null;
+                if (lineParts.Count > 1)
+                {
+                    if (string.Compare(lineParts[1], "BYTE", StringComparison.InvariantCultureIgnoreCase) == 0)
+                    {
+                        typeHintSize = 1;
+                        lineParts.RemoveAt(1);
+                        if (lineParts.Count > 2 && string.Compare(lineParts[1], "PTR", StringComparison.InvariantCultureIgnoreCase) == 0)
+                            lineParts.RemoveAt(1);
+                    }
+                    else if (string.Compare(lineParts[1], "WORD", StringComparison.InvariantCultureIgnoreCase) == 0)
+                    {
+                        typeHintSize = 2;
+                        lineParts.RemoveAt(1);
+                        if (lineParts.Count > 2 && string.Compare(lineParts[1], "PTR", StringComparison.InvariantCultureIgnoreCase) == 0)
+                            lineParts.RemoveAt(1);
+                    }
+                    else if (string.Compare(lineParts[1], "DWORD", StringComparison.InvariantCultureIgnoreCase) == 0)
+                    {
+                        typeHintSize = 4;
+                        lineParts.RemoveAt(1);
+                        if (lineParts.Count > 2 && string.Compare(lineParts[1], "PTR", StringComparison.InvariantCultureIgnoreCase) == 0)
+                            lineParts.RemoveAt(1);
+                    }
+                    else if (string.Compare(lineParts[1], "QWORD", StringComparison.InvariantCultureIgnoreCase) == 0)
+                    {
+                        typeHintSize = 8;
+                        lineParts.RemoveAt(1);
+                        if (lineParts.Count > 2 && string.Compare(lineParts[1], "PTR", StringComparison.InvariantCultureIgnoreCase) == 0)
+                            lineParts.RemoveAt(1);
+                    }
                 }
 
                 var instruction = lineParts[0].ToUpperInvariant();
@@ -385,7 +442,7 @@ namespace picovm.Compiler
                 }
                 else if (instruction == "INT")
                 {
-                    var operand = lineParts[lineParts.Length - 1];
+                    var operand = lineParts[lineParts.Count - 1];
                     var operandType = GetOperandType(operand);
                     if (operandType != ParameterType.Constant)
                         throw new Exception($"ERROR: Unable to parse INT operand, expected a constant: {line}");
@@ -398,9 +455,9 @@ namespace picovm.Compiler
                 }
                 else if (instruction == "MOV")
                 {
-                    var dst = lineParts[lineParts.Length - 2].ToUpperInvariant();
+                    var dst = lineParts[lineParts.Count - 2].ToUpperInvariant();
                     var dstType = GetOperandType(dst);
-                    var src = lineParts[lineParts.Length - 1].ToUpperInvariant();
+                    var src = lineParts[lineParts.Count - 1].ToUpperInvariant();
                     var srcType = GetOperandType(src);
 
                     switch (dstType)
@@ -447,11 +504,10 @@ namespace picovm.Compiler
                                                 textSegmentInstructionOffset = instructionOffset,
                                                 textSegmentReferenceOffset = offsetBytes,
                                                 referenceLength =
-                                                    (regDst == Register.RAX || regDst == Register.RBX || regDst == Register.RCX || regDst == Register.RDX) ? (byte)8 :
-                                                    ((regDst == Register.EAX || regDst == Register.EBX || regDst == Register.ECX || regDst == Register.EDX) ? (byte)4 :
-                                                    ((regDst == Register.AX || regDst == Register.BX || regDst == Register.CX || regDst == Register.DX) ? (byte)2 :
-                                                    ((regDst == Register.AH || regDst == Register.BH || regDst == Register.CH || regDst == Register.DH ||
-                                                      regDst == Register.AL || regDst == Register.BL || regDst == Register.CL || regDst == Register.DL) ? (byte)1 : (byte)0)))
+                                                    (typeHintSize == 8 || (!typeHintSize.HasValue && regDst.Size() == 8)) ? (byte)8 :
+                                                    ((typeHintSize == 4 || (!typeHintSize.HasValue && regDst.Size() == 4)) ? (byte)4 :
+                                                    ((typeHintSize == 2 || (!typeHintSize.HasValue && regDst.Size() == 2)) ? (byte)2 :
+                                                    ((typeHintSize == 1 || (!typeHintSize.HasValue && regDst.Size() == 1)) ? (byte)1 : (byte)0)))
                                             };
 
                                             if (textSymbol.referenceLength == 0)
@@ -473,25 +529,22 @@ namespace picovm.Compiler
                                             bytecode.Add((byte)dstReg);
                                             offsetBytes++;
 
-                                            if (dstReg == Register.RAX || dstReg == Register.RBX || dstReg == Register.RCX || dstReg == Register.RDX)
+                                            if (typeHintSize == 8 || (!typeHintSize.HasValue && dstReg.Size() == 8))
                                             {
                                                 bytecode.AddRange(BitConverter.GetBytes(ParseUInt64Constant(src)));
                                                 offsetBytes += 8;
                                             }
-                                            else if (dstReg == Register.EAX || dstReg == Register.EBX || dstReg == Register.ECX || dstReg == Register.EDX)
+                                            else if (typeHintSize == 4 || (!typeHintSize.HasValue && dstReg.Size() == 4))
                                             {
                                                 bytecode.AddRange(BitConverter.GetBytes(ParseUInt32Constant(src)));
                                                 offsetBytes += 4;
                                             }
-                                            else if (dstReg == Register.AX || dstReg == Register.BX || dstReg == Register.CX || dstReg == Register.DX)
+                                            else if (typeHintSize == 2 || (!typeHintSize.HasValue && dstReg.Size() == 2))
                                             {
                                                 bytecode.AddRange(BitConverter.GetBytes(ParseUInt16Constant(src)));
                                                 offsetBytes += 2;
                                             }
-                                            else if (dstReg == Register.AH || dstReg == Register.AL
-                                                || dstReg == Register.BH || dstReg == Register.BL
-                                                || dstReg == Register.CH || dstReg == Register.CL
-                                                || dstReg == Register.DH || dstReg == Register.DL)
+                                            else if (typeHintSize == 1 || (!typeHintSize.HasValue && dstReg.Size() == 1))
                                             {
                                                 bytecode.Add(ParseByteConstant(src));
                                                 offsetBytes++;
@@ -505,6 +558,58 @@ namespace picovm.Compiler
                                         throw new Exception($"ERROR: Unable to parse MOV parameters into an opcode, unhandled src type: {line}");
                                 }
                             }
+                        case ParameterType.VariableAddress:
+                            {
+                                switch (srcType)
+                                {
+                                    case ParameterType.Constant:
+                                        {
+                                            bytecode.Add((byte)Bytecode.MOV_MEM_CON);
+                                            offsetBytes++;
+
+                                            // TODO: HOW BIG?
+                                            if (typeHintSize == null)
+                                                throw new InvalidOperationException("I can't handle unhinted variable loads yet.  I should scan DS!");
+
+                                            symbolReferenceOffsets.Add(new BytecodeTextSymbol
+                                            {
+                                                name = dst.Substring(1, dst.Length - 2), // Strip brackets
+                                                textSegmentInstructionOffset = (ushort)(offsetBytes - 1),
+                                                textSegmentReferenceOffset = offsetBytes,
+                                                referenceLength = typeHintSize ?? 4
+                                            });
+
+                                            for (var i = 0; i < typeHintSize.Value; i++)
+                                                bytecode.Add((byte)0xFF); // UNRESOLVED SYMBOL FOR VARIABLE
+                                            offsetBytes += typeHintSize.Value;
+
+                                            var variableSize = typeHintSize.Value;
+                                            switch (variableSize)
+                                            {
+                                                case 8:
+                                                    bytecode.AddRange(BitConverter.GetBytes(ParseUInt64Constant(src)));
+                                                    break;
+                                                case 4:
+                                                    bytecode.AddRange(BitConverter.GetBytes(ParseUInt32Constant(src)));
+                                                    break;
+                                                case 2:
+                                                    bytecode.AddRange(BitConverter.GetBytes(ParseUInt16Constant(src)));
+                                                    break;
+                                                case 1:
+                                                    bytecode.Add(ParseByteConstant(src));
+                                                    break;
+                                                default:
+                                                    throw new InvalidOperationException();
+                                            }
+                                            offsetBytes += variableSize;
+                                            continue;
+                                        }
+                                    default:
+                                        throw new NotImplementedException();
+                                }
+
+                                throw new NotImplementedException();
+                            }
                         default:
                             throw new Exception($"ERROR: Unable to parse MOV parameters into an opcode, unhandled dst type: {line}");
                     }
@@ -513,13 +618,13 @@ namespace picovm.Compiler
                 }
                 else if (instruction == "POP")
                 {
-                    var pbc = Pop(lineParts[lineParts.Length - 1]);
+                    var pbc = Pop(lineParts[lineParts.Count - 1]);
                     bytecode.AddRange(pbc);
                     offsetBytes += (ushort)pbc.Length;
                 }
                 else if (instruction == "PUSH")
                 {
-                    var operand = lineParts[lineParts.Length - 1];
+                    var operand = lineParts[lineParts.Count - 1];
                     var operandType = GetOperandType(operand);
 
                     switch (operandType)
@@ -556,19 +661,19 @@ namespace picovm.Compiler
                 }
                 else if (instruction == "ADD")
                 {
-                    var abc = Add(lineParts[lineParts.Length - 2], lineParts[lineParts.Length - 1]);
+                    var abc = Add(typeHintSize, lineParts[lineParts.Count - 2], lineParts[lineParts.Count - 1]);
                     bytecode.AddRange(abc);
                     offsetBytes += (ushort)abc.Length;
                 }
                 else if (instruction == "AND")
                 {
-                    var abc = And(lineParts[lineParts.Length - 2], lineParts[lineParts.Length - 1]);
+                    var abc = And(typeHintSize, lineParts[lineParts.Count - 2], lineParts[lineParts.Count - 1]);
                     bytecode.AddRange(abc);
                     offsetBytes += (ushort)abc.Length;
                 }
                 else if (string.Compare("XOR", instruction, StringComparison.InvariantCulture) == 0)
                 {
-                    var abc = XOr(lineParts[lineParts.Length - 2], lineParts[lineParts.Length - 1]);
+                    var abc = XOr(lineParts[lineParts.Count - 2], lineParts[lineParts.Count - 1]);
                     bytecode.AddRange(abc);
                     offsetBytes += (ushort)abc.Length;
                 }
@@ -576,7 +681,7 @@ namespace picovm.Compiler
                     string.Compare("JZ", instruction, StringComparison.InvariantCulture) == 0 ||
                     string.Compare("JMP", instruction, StringComparison.InvariantCulture) == 0)
                 {
-                    var operand = lineParts[lineParts.Length - 1];
+                    var operand = lineParts[lineParts.Count - 1];
 
                     if (string.Compare("JZ", instruction, StringComparison.InvariantCulture) == 0)
                         bytecode.Add((byte)Bytecode.JZ);
@@ -589,7 +694,7 @@ namespace picovm.Compiler
                         name = operand,
                         textSegmentInstructionOffset = (ushort)(offsetBytes - 1),
                         textSegmentReferenceOffset = offsetBytes,
-                        referenceLength = 4
+                        referenceLength = typeHintSize ?? 4
                     };
 
                     for (var i = 0; i < textSymbol.referenceLength; i++)
@@ -921,7 +1026,10 @@ namespace picovm.Compiler
         }
 
         private static readonly string[] registerNames = new string[] {
-            "RAX", "EAX", "AX", "AH", "AL",
+            "RAX", "RBX", "RCX", "RDX",
+            "R8", "R9", "R10", "R11",
+            "R12", "R13", "R14", "R15",
+            "EAX", "AX", "AH", "AL",
             "EBX", "BX", "BH", "BL",
             "ECX", "CX", "CH", "CL",
             "EDX", "DX", "DH", "DL"
@@ -932,7 +1040,12 @@ namespace picovm.Compiler
         public static ParameterType GetOperandType(string operand)
         {
             if (operand.StartsWith('[') && operand.EndsWith(']'))
-                return ParameterType.RegisterAddress;
+            {
+                if (registerNames.Any(r => string.Compare(r, operand.Substring(1, operand.Length - 2), StringComparison.InvariantCultureIgnoreCase) == 0))
+                    return ParameterType.RegisterAddress;
+                else
+                    return ParameterType.VariableAddress;
+            }
             if (registerNames.Contains(operand.ToUpperInvariant()))
                 return ParameterType.RegisterReference;
             if (ulong.TryParse(operand, System.Globalization.NumberStyles.Integer, System.Globalization.NumberFormatInfo.InvariantInfo, out ulong operandl))
@@ -946,7 +1059,7 @@ namespace picovm.Compiler
             return ParameterType.Unknown;
         }
 
-        private byte[] Add(string operand1, string operand2)
+        private byte[] Add(byte? typeHintSize, string operand1, string operand2)
         {
             var o1Type = GetOperandType(operand1);
             var o2Type = GetOperandType(operand2);
@@ -960,7 +1073,15 @@ namespace picovm.Compiler
                         {
                             case ParameterType.Constant:
                                 {
-                                    if (o1Reg == Register.EAX || o1Reg == Register.EBX || o1Reg == Register.ECX || o1Reg == Register.EDX)
+                                    if (typeHintSize == 8 || (!typeHintSize.HasValue && o1Reg.Size() == 8))
+                                    {
+                                        var ret = new byte[10];
+                                        ret[0] = (byte)Bytecode.ADD_REG_CON;
+                                        ret[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                        Array.Copy(BitConverter.GetBytes(ParseUInt32Constant(operand2)), 0, ret, 2, 8);
+                                        return ret;
+                                    }
+                                    else if (typeHintSize == 4 || (!typeHintSize.HasValue && o1Reg.Size() == 4))
                                     {
                                         var ret = new byte[6];
                                         ret[0] = (byte)Bytecode.ADD_REG_CON;
@@ -968,7 +1089,7 @@ namespace picovm.Compiler
                                         Array.Copy(BitConverter.GetBytes(ParseUInt32Constant(operand2)), 0, ret, 2, 4);
                                         return ret;
                                     }
-                                    else if (o1Reg == Register.AX || o1Reg == Register.BX || o1Reg == Register.CX || o1Reg == Register.DX)
+                                    else if (typeHintSize == 2 || (!typeHintSize.HasValue && o1Reg.Size() == 2))
                                     {
                                         var ret = new byte[4];
                                         ret[0] = (byte)Bytecode.ADD_REG_CON;
@@ -976,10 +1097,7 @@ namespace picovm.Compiler
                                         Array.Copy(BitConverter.GetBytes(ParseUInt16Constant(operand2)), 0, ret, 2, 2);
                                         return ret;
                                     }
-                                    else if (o1Reg == Register.AH || o1Reg == Register.AL
-                                        || o1Reg == Register.BH || o1Reg == Register.BL
-                                        || o1Reg == Register.CH || o1Reg == Register.CL
-                                        || o1Reg == Register.DH || o1Reg == Register.DL)
+                                    else if (typeHintSize == 1 || (!typeHintSize.HasValue && o1Reg.Size() == 1))
                                     {
                                         var ret = new byte[3];
                                         ret[0] = (byte)Bytecode.ADD_REG_CON;
@@ -1015,7 +1133,7 @@ namespace picovm.Compiler
             throw new Exception($"ERROR: Unable to parse ADD into an opcode");
         }
 
-        private byte[] And(string operand1, string operand2)
+        private byte[] And(byte? typeHintSize, string operand1, string operand2)
         {
             var o1Type = GetOperandType(operand1);
             var o2Type = GetOperandType(operand2);
@@ -1029,7 +1147,15 @@ namespace picovm.Compiler
                         {
                             case ParameterType.Constant:
                                 {
-                                    if (o1Reg == Register.EAX || o1Reg == Register.EBX || o1Reg == Register.ECX || o1Reg == Register.EDX)
+                                    if (typeHintSize == 8 || (!typeHintSize.HasValue && o1Reg.Size() == 8))
+                                    {
+                                        var ret = new byte[10];
+                                        ret[0] = (byte)Bytecode.AND_REG_CON;
+                                        ret[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                        Array.Copy(BitConverter.GetBytes(ParseUInt32Constant(operand2)), 0, ret, 2, 8);
+                                        return ret;
+                                    }
+                                    else if (typeHintSize == 4 || (!typeHintSize.HasValue && o1Reg.Size() == 4))
                                     {
                                         var ret = new byte[6];
                                         ret[0] = (byte)Bytecode.AND_REG_CON;
@@ -1037,7 +1163,7 @@ namespace picovm.Compiler
                                         Array.Copy(BitConverter.GetBytes(ParseUInt32Constant(operand2)), 0, ret, 2, 4);
                                         return ret;
                                     }
-                                    else if (o1Reg == Register.AX || o1Reg == Register.BX || o1Reg == Register.CX || o1Reg == Register.DX)
+                                    else if (typeHintSize == 2 || (!typeHintSize.HasValue && o1Reg.Size() == 2))
                                     {
                                         var ret = new byte[4];
                                         ret[0] = (byte)Bytecode.AND_REG_CON;
@@ -1045,10 +1171,7 @@ namespace picovm.Compiler
                                         Array.Copy(BitConverter.GetBytes(ParseUInt16Constant(operand2)), 0, ret, 2, 2);
                                         return ret;
                                     }
-                                    else if (o1Reg == Register.AH || o1Reg == Register.AL
-                                        || o1Reg == Register.BH || o1Reg == Register.BL
-                                        || o1Reg == Register.CH || o1Reg == Register.CL
-                                        || o1Reg == Register.DH || o1Reg == Register.DL)
+                                    else if (typeHintSize == 1 || (!typeHintSize.HasValue && o1Reg.Size() == 1))
                                     {
                                         var ret = new byte[3];
                                         ret[0] = (byte)Bytecode.AND_REG_CON;

@@ -85,7 +85,8 @@ namespace picovm
             // Loader
             var image = new byte[compilation.textSegmentSize + compilation.dataSegmentSize + compilation.bssSegmentSize];
             Array.Copy(compilation.textSegment, 0, image, compilation.textSegmentBase, compilation.textSegmentSize);
-            Array.Copy(compilation.dataSegment, 0, image, compilation.dataSegmentBase, compilation.dataSegmentSize);
+            if (compilation.dataSegmentSize > 0)
+                Array.Copy(compilation.dataSegment, 0, image, compilation.dataSegmentBase, compilation.dataSegmentSize);
 
             Console.Out.WriteLine("Emulating Linux 32-bit kernel syscall interface");
             var kernel = new Linux32Kernel();
