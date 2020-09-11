@@ -1,7 +1,6 @@
 using System;
-using System.ComponentModel;
 
-namespace picovm
+namespace picovm.Compiler
 {
     public static class RegisterUtility
     {

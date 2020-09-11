@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Linq;
 
@@ -30,10 +31,6 @@ namespace picovm.Compiler
         private readonly Dictionary<string, Bytecode> opcodes;
         private readonly Dictionary<string, Register> registers;
 
-        private string entryPoint;
-
-        public string EntryPoint => entryPoint;
-
         public BytecodeCompiler()
         {
             // Generate opcode dictionary
@@ -43,7 +40,21 @@ namespace picovm.Compiler
 
         public CompilationResult Compile(string fileName, IEnumerable<string> programLines)
         {
-            var ret = new CompilationResult();
+            uint? textSegmentSize = null;
+            uint? dataSegmentSize = null;
+            uint? bssSegmentSize = null;
+            string? entryPointSymbol = null;
+            uint? entryPoint = null;
+            uint? textSegmentBase = null;
+            uint? dataSegmentBase = null;
+            byte[]? textSegment = null;
+            ImmutableDictionary<string, uint>? textLabelsOffsets = null;
+            ImmutableList<BytecodeTextSymbol>? textSymbolReferenceOffsets = null;
+            ImmutableArray<byte>? dataSegment = null;
+            ImmutableDictionary<string, BytecodeDataSymbol>? dataSymbolOffsets = null;
+            ImmutableList<BytecodeBssSymbol>? bssSymbols = null;
+            var errors = new List<CompilationError>(10);
+
             // Group program lines into sections
             var sections = new Dictionary<SectionType, List<string>>();
             KeyValuePair<SectionType, List<string>> currentSection = default(KeyValuePair<SectionType, List<string>>);
@@ -112,7 +123,7 @@ namespace picovm.Compiler
                     }
                     else
                     {
-                        ret.errors.Add(new CompilationError($"Unknown section type: {line}", fileName, lineNumber));
+                        errors.Add(new CompilationError($"Unknown section type: {line}", fileName, lineNumber));
                         throw new InvalidOperationException($"Unknown section type: '{line}' ({fileName}:{lineNumber})");
                     }
                 }
@@ -124,7 +135,7 @@ namespace picovm.Compiler
                         case SectionType.Text:
                             if (line.StartsWith("global ", StringComparison.OrdinalIgnoreCase))
                             {
-                                entryPoint = line.Substring(line.IndexOf("global ", StringComparison.OrdinalIgnoreCase) + "global ".Length);
+                                entryPointSymbol = line.Substring(line.IndexOf("global ", StringComparison.OrdinalIgnoreCase) + "global ".Length);
                                 continue;
                             }
                             break;
@@ -140,28 +151,33 @@ namespace picovm.Compiler
                 {
                     case SectionType.Text:
                         var bytecodeGeneration = CompileTextSectionLinesToBytecode(section.Value);
-                        ret.textSegment = bytecodeGeneration.Bytecode;
-                        ret.textSegmentSize = (uint)bytecodeGeneration.Bytecode.Length;
-                        ret.textLabelsOffsets = bytecodeGeneration.LabelsOffsets;
-                        ret.textSymbolReferenceOffsets = bytecodeGeneration.SymbolReferenceOffsets;
+                        textSegment = bytecodeGeneration.Bytecode.ToArray();
+                        textSegmentSize = (uint)bytecodeGeneration.Bytecode.Length;
+                        textLabelsOffsets = bytecodeGeneration.LabelsOffsets;
+                        textSymbolReferenceOffsets = bytecodeGeneration.SymbolReferenceOffsets;
 
-                        if (ret.textLabelsOffsets == null || !ret.textLabelsOffsets.ContainsKey(entryPoint))
+                        if (entryPointSymbol == null)
                         {
-                            ret.errors.Add(new CompilationError($"No entry point located in source file.", fileName));
+                            errors.Add(new CompilationError($"No entry point specified.", fileName));
                             throw new NotImplementedException($"Unable to generate compiled output for section type: {section.Key}");
                         }
-                        ret.entryPoint = ret.textLabelsOffsets[entryPoint];
+                        else if (!textLabelsOffsets.ContainsKey(entryPointSymbol))
+                        {
+                            errors.Add(new CompilationError($"No entry point located in source file.", fileName));
+                            throw new NotImplementedException($"Unable to generate compiled output for section type: {section.Key}");
+                        }
+                        entryPoint = textLabelsOffsets[entryPointSymbol];
                         break;
                     case SectionType.Data:
                         var constGeneration = CompileDataSectionLines(section.Value);
-                        ret.dataSegment = constGeneration.Bytecode;
-                        ret.dataSegmentSize = (uint)constGeneration.Bytecode.Length;
-                        ret.dataSymbolOffsets = constGeneration.SymbolOffsets;
+                        dataSegment = constGeneration.Bytecode;
+                        dataSegmentSize = (uint)constGeneration.Bytecode.Length;
+                        dataSymbolOffsets = constGeneration.SymbolOffsets;
                         break;
                     case SectionType.BSS:
                         var bssGeneration = CompileBssSectionLines(section.Value);
-                        ret.bssSymbols = bssGeneration.Symbols;
-                        ret.bssSegmentSize = Convert.ToUInt32(bssGeneration.Symbols.Sum(s => s.Size()));
+                        bssSymbols = bssGeneration.Symbols;
+                        bssSegmentSize = Convert.ToUInt32(bssGeneration.Symbols.Sum(s => s.Size()));
                         break;
                     default:
                         throw new NotImplementedException($"Unable to generate compiled output for section type: {section.Key}");
@@ -169,146 +185,201 @@ namespace picovm.Compiler
             }
 
             // Resolve data section variables to symbols in text
-            if (ret.dataSymbolOffsets == null)
+            if (dataSymbolOffsets == null || dataSymbolOffsets.Count == 0)
             {
-                foreach (var missing in ret.textSymbolReferenceOffsets)
-                    ret.errors.Add(new CompilationError($"Symbol {missing.name} in program code is undefined; there is NO DATA SECTION!", fileName));
+                if (textSymbolReferenceOffsets != null)
+                    foreach (var missing in textSymbolReferenceOffsets)
+                        errors.Add(new CompilationError($"Symbol {missing.name} in program code is undefined; there is NO DATA SECTION!", fileName));
             }
             else
             {
-                foreach (var missing in ret.textSymbolReferenceOffsets
-                    .Where(tsr => !ret.dataSymbolOffsets.ContainsKey(tsr.name)
-                               && !ret.textLabelsOffsets.ContainsKey(tsr.name)
-                               && !ret.bssSymbols.Any(bss => string.Compare(bss.name, tsr.name, StringComparison.InvariantCultureIgnoreCase) == 0)))
-                    ret.errors.Add(new CompilationError($"Symbol {missing.name} in program code is undefined by the data and BSS sections", fileName));
-                if (ret.errors.Count > 0)
-                    return ret;
+                if (dataSegment == null)
+                {
+                    errors.Add(new CompilationError($"Data segment missing, yet {dataSymbolOffsets.Count} data symbols are defined."));
+                    return new CompilationResult(errors);
+                }
 
-                foreach (var extra in ret.dataSymbolOffsets.Where(dsr => !ret.textSymbolReferenceOffsets.Any(tsr => string.Compare(tsr.name, dsr.Key, StringComparison.InvariantCulture) == 0)))
-                    ret.errors.Add(new CompilationError($"Data symbol {extra.Key} is not referenced in program code", fileName));
+                if (textSegmentSize == null)
+                {
+                    errors.Add(new CompilationError($"Text segment size unknown, but this is needed to resolve data section variables."));
+                    return new CompilationResult(errors);
+                }
+
+                foreach (var missing in textSymbolReferenceOffsets
+                    .Where(tsr => !dataSymbolOffsets.ContainsKey(tsr.name)
+                               && (textLabelsOffsets == null || !textLabelsOffsets.ContainsKey(tsr.name))
+                               && !bssSymbols.Any(bss => string.Compare(bss.name, tsr.name, StringComparison.InvariantCultureIgnoreCase) == 0)))
+                    errors.Add(new CompilationError($"Symbol {missing.name} in program code is undefined by the data and BSS sections", fileName));
+                if (errors.Count > 0)
+                    return new CompilationResult(errors);
+
+                foreach (var extra in dataSymbolOffsets.Where(dsr => !textSymbolReferenceOffsets.Any(tsr => string.Compare(tsr.name, dsr.Key, StringComparison.InvariantCulture) == 0)))
+                    errors.Add(new CompilationError($"Data symbol {extra.Key} is not referenced in program code", fileName));
 
                 // Rebase data symbol offsets
-                ret.dataSegmentBase = ret.textSegmentBase + ret.textSegmentSize;
-                foreach (var ds in ret.dataSymbolOffsets)
-                    ds.Value.dataSegmentOffset += (ushort)ret.dataSegmentBase;
+                dataSegmentBase = (textSegmentBase ?? 0) + textSegmentSize.Value;
+                foreach (var ds in dataSymbolOffsets)
+                    ds.Value.dataSegmentOffset += (ushort)dataSegmentBase.Value;
 
                 // Perform text/label replacements
-                foreach (var tsr in ret.textSymbolReferenceOffsets.Where(tsr => ret.textLabelsOffsets.ContainsKey(tsr.name)))
+                if (textLabelsOffsets != null)
                 {
-                    var labelOffsetAddress = ret.textLabelsOffsets[tsr.name];
-                    var labelOffsetAddressBytes = BitConverter.GetBytes(labelOffsetAddress);
-                    if (labelOffsetAddressBytes.Length != tsr.referenceLength)
-                        throw new InvalidOperationException($"Address size reserved for symbol {tsr.name} is {tsr.referenceLength}, but needed {labelOffsetAddressBytes.Length}");
-
-                    for (var i = 0; i < 4; i++)
+                    foreach (var tsr in textSymbolReferenceOffsets.Where(tsr => textLabelsOffsets.ContainsKey(tsr.name)))
                     {
-                        if (ret.textSegment[tsr.textSegmentReferenceOffset + i] != 0xEE)
-                            throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.name} which did not contain placeholder values!");
+                        var labelOffsetAddress = textLabelsOffsets[tsr.name];
+                        var labelOffsetAddressBytes = BitConverter.GetBytes(labelOffsetAddress);
+                        if (labelOffsetAddressBytes.Length != tsr.referenceLength)
+                            throw new InvalidOperationException($"Address size reserved for symbol {tsr.name} is {tsr.referenceLength}, but needed {labelOffsetAddressBytes.Length}");
+
+                        if (textSegment == null)
+                            throw new InvalidOperationException($"Text segment is not loaded, and so symbol {tsr.name} cannot be resolved");
+
+                        for (var i = 0; i < 4; i++)
+                        {
+                            if (textSegment[tsr.textSegmentReferenceOffset + i] != 0xEE)
+                                throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.name} which did not contain placeholder values!");
+                        }
+                        Array.Copy(labelOffsetAddressBytes, 0, textSegment, tsr.textSegmentReferenceOffset, tsr.referenceLength);
+                        Console.Out.WriteLine($"\tLBL {tsr.name}->{labelOffsetAddress}");
                     }
-                    Array.Copy(labelOffsetAddressBytes, 0, ret.textSegment, tsr.textSegmentReferenceOffset, tsr.referenceLength);
-                    Console.Out.WriteLine($"\tLBL {tsr.name}->{labelOffsetAddress}");
                 }
 
                 // Perform data replacements
-                foreach (var tsr in ret.textSymbolReferenceOffsets.Where(tsr => ret.dataSymbolOffsets.ContainsKey(tsr.name)))
+                if (textSymbolReferenceOffsets != null && textSymbolReferenceOffsets.Count > 0)
                 {
-                    var dataSymbol = ret.dataSymbolOffsets[tsr.name];
-                    var dataSymbolAddress = dataSymbol.dataSegmentOffset;
-
-                    if (dataSymbol.constant)
+                    if (textSegment == null)
                     {
-                        // This is a value, just write it directly into the text.
-                        if (ret.textSegment[tsr.textSegmentInstructionOffset] == (byte)Bytecode.MOV_REG_MEM)
-                            ret.textSegment[tsr.textSegmentInstructionOffset] = (byte)Bytecode.MOV_REG_CON;
-                        else
-                            throw new InvalidOperationException($"Unable to handle constant inlining of instruction: {ret.textSegment[tsr.textSegmentInstructionOffset]} for symbol {tsr.name}");
-
-                        switch (dataSymbol.length)
-                        {
-                            case 2:
-                                {
-                                    switch (tsr.referenceLength)
-                                    {
-                                        case 1:
-                                            throw new InvalidOperationException("Unable to inline constant size of 2 bytes into reserved text section of 1 byte");
-                                        case 2:
-                                            // 2 to 2, straight array copy.
-                                            Array.Copy(ret.dataSegment, dataSymbolAddress - (int)ret.dataSegmentBase, ret.textSegment, tsr.textSegmentReferenceOffset, 2);
-                                            for (var i = 0; i < 2; i++)
-                                            {
-                                                if (ret.textSegment[tsr.textSegmentReferenceOffset + i] != 0xFF)
-                                                    throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.name} which did not contain placeholder values!");
-                                            }
-                                            break;
-                                        case 4:
-                                            // 2 to 4 upsize
-                                            var dataSymbolValue = BitConverter.ToUInt16(ret.dataSegment, (int)(dataSymbolAddress - ret.dataSegmentBase));
-                                            var tsrValue = Convert.ToUInt32(dataSymbolValue);
-                                            // Validate we're overwriting the right place
-                                            for (var i = 0; i < 4; i++)
-                                            {
-                                                if (ret.textSegment[tsr.textSegmentReferenceOffset + i] != 0xFF)
-                                                    throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.name} which did not contain placeholder values!");
-                                            }
-                                            Array.Copy(BitConverter.GetBytes(tsrValue), 0, ret.textSegment, tsr.textSegmentReferenceOffset, 4);
-                                            break;
-                                        default:
-                                            throw new NotImplementedException();
-                                    }
-                                    break;
-                                }
-                            case 4:
-                                {
-                                    switch (tsr.referenceLength)
-                                    {
-                                        case 1:
-                                        case 2:
-                                            throw new InvalidOperationException($"Unable to inline constant size of 4 bytes into reserved text section of {tsr.referenceLength} bytes");
-                                        case 4:
-                                            // 4 to 4, straight array copy.
-                                            Array.Copy(ret.dataSegment, dataSymbolAddress - (int)ret.dataSegmentBase, ret.textSegment, tsr.textSegmentReferenceOffset, 4);
-                                            break;
-                                        default:
-                                            throw new NotImplementedException();
-                                    }
-                                    break;
-                                }
-                            default:
-                                throw new NotImplementedException($"Cannot handle symbol of length: {dataSymbol.length}");
-                        }
+                        errors.Add(new CompilationError($"Text segment null, but this is needed to resolve and replace data section variables."));
+                        return new CompilationResult(errors);
                     }
-                    else
+
+                    foreach (var tsr in textSymbolReferenceOffsets.Where(tsr => dataSymbolOffsets.ContainsKey(tsr.name)))
                     {
-                        // This is a reference, write it's address into the text.
-                        var dataSymbolAddressBytes = BitConverter.GetBytes(dataSymbolAddress);
-                        if (dataSymbolAddressBytes.Length != tsr.referenceLength)
-                            throw new InvalidOperationException($"Address size reserved for symbol {tsr.name} is {tsr.referenceLength}, but needed {dataSymbolAddressBytes.Length}");
-                        Array.Copy(dataSymbolAddressBytes, 0, ret.textSegment, tsr.textSegmentReferenceOffset, tsr.referenceLength);
-                        Console.Out.WriteLine($"\tDS {tsr.name}->{dataSymbolAddress}");
+                        var dataSymbol = dataSymbolOffsets[tsr.name];
+                        var dataSymbolAddress = dataSymbol.dataSegmentOffset;
+
+                        if (dataSymbol.constant)
+                        {
+                            // This is a value, just write it directly into the text.
+                            if (textSegment[tsr.textSegmentInstructionOffset] == (byte)Bytecode.MOV_REG_MEM)
+                                textSegment[tsr.textSegmentInstructionOffset] = (byte)Bytecode.MOV_REG_CON;
+                            else
+                                throw new InvalidOperationException($"Unable to handle constant inlining of instruction: {textSegment[tsr.textSegmentInstructionOffset]} for symbol {tsr.name}");
+
+                            switch (dataSymbol.length)
+                            {
+                                case 2:
+                                    {
+                                        switch (tsr.referenceLength)
+                                        {
+                                            case 1:
+                                                throw new InvalidOperationException("Unable to inline constant size of 2 bytes into reserved text section of 1 byte");
+                                            case 2:
+                                                // 2 to 2, straight array copy.
+                                                Array.Copy(dataSegment.Value.ToArray(), dataSymbolAddress - (int)dataSegmentBase.Value, textSegment, tsr.textSegmentReferenceOffset, 2);
+                                                for (var i = 0; i < 2; i++)
+                                                {
+                                                    if (textSegment[tsr.textSegmentReferenceOffset + i] != 0xFF)
+                                                        throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.name} which did not contain placeholder values!");
+                                                }
+                                                break;
+                                            case 4:
+                                                // 2 to 4 upsize
+                                                var dataSymbolValue = BitConverter.ToUInt16(dataSegment.Value.ToArray(), (int)(dataSymbolAddress - dataSegmentBase.Value));
+                                                var tsrValue = Convert.ToUInt32(dataSymbolValue);
+                                                // Validate we're overwriting the right place
+                                                for (var i = 0; i < 4; i++)
+                                                {
+                                                    if (textSegment[tsr.textSegmentReferenceOffset + i] != 0xFF)
+                                                        throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.name} which did not contain placeholder values!");
+                                                }
+                                                Array.Copy(BitConverter.GetBytes(tsrValue), 0, textSegment, tsr.textSegmentReferenceOffset, 4);
+                                                break;
+                                            default:
+                                                throw new NotImplementedException();
+                                        }
+                                        break;
+                                    }
+                                case 4:
+                                    {
+                                        switch (tsr.referenceLength)
+                                        {
+                                            case 1:
+                                            case 2:
+                                                throw new InvalidOperationException($"Unable to inline constant size of 4 bytes into reserved text section of {tsr.referenceLength} bytes");
+                                            case 4:
+                                                // 4 to 4, straight array copy.
+                                                Array.Copy(dataSegment.Value.ToArray(), dataSymbolAddress - (int)dataSegmentBase.Value, textSegment, tsr.textSegmentReferenceOffset, 4);
+                                                break;
+                                            default:
+                                                throw new NotImplementedException();
+                                        }
+                                        break;
+                                    }
+                                default:
+                                    throw new NotImplementedException($"Cannot handle symbol of length: {dataSymbol.length}");
+                            }
+                        }
+                        else
+                        {
+                            // This is a reference, write it's address into the text.
+                            var dataSymbolAddressBytes = BitConverter.GetBytes(dataSymbolAddress);
+                            if (dataSymbolAddressBytes.Length != tsr.referenceLength)
+                                throw new InvalidOperationException($"Address size reserved for symbol {tsr.name} is {tsr.referenceLength}, but needed {dataSymbolAddressBytes.Length}");
+                            Array.Copy(dataSymbolAddressBytes, 0, textSegment, tsr.textSegmentReferenceOffset, tsr.referenceLength);
+                            Console.Out.WriteLine($"\tDS {tsr.name}->{dataSymbolAddress}");
+                        }
                     }
                 }
 
                 // Perform BSS reference replacements
-                if (ret.bssSymbols != null)
+                if (bssSymbols != null)
                 {
-                    var tsrBss = ret.textSymbolReferenceOffsets.Where(tsr => ret.bssSymbols.Exists(bss => string.Compare(bss.name, tsr.name, StringComparison.InvariantCultureIgnoreCase) == 0)).ToArray();
+                    if (textSegment == null)
+                        throw new InvalidOperationException("Text segment is null when attempting to perform BSS replacements");
+                    if (textSegmentSize == null)
+                        throw new InvalidOperationException("Text segment size is null when attempting to perform BSS replacements");
+                    if (dataSegmentSize == null)
+                        throw new InvalidOperationException("Data segment size is null when attempting to perform BSS replacements");
+
+                    var tsrBss = textSymbolReferenceOffsets.Where(tsr => bssSymbols.Exists(bss => string.Compare(bss.name, tsr.name, StringComparison.InvariantCultureIgnoreCase) == 0)).ToArray();
                     foreach (var tsr in tsrBss)
                     {
-                        var bss = ret.bssSymbols.Single(bss => string.Compare(bss.name, tsr.name, StringComparison.InvariantCultureIgnoreCase) == 0);
-                        var bssIndex = ret.bssSymbols.IndexOf(bss);
-                        uint bssOffset = (ret.textSegmentBase + ret.textSegmentSize) + (ret.dataSegmentSize) + (uint)ret.bssSymbols.Take(bssIndex).Sum(b => b.Size());
+                        var bss = bssSymbols.Single(bss => string.Compare(bss.name, tsr.name, StringComparison.InvariantCultureIgnoreCase) == 0);
+                        var bssIndex = bssSymbols.IndexOf(bss);
+                        uint bssOffset = ((textSegmentBase ?? 0) + textSegmentSize.Value) + dataSegmentSize.Value + (uint)bssSymbols.Take(bssIndex).Sum(b => b.Size());
                         for (var i = 0; i < 4; i++)
                         {
-                            if (ret.textSegment[tsr.textSegmentReferenceOffset + i] != 0xFF)
+                            if (textSegment[tsr.textSegmentReferenceOffset + i] != 0xFF)
                                 throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.name} which did not contain placeholder values!");
                         }
-                        Array.Copy(BitConverter.GetBytes(bssOffset), 0, ret.textSegment, tsr.textSegmentReferenceOffset, 4);
+                        Array.Copy(BitConverter.GetBytes(bssOffset), 0, textSegment, tsr.textSegmentReferenceOffset, 4);
                         Console.Out.WriteLine($"\tBSS {bss.name}->{bssOffset}");
                     }
                 }
             }
 
-            return ret;
+            if (textSegmentSize == null)
+                throw new InvalidOperationException("Text segment size unknown at the end of compilation");
+            if (entryPoint == null)
+                throw new InvalidOperationException("Entry point unknown at the end of compilation");
+            if (textSegment == null)
+                throw new InvalidOperationException("Text segment null at the end of compilation");
+
+            return new CompilationResult(
+                textSegmentSize.Value,
+                dataSegmentSize ?? 0,
+                bssSegmentSize ?? 0,
+                entryPoint.Value,
+                textSegmentBase ?? 0,
+                dataSegmentBase,
+                textSegment,
+                textLabelsOffsets,
+                textSymbolReferenceOffsets,
+                dataSegment,
+                dataSymbolOffsets,
+                bssSymbols,
+                errors);
         }
 
         private static ulong ParseUInt64Constant(string operand)
@@ -579,7 +650,7 @@ namespace picovm.Compiler
                                                 referenceLength = typeHintSize ?? 4
                                             });
 
-                                            for (var i = 0; i < typeHintSize.Value; i++)
+                                            for (var i = 0; i < typeHintSize!.Value; i++)
                                                 bytecode.Add((byte)0xFF); // UNRESOLVED SYMBOL FOR VARIABLE
                                             offsetBytes += typeHintSize.Value;
 
@@ -849,7 +920,11 @@ namespace picovm.Compiler
                             continue;
                         }
                         else
+                        {
+                            if (nextValue == null)
+                                throw new InvalidOperationException("Missing value type in nextValue");
                             computeStack.Push(nextValue);
+                        }
                     }
 
                     if (computeStack.Count != 1)
@@ -1254,7 +1329,7 @@ namespace picovm.Compiler
         public static string GetEnumDescription(Enum value)
         {
             var fi = value.GetType().GetField(value.ToString());
-            var attributes = fi.GetCustomAttributes(typeof(DescriptionAttribute), false) as DescriptionAttribute[];
+            var attributes = fi?.GetCustomAttributes(typeof(DescriptionAttribute), false) as DescriptionAttribute[];
             if (attributes != null && attributes.Any())
             {
                 return attributes.First().Description;

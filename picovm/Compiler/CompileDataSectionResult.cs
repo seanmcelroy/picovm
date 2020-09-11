@@ -1,16 +1,17 @@
 using System.Collections.Generic;
+using System.Collections.Immutable;
 
 namespace picovm.Compiler
 {
     public sealed class CompileDataSectionResult
     {
-        public byte[] Bytecode { get; private set; }
-        public Dictionary<string, BytecodeDataSymbol> SymbolOffsets { get; private set; }
+        public ImmutableArray<byte> Bytecode { get; private set; }
+        public ImmutableDictionary<string, BytecodeDataSymbol> SymbolOffsets { get; private set; }
 
-        public CompileDataSectionResult(byte[] bytecode, Dictionary<string, BytecodeDataSymbol> symbolOffsets)
+        public CompileDataSectionResult(byte[] bytecode, IEnumerable<KeyValuePair<string, BytecodeDataSymbol>> symbolOffsets)
         {
-            this.Bytecode = bytecode;
-            this.SymbolOffsets = symbolOffsets;
+            this.Bytecode = ImmutableArray.Create<byte>(bytecode);
+            this.SymbolOffsets = ImmutableDictionary<string, BytecodeDataSymbol>.Empty.AddRange(symbolOffsets);
         }
     }
 }

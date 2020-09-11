@@ -45,7 +45,7 @@ namespace picovm.VM
 
         private bool[] flags = new bool[2];
 
-        private byte[] memory = new byte[65535];
+        private byte[] memory = new byte[65536];
 
         private uint instructionPointer = 0;
 
@@ -418,7 +418,7 @@ namespace picovm.VM
         public void Dump()
         {
             Console.WriteLine();
-            Console.Write($"EAX: 0x{ReadExtendedRegister(Register.EAX):X4} ({ReadExtendedRegister(Register.EAX).ToString().PadLeft(2)})\t");
+            Console.Error.Write($"EAX: 0x{ReadExtendedRegister(Register.EAX):X4} ({ReadExtendedRegister(Register.EAX).ToString().PadLeft(2)})\t");
             Console.Write($"EBX: 0x{ReadExtendedRegister(Register.EBX):X4} ({ReadExtendedRegister(Register.EBX).ToString().PadLeft(2)})\t");
             Console.Write($"ECX: 0x{ReadExtendedRegister(Register.ECX):X4} ({ReadExtendedRegister(Register.ECX).ToString().PadLeft(2)})\t");
             Console.WriteLine($"EDX: 0x{ReadExtendedRegister(Register.EDX):X4} ({ReadExtendedRegister(Register.EDX).ToString().PadLeft(2)})");

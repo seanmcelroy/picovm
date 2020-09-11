@@ -12,20 +12,21 @@ namespace picovm.Compiler
             "DB", "DW", "DD", "DQ", "DUP", "EQU"
         };
 
-        public string Label { get; private set; }
+        public string? Label { get; private set; }
 
         public string Mnemonic { get; private set; }
 
         public string[] Operands { get; private set; }
 
-        private CompilerDataAllocationDirective()
+        private CompilerDataAllocationDirective(string? label, string mnemonic, string[] operands)
         {
+            this.Label = label;
+            this.Mnemonic = mnemonic;
+            this.Operands = operands;
         }
 
         public static CompilerDataAllocationDirective ParseLine(string directiveLine)
         {
-            var ret = new CompilerDataAllocationDirective();
-
             var lineParts = directiveLine.Split(new char[] { ' ', '\t', ',' }, StringSplitOptions.RemoveEmptyEntries);
 
             // Ignore whitespace between the first token and the second if the second is a colon.  Poorly formatted label.
@@ -36,19 +37,20 @@ namespace picovm.Compiler
                 lineParts = respin.ToArray();
             }
 
+            string? label = null;
             if (SYMBOLS.Any(s => string.Compare(s, lineParts[0], StringComparison.InvariantCultureIgnoreCase) != 0 &&
                 SYMBOLS.Any(s => string.Compare(s, lineParts[1], StringComparison.InvariantCultureIgnoreCase) == 0)))
-                ret.Label = lineParts[0].TrimEnd(':');
+                label = lineParts[0].TrimEnd(':');
 
-            var labelIndex = (ret.Label == null) ? default(int?) : directiveLine.IndexOf(ret.Label);
+            var labelIndex = (label == null) ? default(int?) : directiveLine.IndexOf(label);
 
-            ret.Mnemonic = labelIndex == null ? lineParts[0] : lineParts[1];
-            var mnemonicIndex = directiveLine.Substring(labelIndex ?? 0).IndexOf(ret.Mnemonic);
+            var mnemonic = labelIndex == null ? lineParts[0] : lineParts[1];
+            var mnemonicIndex = directiveLine.Substring(labelIndex ?? 0).IndexOf(mnemonic);
 
-            var operandLine = directiveLine.Substring(mnemonicIndex + ret.Mnemonic.Length).TrimStart(' ', '\t');
-            ret.Operands = BytecodeCompiler.ParseOperandLine(operandLine).ToArray();
+            var operandLine = directiveLine.Substring(mnemonicIndex + mnemonic.Length).TrimStart(' ', '\t');
+            var operands = BytecodeCompiler.ParseOperandLine(operandLine).ToArray();
 
-            return ret;
+            return new CompilerDataAllocationDirective(label, mnemonic, operands);
         }
 
         public static object UnboxParsedOperand(string operandPart)

@@ -1,5 +1,9 @@
 ﻿using System;
+using System.IO;
+using System.Linq;
 using picovm.Compiler;
+using picovm.Packager;
+using picovm.Packager.Elf64;
 using picovm.VM;
 
 namespace picovm
@@ -12,7 +16,7 @@ namespace picovm
             Console.WriteLine(" (c) 2020 Sean McElroy");
             Console.WriteLine(" Released under the MIT License; all rights reserved.");
             Console.WriteLine();
-            Console.WriteLine(" Usage: picovm <src.asm> <a.out>");
+            Console.WriteLine(" Usage: picovm <src.asm> <a.elf>");
 
             if (args.Length == 0)
             {
@@ -59,34 +63,46 @@ namespace picovm
                 var fileName = (new System.IO.FileInfo(args[0])).Name;
                 compilation = compiler.Compile(fileName, programText);
 
-                if (compilation.errors.Count > 0)
+                if (compilation.Errors.Count > 0)
                 {
-                    Console.Error.WriteLine($"Compilation failed with {compilation.errors.Count} errors.");
+                    Console.Error.WriteLine($"Compilation failed with {compilation.Errors.Count} errors.");
                     return -6;
                 }
             }
 
             // Package.
             {
-                var packageFormat = CompilerOutputType.AOut32;
+                var packageFormat = CompilerOutputType.Elf64;
                 Console.Out.WriteLine($"Packaging bytecode as: {Enum.GetName(typeof(CompilerOutputType), packageFormat)}");
-                var fileName = args[1];
-                switch (packageFormat)
+                IPackager packager;
+
+                using (var fs = new FileStream(args[1], FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.SequentialScan))
                 {
-                    case CompilerOutputType.AOut32:
-                        var packager = new PackagerAOut32(compilation);
-                        packager.WriteFile(fileName);
-                        break;
-                    default:
-                        throw new InvalidOperationException($"Unknown packaging format: {packageFormat}");
+                    switch (packageFormat)
+                    {
+                        case CompilerOutputType.AOut32:
+                            packager = new PackagerAOut32(compilation);
+                            packager.Write(fs);
+                            break;
+                        case CompilerOutputType.Elf64:
+                            packager = new PackagerElf64(compilation);
+                            packager.Write(fs);
+                            break;
+                        default:
+                            throw new InvalidOperationException($"Unknown packaging format: {packageFormat}");
+                    }
+
+                    fs.Flush();
+                    fs.Close();
                 }
+
             }
 
             // Loader
-            var image = new byte[compilation.textSegmentSize + compilation.dataSegmentSize + compilation.bssSegmentSize];
-            Array.Copy(compilation.textSegment, 0, image, compilation.textSegmentBase, compilation.textSegmentSize);
-            if (compilation.dataSegmentSize > 0)
-                Array.Copy(compilation.dataSegment, 0, image, compilation.dataSegmentBase, compilation.dataSegmentSize);
+            var image = new byte[compilation.TextSegmentSize!.Value + compilation.DataSegmentSize!.Value + compilation.BssSegmentSize!.Value];
+            Array.Copy(compilation.TextSegment!, 0, image, compilation.TextSegmentBase!.Value, compilation.TextSegmentSize.Value);
+            if (compilation.DataSegmentSize > 0 && compilation.DataSegment != null)
+                Array.Copy(compilation.DataSegment.Value.ToArray(), 0, image, (int)compilation.DataSegmentBase!.Value, (int)compilation.DataSegmentSize.Value);
 
             Console.Out.WriteLine("Emulating Linux 32-bit kernel syscall interface");
             var kernel = new Linux32Kernel();

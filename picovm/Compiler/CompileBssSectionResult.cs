@@ -1,14 +1,13 @@
 using System.Collections.Generic;
+using System.Collections.Immutable;
 
 namespace picovm.Compiler
 {
     public sealed class CompileBssSectionResult
     {
-        public List<BytecodeBssSymbol> Symbols { get; private set; }
+        public ImmutableList<BytecodeBssSymbol> Symbols { get; private set; }
 
-        public CompileBssSectionResult(List<BytecodeBssSymbol> symbols)
-        {
-            this.Symbols = symbols;
-        }
+        public CompileBssSectionResult(IEnumerable<BytecodeBssSymbol> symbols) =>
+            this.Symbols = ImmutableList<BytecodeBssSymbol>.Empty.AddRange(symbols);
     }
 }

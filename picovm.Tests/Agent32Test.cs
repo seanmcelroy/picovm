@@ -42,7 +42,7 @@ namespace picovm.Tests
             var compiler = new BytecodeCompiler();
             var compiled = compiler.Compile("UNIT_TEST", programText);
 
-            var agent = new Agent(kernel, compiled.textSegment);
+            var agent = new Agent(kernel, compiled.TextSegment);
             var ret = agent.Tick();
             Xunit.Assert.Null(ret);
             Xunit.Assert.Equal(4294967295, agent.ReadExtendedRegister(Register.EAX));
@@ -101,7 +101,7 @@ namespace picovm.Tests
             var compiler = new BytecodeCompiler();
             var compiled = compiler.Compile("UNIT_TEST", programText);
 
-            var agent = new Agent(kernel, compiled.textSegment);
+            var agent = new Agent(kernel, compiled.TextSegment);
             var ret = agent.Tick();
             Xunit.Assert.Null(ret);
             Xunit.Assert.Equal((uint)0xFFFFFFFF, agent.ReadExtendedRegister(Register.EAX));
@@ -158,7 +158,7 @@ namespace picovm.Tests
             var compiler = new BytecodeCompiler();
             var compiled = compiler.Compile("UNIT_TEST", programText);
 
-            var agent = new Agent(kernel, compiled.textSegment);
+            var agent = new Agent(kernel, compiled.TextSegment);
             var ret = agent.Tick();
             Xunit.Assert.Null(ret);
             Xunit.Assert.Equal((uint)0x11112222, agent.ReadExtendedRegister(Register.EAX));
@@ -213,11 +213,13 @@ namespace picovm.Tests
             var compiler = new BytecodeCompiler();
             var compiled = compiler.Compile("UNIT_TEST", programText);
 
-            var agent = new Agent(kernel, compiled.textSegment);
+            var agent = new Agent(kernel, compiled.TextSegment);
+            Xunit.Assert.Equal((uint)65535, agent.StackPointer);
             var ret = agent.Tick();
 
             // PUSH 4294945365
             Xunit.Assert.Null(ret);
+            agent.Dump();
             Xunit.Assert.Equal((uint)(65535 - 4), agent.StackPointer);
             Xunit.Assert.Equal(4294945365, agent.StackPeek32());
             Xunit.Assert.Equal((uint)0, agent.ReadExtendedRegister(Register.EAX));

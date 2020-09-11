@@ -13,7 +13,7 @@ namespace picovm.Compiler
             QuadWord = 4
         }
 
-        public string name;
+        public string? name;
         public BssType type;
         public ushort length;
 
