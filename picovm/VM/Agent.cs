@@ -47,7 +47,7 @@ namespace picovm.VM
 
         private byte[] memory = new byte[65536];
 
-        private uint instructionPointer = 0;
+        private ulong instructionPointer = 0;
 
         public uint StackPointer
         {
@@ -57,15 +57,16 @@ namespace picovm.VM
 
         private readonly IKernel kernel;
 
-        public Agent(IKernel kernel, IEnumerable<byte> program) : this(kernel, program.ToArray())
+        public Agent(IKernel kernel, IEnumerable<byte> program, ulong entryPoint) : this(kernel, program.ToArray(), entryPoint)
         {
         }
 
-        public Agent(IKernel kernel, byte[] program)
+        public Agent(IKernel kernel, byte[] program, ulong entryPoint)
         {
             this.kernel = kernel;
             Array.Copy(program, memory, program.Length);
             StackPointer = (uint)(memory.Length - 1);
+            this.instructionPointer = entryPoint;
         }
 
         public static ulong ReadR64Register(ulong[] registers, Register reference)
@@ -424,11 +425,11 @@ namespace picovm.VM
             Console.WriteLine($"EDX: 0x{ReadExtendedRegister(Register.EDX):X4} ({ReadExtendedRegister(Register.EDX).ToString().PadLeft(2)})");
             Console.WriteLine($"EIP: 0x{instructionPointer:X4} ({instructionPointer})\tESP: 0x{StackPointer:X4} ({StackPointer})");
             Console.WriteLine("(Stack)");
-            var i = (uint)memory.Length;
+            var i = (ulong)memory.Length;
             var qword = new byte[8];
             do
             {
-                Array.Copy(memory, i - 8, qword, 0, 8);
+                Array.Copy(memory, (int)i - 8, qword, 0, 8);
                 var output = qword.Select(b => $"{b:X2}").Aggregate((c, n) => $"{c} {n}");
                 Console.WriteLine($"{i}\t: {output}");
                 i -= 8;
@@ -437,7 +438,7 @@ namespace picovm.VM
             i = instructionPointer + (8 - instructionPointer % 8);
             do
             {
-                Array.Copy(memory, i - 8, qword, 0, 8);
+                Array.Copy(memory, (uint)i - 8, qword, 0, 8);
                 var output = qword.Select(b => $"{b:X2}").Aggregate((c, n) => $"{c} {n}");
                 Console.WriteLine($"{i}\t: {output}");
                 i -= 8;

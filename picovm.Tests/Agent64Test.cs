@@ -25,9 +25,9 @@ namespace picovm.Tests
             };
 
             var compiler = new BytecodeCompiler();
-            var compiled = compiler.Compile("UNIT_TEST", programText);
+            var compiled = compiler.Compile(programText, "UNIT_TEST");
 
-            var agent = new Agent(kernel, compiled.TextSegment);
+            var agent = new Agent(kernel, compiled.TextSegment, 0);
             var ret = agent.Tick();
             Xunit.Assert.Null(ret);
             Xunit.Assert.Equal((ulong)0x1111222233334444, agent.ReadR64Register(Register.RAX));

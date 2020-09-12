@@ -42,7 +42,7 @@ namespace picovm.Packager.Elf64
             Write(msProgramHeader);
             var bwProgramHeader = new BinaryWriter(msProgramHeader);
             uint programHeaderSizeReal = (uint)msProgramHeader.Position;
-            int programHeaderSizePad = programHeaderSizeReal % 16 == 0 ? 0 : (16 - ((int)programHeaderSizeReal % 16));
+            int programHeaderSizePad = programHeaderSizeReal.CalculateRoundUpTo16Pad();
             bwProgramHeader.Write(Enumerable.Repeat((byte)0x00, programHeaderSizePad).ToArray());
             bwProgramHeader.Flush();
             return (msProgramHeader, programHeaderSizeReal, programHeaderSizePad);

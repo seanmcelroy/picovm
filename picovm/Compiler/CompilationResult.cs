@@ -12,7 +12,7 @@ namespace picovm.Compiler
         public readonly uint? EntryPoint;
         public readonly uint? TextSegmentBase;
         public readonly uint? DataSegmentBase;
-        public readonly byte[]? TextSegment;
+        public readonly ImmutableArray<byte>? TextSegment;
         public readonly Dictionary<string, uint>? TextLabelsOffsets;
         public readonly ImmutableList<BytecodeTextSymbol> TextSymbolReferenceOffsets;
         public readonly ImmutableArray<byte>? DataSegment;
@@ -42,7 +42,7 @@ namespace picovm.Compiler
             this.EntryPoint = entryPoint;
             this.TextSegmentBase = textSegmentBase;
             this.DataSegmentBase = dataSegmentBase;
-            this.TextSegment = textSegment;
+            this.TextSegment = ImmutableArray<byte>.Empty.AddRange(textSegment);
             this.TextLabelsOffsets = textLabelsOffsets?.ToDictionary(k => k.Key, v => v.Value);
             this.TextSymbolReferenceOffsets = ImmutableList<BytecodeTextSymbol>.Empty.AddRange(textSymbolReferenceOffsets);
             this.DataSegment = dataSegment;
@@ -56,6 +56,11 @@ namespace picovm.Compiler
             this.TextSymbolReferenceOffsets = ImmutableList<BytecodeTextSymbol>.Empty;
             this.BssSymbols = ImmutableList<BytecodeBssSymbol>.Empty;
             this.Errors = ImmutableList<CompilationError>.Empty.AddRange(errors);
+        }
+
+        public static CompilationResult Error(string message, string? sourceFile = null, ushort? lineNumber = null, ushort? column = null)
+        {
+            return new CompilationResult(new[] { new CompilationError(message, sourceFile, lineNumber, column) });
         }
     }
 }

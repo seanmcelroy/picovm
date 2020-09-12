@@ -38,7 +38,27 @@ namespace picovm.Compiler
             registers = Enum.GetValues(typeof(Register)).Cast<Register>().ToDictionary(k => GetEnumDescription(k), v => v);
         }
 
-        public CompilationResult Compile(string fileName, IEnumerable<string> programLines)
+        public CompilationResult Compile(string sourceFilename)
+        {
+            if (!System.IO.File.Exists(sourceFilename))
+            {
+                return CompilationResult.Error($"Source input file {sourceFilename} not found.", sourceFilename);
+            }
+
+            string[] programText;
+            try
+            {
+                programText = System.IO.File.ReadAllLines(sourceFilename);
+            }
+            catch (Exception ex)
+            {
+                return CompilationResult.Error($"Error while attempting to read input file: {ex.Message}");
+            }
+
+            return Compile(programText, sourceFilename);
+        }
+
+        public CompilationResult Compile(IEnumerable<string> programLines, string? sourceFilename = null)
         {
             uint? textSegmentSize = null;
             uint? dataSegmentSize = null;
@@ -123,8 +143,8 @@ namespace picovm.Compiler
                     }
                     else
                     {
-                        errors.Add(new CompilationError($"Unknown section type: {line}", fileName, lineNumber));
-                        throw new InvalidOperationException($"Unknown section type: '{line}' ({fileName}:{lineNumber})");
+                        errors.Add(new CompilationError($"Unknown section type: {line}", sourceFilename, lineNumber));
+                        throw new InvalidOperationException($"Unknown section type: '{line}' ({sourceFilename}:{lineNumber})");
                     }
                 }
                 else
@@ -158,12 +178,12 @@ namespace picovm.Compiler
 
                         if (entryPointSymbol == null)
                         {
-                            errors.Add(new CompilationError($"No entry point specified.", fileName));
+                            errors.Add(new CompilationError($"No entry point specified.", sourceFilename));
                             throw new NotImplementedException($"Unable to generate compiled output for section type: {section.Key}");
                         }
                         else if (!textLabelsOffsets.ContainsKey(entryPointSymbol))
                         {
-                            errors.Add(new CompilationError($"No entry point located in source file.", fileName));
+                            errors.Add(new CompilationError($"No entry point located in source file.", sourceFilename));
                             throw new NotImplementedException($"Unable to generate compiled output for section type: {section.Key}");
                         }
                         entryPoint = textLabelsOffsets[entryPointSymbol];
@@ -189,7 +209,7 @@ namespace picovm.Compiler
             {
                 if (textSymbolReferenceOffsets != null)
                     foreach (var missing in textSymbolReferenceOffsets)
-                        errors.Add(new CompilationError($"Symbol {missing.name} in program code is undefined; there is NO DATA SECTION!", fileName));
+                        errors.Add(new CompilationError($"Symbol {missing.name} in program code is undefined; there is NO DATA SECTION!", sourceFilename));
             }
             else
             {
@@ -209,12 +229,12 @@ namespace picovm.Compiler
                     .Where(tsr => !dataSymbolOffsets.ContainsKey(tsr.name)
                                && (textLabelsOffsets == null || !textLabelsOffsets.ContainsKey(tsr.name))
                                && !bssSymbols.Any(bss => string.Compare(bss.name, tsr.name, StringComparison.InvariantCultureIgnoreCase) == 0)))
-                    errors.Add(new CompilationError($"Symbol {missing.name} in program code is undefined by the data and BSS sections", fileName));
+                    errors.Add(new CompilationError($"Symbol {missing.name} in program code is undefined by the data and BSS sections", sourceFilename));
                 if (errors.Count > 0)
                     return new CompilationResult(errors);
 
                 foreach (var extra in dataSymbolOffsets.Where(dsr => !textSymbolReferenceOffsets.Any(tsr => string.Compare(tsr.name, dsr.Key, StringComparison.InvariantCulture) == 0)))
-                    errors.Add(new CompilationError($"Data symbol {extra.Key} is not referenced in program code", fileName));
+                    errors.Add(new CompilationError($"Data symbol {extra.Key} is not referenced in program code", sourceFilename));
 
                 // Rebase data symbol offsets
                 dataSegmentBase = (textSegmentBase ?? 0) + textSegmentSize.Value;

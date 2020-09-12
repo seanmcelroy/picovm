@@ -40,9 +40,9 @@ namespace picovm.Tests
             };
 
             var compiler = new BytecodeCompiler();
-            var compiled = compiler.Compile("UNIT_TEST", programText);
+            var compiled = compiler.Compile(programText, "UNIT_TEST");
 
-            var agent = new Agent(kernel, compiled.TextSegment);
+            var agent = new Agent(kernel, compiled.TextSegment, 0);
             var ret = agent.Tick();
             Xunit.Assert.Null(ret);
             Xunit.Assert.Equal(4294967295, agent.ReadExtendedRegister(Register.EAX));
@@ -99,9 +99,9 @@ namespace picovm.Tests
             };
 
             var compiler = new BytecodeCompiler();
-            var compiled = compiler.Compile("UNIT_TEST", programText);
+            var compiled = compiler.Compile(programText, "UNIT_TEST");
 
-            var agent = new Agent(kernel, compiled.TextSegment);
+            var agent = new Agent(kernel, compiled.TextSegment, 0);
             var ret = agent.Tick();
             Xunit.Assert.Null(ret);
             Xunit.Assert.Equal((uint)0xFFFFFFFF, agent.ReadExtendedRegister(Register.EAX));
@@ -156,9 +156,9 @@ namespace picovm.Tests
             };
 
             var compiler = new BytecodeCompiler();
-            var compiled = compiler.Compile("UNIT_TEST", programText);
+            var compiled = compiler.Compile(programText, "UNIT_TEST");
 
-            var agent = new Agent(kernel, compiled.TextSegment);
+            var agent = new Agent(kernel, compiled.TextSegment, 0);
             var ret = agent.Tick();
             Xunit.Assert.Null(ret);
             Xunit.Assert.Equal((uint)0x11112222, agent.ReadExtendedRegister(Register.EAX));
@@ -211,9 +211,9 @@ namespace picovm.Tests
             };
 
             var compiler = new BytecodeCompiler();
-            var compiled = compiler.Compile("UNIT_TEST", programText);
+            var compiled = compiler.Compile(programText, "UNIT_TEST");
 
-            var agent = new Agent(kernel, compiled.TextSegment);
+            var agent = new Agent(kernel, compiled.TextSegment, 0);
             Xunit.Assert.Equal((uint)65535, agent.StackPointer);
             var ret = agent.Tick();
 

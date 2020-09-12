@@ -1,28 +1,27 @@
 using System;
-using System.ComponentModel;
 using System.IO;
-using picovm.Compiler;
-using picovm.Packager;
+using picovm.VM;
 
 namespace picovm.Packager.Elf64
 {
     public sealed class LoaderElf64 : ILoader
     {
         private readonly Stream stream;
+
         public LoaderElf64(Stream stream)
         {
             if (stream == null)
                 throw new ArgumentNullException(nameof(stream));
-            if (!stream.CanRead)
-                throw new ArgumentException("Stream is not available for reading", nameof(stream));
 
             this.stream = stream;
         }
 
-        public CompilationResult Load()
+        public LoaderResult Load()
         {
             if (!stream.CanRead)
                 throw new ArgumentException("Stream is not available for reading", nameof(stream));
+            if (!stream.CanSeek)
+                throw new ArgumentException("Stream is not available for seeking", nameof(stream));
 
             var elfFileHeader = new Header64();
             elfFileHeader.Read(stream);
@@ -31,8 +30,15 @@ namespace picovm.Packager.Elf64
             var programHeader = new ProgramHeader64();
             programHeader.Read(stream);
 
+            var image = new byte[(int)programHeader.P_FILESZ - elfFileHeader.E_EHSIZE - (elfFileHeader.E_PHNUM * elfFileHeader.E_PHENTSIZE)];
+            var imageOffset =
+                elfFileHeader.E_EHSIZE
+                + elfFileHeader.E_EHSIZE.CalculateRoundUpTo16Pad()
+                + (elfFileHeader.E_PHNUM * (elfFileHeader.E_PHENTSIZE + elfFileHeader.E_PHENTSIZE.CalculateRoundUpTo16Pad()));
+            stream.Seek(imageOffset, SeekOrigin.Begin);
+            stream.Read(image, 0, image.Length);
 
-            return null;
+            return new LoaderResult(elfFileHeader.E_ENTRY - (ulong)imageOffset, image);
         }
     }
 }

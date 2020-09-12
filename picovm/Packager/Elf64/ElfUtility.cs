@@ -122,5 +122,13 @@ namespace picovm.Packager.Elf64
             stream.Write(buffer);
             return (UInt16)buffer.Length;
         }
+
+        public static int CalculateRoundUpTo16Pad(this uint? realSize, uint roundUp = 16) => 0;// realSize == 0 ? 0 : realSize!.Value % roundUp == 0 ? 0 : (int)(roundUp - (realSize.Value % roundUp));
+        public static int CalculateRoundUpTo16Pad(this uint realSize, uint roundUp = 16) => 0;// realSize == 0 ? 0 : realSize % roundUp == 0 ? 0 : (int)(roundUp - (realSize % roundUp));
+        public static int CalculateRoundUpTo16Pad(this ushort? realSize, uint roundUp = 16) => 0; //realSize == 0 ? 0 : realSize!.Value % roundUp == 0 ? 0 : (int)(roundUp - (realSize.Value % roundUp));
+        public static int CalculateRoundUpTo16Pad(this ushort realSize, uint roundUp = 16) => 0; // realSize == 0 ? 0 : realSize % roundUp == 0 ? 0 : (int)(roundUp - (realSize % roundUp));
+
+
+
     }
 }

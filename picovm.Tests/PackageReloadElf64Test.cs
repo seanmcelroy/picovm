@@ -20,9 +20,9 @@ namespace picovm.Tests
         {
             // http://www.sco.com/developers/devspecs/gabi41.pdf
             var compiler = new BytecodeCompiler();
-            var fileName = "./../../../../picovm/asm-src/read-keyboard.asm";
-            Xunit.Assert.True(File.Exists(Path.Combine(System.Environment.CurrentDirectory, fileName)), $"Cannot find file {fileName} for test, current directory: {System.Environment.CurrentDirectory}");
-            var compilation = compiler.Compile(fileName, System.IO.File.ReadAllLines(fileName));
+            var sourceFileName = "./../../../../picovm/asm-src/read-keyboard.asm";
+            Xunit.Assert.True(File.Exists(Path.Combine(System.Environment.CurrentDirectory, sourceFileName)), $"Cannot find file {sourceFileName} for test, current directory: {System.Environment.CurrentDirectory}");
+            var compilation = compiler.Compile(sourceFileName);
             Xunit.Assert.Equal(0, compilation.Errors.Count);
 
             var packager = new PackagerElf64(compilation);
@@ -85,21 +85,8 @@ namespace picovm.Tests
                 var loader = new LoaderElf64(ms);
                 var compilation2 = loader.Load();
                 Xunit.Assert.NotNull(compilation2);
-
-                Xunit.Assert.Equal(compilation.BssSegmentSize, compilation2.BssSegmentSize);
-                Xunit.Assert.Equal(compilation.BssSymbols, compilation2.BssSymbols);
-                Xunit.Assert.Equal(compilation.DataSegment, compilation2.DataSegment);
-                Xunit.Assert.Equal(compilation.DataSegmentBase, compilation2.DataSegmentBase);
-                Xunit.Assert.Equal(compilation.DataSegmentSize, compilation2.DataSegmentSize);
-                Xunit.Assert.Equal(compilation.DataSymbolOffsets, compilation2.DataSymbolOffsets);
-                Xunit.Assert.Equal(compilation.EntryPoint, compilation2.EntryPoint);
-                Xunit.Assert.Equal(compilation.TextLabelsOffsets, compilation2.TextLabelsOffsets);
-                Xunit.Assert.Equal(compilation.TextSegment, compilation2.TextSegment);
-                Xunit.Assert.Equal(compilation.TextSegmentBase, compilation2.TextSegmentBase);
-                Xunit.Assert.Equal(compilation.TextSegmentSize, compilation2.TextSegmentSize);
-                Xunit.Assert.Equal(compilation.TextSymbolReferenceOffsets, compilation2.TextSymbolReferenceOffsets);
+                Xunit.Assert.Equal(compilation.EntryPoint.Value, compilation2.EntryPoint);
             }
         }
-
     }
 }

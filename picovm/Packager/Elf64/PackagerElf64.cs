@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using picovm.Compiler;
+using picovm.Packager.Elf64;
 
 namespace picovm.Packager.Elf64
 {
@@ -71,13 +72,13 @@ namespace picovm.Packager.Elf64
             // .text
             uint textOffset = programHeaderOffset + programHeaderSize;
             uint textSizeReal = (uint)(compilationResult.TextSegment?.Length ?? 0);
-            int textSizePad = textSizeReal == 0 ? 0 : compilationResult.TextSegment!.Length % 16 == 0 ? 0 : (16 - (compilationResult.TextSegment.Length % 16));
+            int textSizePad = textSizeReal.CalculateRoundUpTo16Pad();
             uint textSize = textSizeReal + (uint)textSizePad;
 
             // .rodata
             uint rodataOffset = textOffset + textSize;
             uint rodataSizeReal = (uint)(compilationResult.DataSegment?.Length ?? 0);
-            int rodataSizePad = rodataSizeReal == 0 ? 0 : compilationResult.DataSegment!.Value.Length % 16 == 0 ? 0 : (16 - (compilationResult.DataSegment!.Value.Length % 16));
+            int rodataSizePad = rodataSizeReal.CalculateRoundUpTo16Pad();
             uint rodataSize = rodataSizeReal + (uint)rodataSizePad;
 
             var msData = new MemoryStream();
@@ -157,7 +158,7 @@ namespace picovm.Packager.Elf64
                 });
 
                 // Write out section header string table, align to 16 bytes
-                sectionNamesSizePad = (int)sectionNamesSizeReal % 16 == 0 ? 0 : (16 - ((int)sectionNamesSizeReal % 16));
+                sectionNamesSizePad = sectionNamesSizeReal.CalculateRoundUpTo16Pad();
                 bwSectionNames.Write(Enumerable.Repeat((byte)0x00, sectionNamesSizePad).ToArray());
                 bwSectionNames.Flush();
             }
@@ -180,7 +181,7 @@ namespace picovm.Packager.Elf64
             stream.Write(msProgramHeader.ToArray());
             if (compilationResult.TextSegment != null)
             {
-                stream.Write(compilationResult.TextSegment);
+                stream.Write(compilationResult.TextSegment.Value.AsSpan());
                 stream.Write(Enumerable.Repeat((byte)0x00, textSizePad).ToArray());
             }
             if (compilationResult.DataSegment != null)
