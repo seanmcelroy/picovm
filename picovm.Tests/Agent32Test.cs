@@ -1,4 +1,5 @@
-using picovm.Compiler;
+using System;
+using picovm.Assembler;
 using picovm.VM;
 using Xunit;
 
@@ -11,8 +12,8 @@ namespace picovm.Tests
         [Fact]
         public void GetOperand_Constant()
         {
-            Xunit.Assert.Equal(BytecodeCompiler.ParameterType.Constant, BytecodeCompiler.GetOperandType("4294945365"));
-            Xunit.Assert.Equal(BytecodeCompiler.ParameterType.Constant, BytecodeCompiler.GetOperandType("2863315917"));
+            Xunit.Assert.Equal(ParameterType.Constant, AssemblerUtility.GetOperandType("4294945365"));
+            Xunit.Assert.Equal(ParameterType.Constant, AssemblerUtility.GetOperandType("2863315917"));
         }
 
         [Fact]
@@ -39,7 +40,7 @@ namespace picovm.Tests
                 "END"
             };
 
-            var compiler = new BytecodeCompiler();
+            var compiler = new BytecodeCompiler<UInt32>();
             var compiled = compiler.Compile(programText, "UNIT_TEST");
 
             var agent = new Agent(kernel, compiled.TextSegment, 0);
@@ -98,7 +99,7 @@ namespace picovm.Tests
                 "END"
             };
 
-            var compiler = new BytecodeCompiler();
+            var compiler = new BytecodeCompiler<UInt32>();
             var compiled = compiler.Compile(programText, "UNIT_TEST");
 
             var agent = new Agent(kernel, compiled.TextSegment, 0);
@@ -155,7 +156,7 @@ namespace picovm.Tests
                 "xor  ax, ax          ; eax = 0x11110000 (works, only low 16 bits cleared)"
             };
 
-            var compiler = new BytecodeCompiler();
+            var compiler = new BytecodeCompiler<UInt32>();
             var compiled = compiler.Compile(programText, "UNIT_TEST");
 
             var agent = new Agent(kernel, compiled.TextSegment, 0);
@@ -210,7 +211,7 @@ namespace picovm.Tests
                 "END"
             };
 
-            var compiler = new BytecodeCompiler();
+            var compiler = new BytecodeCompiler<UInt32>();
             var compiled = compiler.Compile(programText, "UNIT_TEST");
 
             var agent = new Agent(kernel, compiled.TextSegment, 0);

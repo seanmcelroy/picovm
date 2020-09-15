@@ -1,5 +1,5 @@
 using Xunit;
-using picovm.Compiler;
+using picovm.Assembler;
 
 namespace picovm.Tests
 {

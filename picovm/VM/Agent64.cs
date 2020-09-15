@@ -6,338 +6,138 @@ using picovm.Assembler;
 namespace picovm.VM
 {
 
-    public class Agent
+    public class Agent64 : Agent
     {
-        #region Registers
-        // General registers
-        public const byte R_A = 0;
-        public const byte R_B = 1;
-        public const byte R_C = 2;
-        public const byte R_D = 3;
-        // Segment registers
-        public const byte R_CS = 4;
-        public const byte R_DS = 5;
-        public const byte R_ES = 6;
-        public const byte R_FS = 7;
-        public const byte R_GS = 8;
-        public const byte R_SS = 9;
-        // Index and pointers
-        public const byte R_SI = 10;
-        public const byte R_DI = 11;
-        public const byte R_BP = 12;
-        public const byte R_IP = 13;
-        public const byte R_SP = 14;
-        // Indicator
-        public const byte R_FLAGS = 15;
+        private ulong instructionPointer = 0;
 
-        public const byte R_8 = 16;
-        public const byte R_9 = 17;
-        public const byte R_10 = 18;
-        public const byte R_11 = 19;
-        public const byte R_12 = 20;
-        public const byte R_13 = 21;
-        public const byte R_14 = 22;
-        public const byte R_15 = 23;
-
-        #endregion
-
-        protected ulong[] registers = new ulong[24];
-
-        protected bool[] flags = new bool[2];
-
-        protected byte[] memory = new byte[65536];
-
-        private UInt32 instructionPointer = 0;
-
-        public UInt32 StackPointer
+        public new UInt64 StackPointer
         {
-            get => ReadExtendedRegister(Register.SP);
-            set => WriteExtendedRegister(Register.SP, value);
+            get => ReadR64Register(Register.SP);
+            set => WriteR64Register(Register.SP, value);
         }
 
-        protected IKernel kernel { get; private set; }
-
-        public Agent(IKernel kernel, IEnumerable<byte> program, UInt32 entryPoint) : this(kernel, program.ToArray(), entryPoint)
+        public Agent64(IKernel kernel, IEnumerable<byte> program, UInt64 entryPoint) : this(kernel, program.ToArray(), entryPoint)
         {
         }
 
-        public Agent(IKernel kernel, byte[] program, UInt32 entryPoint)
+        public Agent64(IKernel kernel, byte[] program, UInt64 entryPoint) : base(kernel, program)
         {
-            this.kernel = kernel;
-            Array.Copy(program, memory, program.Length);
             StackPointer = (uint)(memory.Length - 1);
             this.instructionPointer = entryPoint;
         }
 
-        protected Agent(IKernel kernel, byte[] program)
+        public static ulong ReadR64Register(ulong[] registers, Register reference)
         {
-            this.kernel = kernel;
-            Array.Copy(program, memory, program.Length);
-            StackPointer = (uint)(memory.Length - 1);
-        }
-
-        public static uint ReadExtendedRegister(ulong[] registers, Register reference)
-        {
-            // http://www.cs.virginia.edu/~evans/cs216/guides/x86.html
-
-            // https://stackoverflow.com/questions/1209439/what-is-the-best-way-to-combine-two-uints-into-a-ulong-in-c-sharp
-            uint ret;
             switch (reference)
             {
-                case Register.EAX:
-                    {
-                        var u64 = registers[R_A];
-                        ret = (uint)(u64 & uint.MaxValue);
-                    }
+                case Register.RAX:
+                    return registers[R_A];
+                case Register.RBX:
+                    return registers[R_B];
+                case Register.RCX:
+                    return registers[R_C];
+                case Register.RDX:
+                    return registers[R_D];
+                case Register.RDI:
+                    return registers[R_DI];
+                case Register.RSI:
+                    return registers[R_SI];
+                case Register.R8:
+                    return registers[R_8];
+                case Register.R9:
+                    return registers[R_9];
+                case Register.R10:
+                    return registers[R_10];
+                case Register.R11:
+                    return registers[R_11];
+                case Register.R12:
+                    return registers[R_12];
+                case Register.R13:
+                    return registers[R_13];
+                case Register.R14:
+                    return registers[R_14];
+                case Register.R15:
+                    return registers[R_15];
+                case Register.SP:
+                    return registers[R_SP];
+                default:
+                    throw new InvalidOperationException($"ERROR: Unknown x64 register {reference}!");
+            }
+        }
+
+        public ulong ReadR64Register(Register reference) => ReadR64Register(this.registers, reference);
+
+        public static void WriteR64Register(ulong[] registers, Register reference, ulong value)
+        {
+            switch (reference)
+            {
+                case Register.RAX:
+                    registers[R_A] = value;
                     break;
-                case Register.EBX:
-                    {
-                        var u64 = registers[R_B];
-                        ret = (uint)(u64 & uint.MaxValue);
-                    }
+                case Register.RBX:
+                    registers[R_B] = value;
                     break;
-                case Register.ECX:
-                    {
-                        var u64 = registers[R_C];
-                        ret = (uint)(u64 & uint.MaxValue);
-                    }
+                case Register.RCX:
+                    registers[R_C] = value;
                     break;
-                case Register.EDX:
-                    {
-                        var u64 = registers[R_D];
-                        ret = (uint)(u64 & uint.MaxValue);
-                    }
+                case Register.RDX:
+                    registers[R_D] = value;
+                    break;
+                case Register.R8:
+                    registers[R_8] = value;
+                    break;
+                case Register.R9:
+                    registers[R_9] = value;
+                    break;
+                case Register.R10:
+                    registers[R_10] = value;
+                    break;
+                case Register.R11:
+                    registers[R_11] = value;
+                    break;
+                case Register.R12:
+                    registers[R_12] = value;
+                    break;
+                case Register.R13:
+                    registers[R_13] = value;
+                    break;
+                case Register.R14:
+                    registers[R_14] = value;
+                    break;
+                case Register.R15:
+                    registers[R_15] = value;
                     break;
                 case Register.SP:
-                    {
-                        var u64 = registers[R_SP];
-                        ret = (uint)(u64 & uint.MaxValue);
-                    }
+                    registers[R_SP] = value;
+                    break;
+                case Register.RDI:
+                    registers[R_DI] = value;
+                    break;
+                case Register.RSI:
+                    registers[R_SI] = value;
                     break;
                 default:
-                    throw new InvalidOperationException($"ERROR: Unknown extended register {reference}!");
+                    throw new InvalidOperationException($"ERROR: Unknown x64 register {reference}!");
             }
+        }
+
+        public void WriteR64Register(Register reference, ulong value) => WriteR64Register(this.registers, reference, value);
+
+        public ulong StackPop64()
+        {
+            var ret = BitConverter.ToUInt64(memory, (int)ReadR64Register(Register.SP));
+            StackPointer += 8;
             return ret;
         }
 
-        public uint ReadExtendedRegister(Register reference) => ReadExtendedRegister(this.registers, reference);
-
-        public ushort ReadRegister(Register reference)
-        {
-            // 16 bits
-            // We want to read the right-most 16 bits of the 64-bit value
-            ushort ret;
-            switch (reference)
-            {
-                case Register.AX:
-                    ret = (ushort)(registers[R_A] & (ulong)ushort.MaxValue);
-                    break;
-                case Register.BX:
-                    ret = (ushort)(registers[R_B] & (ulong)ushort.MaxValue);
-                    break;
-                case Register.CX:
-                    ret = (ushort)(registers[R_C] & (ulong)ushort.MaxValue);
-                    break;
-                case Register.DX:
-                    ret = (ushort)(registers[R_D] & (ulong)ushort.MaxValue);
-                    break;
-                case Register.DI:
-                    ret = (ushort)(registers[R_DI] & (ulong)ushort.MaxValue);
-                    break;
-                case Register.SI:
-                    ret = (ushort)(registers[R_SI] & (ulong)ushort.MaxValue);
-                    break;
-                default:
-                    throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
-            }
-            return ret;
-        }
-
-        public byte ReadHalfRegister(Register reference)
-        {
-            // 8 bits
-            // We want to read the right-most 8 bits of the 64-bit value
-            byte ret;
-            switch (reference)
-            {
-                case Register.AH:
-                    ret = (byte)((registers[R_A] & (ulong)0xFF00) >> 8);
-                    break;
-                case Register.AL:
-                    ret = (byte)(registers[R_A] & (ulong)0x00FF);
-                    break;
-                case Register.BH:
-                    ret = (byte)((registers[R_B] & (ulong)0xFF00) >> 8);
-                    break;
-                case Register.BL:
-                    ret = (byte)(registers[R_B] & (ulong)0x00FF);
-                    break;
-                case Register.CH:
-                    ret = (byte)((registers[R_C] & (ulong)0xFF00) >> 8);
-                    break;
-                case Register.CL:
-                    ret = (byte)(registers[R_C] & (ulong)0x00FF);
-                    break;
-                case Register.DH:
-                    ret = (byte)((registers[R_D] & (ulong)0xFF00) >> 8);
-                    break;
-                case Register.DL:
-                    ret = (byte)(registers[R_D] & (ulong)0x00FF);
-                    break;
-                default:
-                    throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
-            }
-            return ret;
-        }
-
-        public static void WriteExtendedRegister(ulong[] registers, Register reference, uint value)
-        {
-            const uint hi = 0;
-            var lo = value;
-            switch (reference)
-            {
-                case Register.EAX:
-                    registers[R_A] = (ulong)hi << 32 | lo;
-                    break;
-                case Register.EBX:
-                    registers[R_B] = (ulong)hi << 32 | lo;
-                    break;
-                case Register.ECX:
-                    registers[R_C] = (ulong)hi << 32 | lo;
-                    break;
-                case Register.EDX:
-                    registers[R_D] = (ulong)hi << 32 | lo;
-                    break;
-                case Register.SP:
-                    registers[R_SP] = (ulong)hi << 32 | lo;
-                    break;
-                default:
-                    throw new InvalidOperationException($"ERROR: Unknown extended register {reference}!");
-            }
-        }
-
-        public void WriteExtendedRegister(Register reference, uint value) => WriteExtendedRegister(this.registers, reference, value);
-
-        public static void WriteExtendedRegister(ulong[] registers, Register reference, int value)
-        {
-            const int hi = 0;
-            var lo = value;
-            switch (reference)
-            {
-                case Register.EAX:
-                    registers[R_A] = (ulong)(hi << 32 | lo);
-                    break;
-                case Register.EBX:
-                    registers[R_B] = (ulong)(hi << 32 | lo);
-                    break;
-                case Register.ECX:
-                    registers[R_C] = (ulong)(hi << 32 | lo);
-                    break;
-                case Register.EDX:
-                    registers[R_D] = (ulong)(hi << 32 | lo);
-                    break;
-                default:
-                    throw new InvalidOperationException($"ERROR: Unknown extended register {reference}!");
-            }
-        }
-
-        public void WriteRegister(Register reference, ushort value)
-        {
-            // 16 bits
-            // We want to overwrite the right-most 8 bits of the 64-bit value
-            // reg_data = (reg_data & (~bit_mask)) | (new_value << 5)
-            // https://stackoverflow.com/questions/5925755/how-to-replace-bits-in-a-bitfield-without-affecting-other-bits-using-c
-
-            switch (reference)
-            {
-                case Register.AX:
-                    registers[R_A] = registers[R_A] & ~((ulong)ushort.MaxValue) | (ulong)value;
-                    break;
-                case Register.BX:
-                    registers[R_B] = registers[R_B] & ~((ulong)ushort.MaxValue) | (ulong)value;
-                    break;
-                case Register.CX:
-                    registers[R_C] = registers[R_C] & ~((ulong)ushort.MaxValue) | (ulong)value;
-                    break;
-                case Register.DX:
-                    registers[R_D] = registers[R_D] & ~((ulong)ushort.MaxValue) | (ulong)value;
-                    break;
-                case Register.DI:
-                    registers[R_DI] = registers[R_DI] & ~((ulong)ushort.MaxValue) | (ulong)value;
-                    break;
-                case Register.SI:
-                    registers[R_SI] = registers[R_SI] & ~((ulong)ushort.MaxValue) | (ulong)value;
-                    break;
-                default:
-                    throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
-            }
-        }
-
-        public void WriteHalfRegister(Register reference, byte value)
-        {
-            // 8 bits / 1 byte
-            switch (reference)
-            {
-                case Register.AH:
-                    registers[R_A] = registers[R_A] & ~((ulong)0xFF00) | ((ulong)value << 8);
-                    break;
-                case Register.AL:
-                    registers[R_A] = registers[R_A] & ~((ulong)0x00FF) | (ulong)value;
-                    break;
-                case Register.BH:
-                    registers[R_B] = registers[R_B] & ~((ulong)0xFF00) | ((ulong)value << 8);
-                    break;
-                case Register.BL:
-                    registers[R_B] = registers[R_B] & ~((ulong)0x00FF) | (ulong)value;
-                    break;
-                case Register.CH:
-                    registers[R_C] = registers[R_C] & ~((ulong)0xFF00) | ((ulong)value << 8);
-                    break;
-                case Register.CL:
-                    registers[R_C] = registers[R_C] & ~((ulong)0x00FF) | (ulong)value;
-                    break;
-                case Register.DH:
-                    registers[R_D] = registers[R_D] & ~((ulong)0xFF00) | ((ulong)value << 8);
-                    break;
-                case Register.DL:
-                    registers[R_D] = registers[R_D] & ~((ulong)0x00FF) | (ulong)value;
-                    break;
-                default:
-                    throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
-            }
-        }
-
-        public uint StackPeek32() => BitConverter.ToUInt32(memory, (int)ReadExtendedRegister(Register.SP));
-
-        public uint StackPop32()
-        {
-            var ret = BitConverter.ToUInt32(memory, (int)StackPointer);
-            StackPointer += 4;
-            return ret;
-        }
-
-        public ushort StackPop16()
-        {
-            var ret = BitConverter.ToUInt16(memory, (int)StackPointer);
-            StackPointer += 2;
-            return ret;
-        }
-
-        public byte StackPop8()
-        {
-            var ret = memory[(int)StackPointer];
-            StackPointer++;
-            return ret;
-        }
-
-        public void StackPush(uint value)
+        public void StackPush(ulong value)
         {
             // Push is ALWAYS a 32-bit operation.  Callers convert.
-            Array.Copy(BitConverter.GetBytes(value), 0, memory, StackPointer - 4, 4);
-            StackPointer -= 4;
+            Array.Copy(BitConverter.GetBytes(value), 0L, memory, (long)(StackPointer - 8), 8);
+            StackPointer -= 8;
         }
 
-        public virtual void Dump()
+        public override void Dump()
         {
             Console.WriteLine();
             Console.Error.Write($"EAX: 0x{ReadExtendedRegister(Register.EAX):X4} ({ReadExtendedRegister(Register.EAX).ToString().PadLeft(2)})\t");
@@ -366,7 +166,7 @@ namespace picovm.VM
             } while (i > 0);
         }
 
-        public virtual int? Tick()
+        public override int? Tick()
         {
             var instruction = (Bytecode)memory[instructionPointer];
             instructionPointer++;
@@ -384,6 +184,15 @@ namespace picovm.VM
 
                         switch (operand1.Size())
                         {
+                            case 8:
+                                {
+                                    var operand1value = ReadR64Register(operand1);
+                                    instructionPointer++;
+                                    var operand2value = BitConverter.ToUInt64(memory, (int)instructionPointer);
+                                    instructionPointer += 8;
+                                    WriteR64Register(operand1, operand1value + operand2value);
+                                    break;
+                                }
                             case 4:
                                 {
                                     var operand1value = ReadExtendedRegister(operand1);
@@ -423,6 +232,15 @@ namespace picovm.VM
 
                         switch (operand1.Size())
                         {
+                            case 8:
+                                {
+                                    var loc = ReadR64Register(operand1);
+                                    var operand1value = BitConverter.ToUInt64(memory, (int)loc);
+                                    var operand2value = BitConverter.ToUInt64(memory, (int)instructionPointer);
+                                    instructionPointer += 4;
+                                    Array.Copy(BitConverter.GetBytes(operand1value + operand2value), 0L, memory, (long)loc, 8);
+                                    break;
+                                }
                             case 4:
                                 {
                                     var loc = ReadExtendedRegister(operand1);
@@ -462,6 +280,16 @@ namespace picovm.VM
 
                         switch (operand1.Size())
                         {
+                            case 8:
+                                {
+                                    var operand1value = ReadR64Register(operand1);
+                                    var operand2value = BitConverter.ToUInt64(memory, (int)instructionPointer);
+                                    instructionPointer += 8;
+                                    var val = operand1value & operand2value;
+                                    flags[(int)Flag.ZERO_FLAG] = val == 0;
+                                    WriteR64Register(operand1, val);
+                                    break;
+                                }
                             case 4:
                                 {
                                     var operand1value = ReadExtendedRegister(operand1);
@@ -527,11 +355,33 @@ namespace picovm.VM
 
                         switch (src.Size())
                         {
+                            case 8:
+                                {
+                                    var srcVal = ReadR64Register(src);
+                                    switch (dst.Size())
+                                    {
+                                        case 8:
+                                            WriteR64Register(dst, srcVal);
+                                            break;
+                                        case 4:
+                                            throw new InvalidOperationException("ERROR: MOV dst is a dword but source is a qword");
+                                        case 2:
+                                            throw new InvalidOperationException("ERROR: MOV dst is a word but source is a qword");
+                                        case 1:
+                                            throw new InvalidOperationException("ERROR: MOV dst is a byte but source is a qword");
+                                        default:
+                                            throw new InvalidOperationException($"ERROR: Unrecognized register for MOV dst: {dst}");
+                                    }
+                                    break;
+                                }
                             case 4:
                                 {
                                     var srcVal = ReadExtendedRegister(src);
                                     switch (dst.Size())
                                     {
+                                        case 8:
+                                            WriteR64Register(dst, srcVal);
+                                            break;
                                         case 4:
                                             WriteExtendedRegister(dst, srcVal);
                                             break;
@@ -549,6 +399,9 @@ namespace picovm.VM
                                     var srcVal = ReadRegister(src);
                                     switch (dst.Size())
                                     {
+                                        case 8:
+                                            WriteR64Register(dst, srcVal);
+                                            break;
                                         case 4:
                                             WriteExtendedRegister(dst, srcVal);
                                             break;
@@ -567,6 +420,9 @@ namespace picovm.VM
                                     var srcVal = ReadHalfRegister(src);
                                     switch (dst.Size())
                                     {
+                                        case 8:
+                                            WriteR64Register(dst, srcVal);
+                                            break;
                                         case 4:
                                             WriteExtendedRegister(dst, srcVal);
                                             break;
@@ -593,6 +449,13 @@ namespace picovm.VM
                         instructionPointer++;
                         switch (dst.Size())
                         {
+                            case 8:
+                                {
+                                    var loc = BitConverter.ToUInt64(memory, (int)instructionPointer);
+                                    instructionPointer += 8;
+                                    WriteR64Register(dst, loc);
+                                    break;
+                                }
                             case 4:
                                 {
                                     var loc = BitConverter.ToUInt32(memory, (int)instructionPointer);
@@ -627,6 +490,13 @@ namespace picovm.VM
 
                         switch (dst.Size())
                         {
+                            case 8:
+                                {
+                                    var val = BitConverter.ToUInt64(memory, (int)instructionPointer);
+                                    instructionPointer += 8;
+                                    WriteR64Register(dst, val);
+                                    break;
+                                }
                             case 4:
                                 {
                                     var val = BitConverter.ToUInt32(memory, (int)instructionPointer);
@@ -683,6 +553,12 @@ namespace picovm.VM
 
                         switch (operand.Size())
                         {
+                            case 8:
+                                {
+                                    var loc = ReadR64Register(operand);
+                                    Array.Copy(BitConverter.GetBytes(StackPop64()), 0L, memory, (long)loc, 8);
+                                    break;
+                                }
                             case 4:
                                 {
                                     var loc = ReadExtendedRegister(operand);
@@ -713,6 +589,9 @@ namespace picovm.VM
                         instructionPointer++;
                         switch (operand.Size())
                         {
+                            case 8:
+                                StackPush(ReadR64Register(operand));
+                                break;
                             case 4:
                                 StackPush(ReadExtendedRegister(operand));
                                 break;

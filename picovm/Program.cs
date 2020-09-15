@@ -1,9 +1,10 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
-using picovm.Compiler;
+using picovm.Assembler;
 using picovm.Packager;
-using picovm.Packager.Elf64;
+using picovm.Packager.Elf.Elf32;
+using picovm.Packager.Elf.Elf64;
 using picovm.VM;
 
 namespace picovm
@@ -18,15 +19,19 @@ namespace picovm
             Console.WriteLine();
             Console.WriteLine(" Usage: picovm <COMMAND> INPUTS... <src.asm> <a.elf>");
             Console.WriteLine("\r\n\tCommands:");
-            Console.WriteLine("\r\n\t\tcompile OUTPUT TYPE FORMAT INPUT");
-            Console.WriteLine("\t\t\tOUTPUT - resulting .elf output file");
-            Console.WriteLine("\t\t\tTYPE   - elf64 is the only supported package type");
-            Console.WriteLine("\t\t\tFORMAT - pico is the only supported code/text format");
-            Console.WriteLine("\t\t\tINPUT  - source .asm assembly file");
+            Console.WriteLine("\t\tasm OUTPUT TYPE FORMAT INPUT");
+            Console.WriteLine("\t\t\tAssembles a file into a binary output");
+            Console.WriteLine("\t\t\t OUTPUT - resulting .elf output file");
+            Console.WriteLine("\t\t\t TYPE   - elf32 and elf64 is the only supported package types");
+            Console.WriteLine("\t\t\t FORMAT - pico is the only supported code/text format");
+            Console.WriteLine("\t\t\t INPUT  - source .asm assembly file");
+            Console.WriteLine("\r\n\t\tinspect EXECUTABLE");
+            Console.WriteLine("\t\t\tReads the metadata about an executable");
             Console.WriteLine("\r\n\t\trun EXECUTABLE");
-            Console.WriteLine("\t\t\tEXECUTABLE - file to run in the virtual machine");
-            Console.WriteLine("\r\n\t\tcomprun OUTPUT TYPE FORMAT INPUT");
-            Console.WriteLine("\t\t\t(same as compile + run together)");
+            Console.WriteLine("\t\t\tRuns a binary executable file");
+            Console.WriteLine("\t\t\t EXECUTABLE - file to run in the virtual machine");
+            Console.WriteLine("\r\n\t\tasmrun OUTPUT TYPE FORMAT INPUT");
+            Console.WriteLine("\t\t\tCombines asm and run into a single command");
 
             if (args.Length == 0)
             {
@@ -35,11 +40,11 @@ namespace picovm
             }
 
             var command = args[0];
-            if (string.Compare(command, "compile", StringComparison.CurrentCultureIgnoreCase) == 0)
+            if (string.Compare(command, "asm", StringComparison.CurrentCultureIgnoreCase) == 0)
             {
                 if (args.Length != 5)
                 {
-                    Console.Error.WriteLine("Incorrect options for compile command.");
+                    Console.Error.WriteLine("Incorrect options for asm command.");
                     return -2;
                 }
 
@@ -48,7 +53,7 @@ namespace picovm
                 var format = args[3];
                 var input = args[4];
 
-                var compilation = Compile(output, type, format, input);
+                var compilation = Assemble(output, type, format, input);
             }
             else if (string.Compare(command, "run", StringComparison.CurrentCultureIgnoreCase) == 0)
             {
@@ -59,14 +64,15 @@ namespace picovm
                 }
 
                 var exec = args[1];
-                var loaded = Load(exec);
+                var type = Inspector.DetectPackageOutputType(exec);
+                var loaded = Load(exec, type);
                 var result = Execute(loaded);
             }
-            else if (string.Compare(command, "comprun", StringComparison.CurrentCultureIgnoreCase) == 0)
+            else if (string.Compare(command, "asmrun", StringComparison.CurrentCultureIgnoreCase) == 0)
             {
                 if (args.Length != 5)
                 {
-                    Console.Error.WriteLine("Incorrect options for compile command.");
+                    Console.Error.WriteLine("Incorrect options for asmrun command.");
                     return -2;
                 }
 
@@ -75,8 +81,8 @@ namespace picovm
                 var format = args[3];
                 var input = args[4];
 
-                var compilation = Compile(output, type, format, input);
-                var loaded = Load(output);
+                var compilation = Assemble(output, type, format, input);
+                var loaded = Load(output, type);
                 var result = Execute(loaded);
             }
             else
@@ -88,10 +94,16 @@ namespace picovm
             return 0;
         }
 
-        static CompilationResult Compile(string output, string type, string format, string input)
+        static ICompilationResult Assemble(string output, string type, string format, string input)
+        {
+            var outputType = Enum.Parse<AssemblerPackageOutputType>(type, true);
+            return Assemble(output, outputType, format, input);
+        }
+
+        static ICompilationResult Assemble(string output, AssemblerPackageOutputType outputType, string format, string input)
         {
             if (!System.IO.File.Exists(input))
-                return CompilationResult.Error($"Source input file {input} not found.");
+                return CompilationResultBase.Error($"Source input file {input} not found.");
 
             if (System.IO.File.Exists(output))
             {
@@ -102,10 +114,26 @@ namespace picovm
             }
 
             // Compile.
-            CompilationResult compilation;
+            ICompilationResult compilation;
             {
                 Console.Out.WriteLine($"Compiling source file: {input}");
-                var compiler = new BytecodeCompiler();
+                IBytecodeCompiler? compiler = null;
+                switch (outputType)
+                {
+                    case AssemblerPackageOutputType.Elf32:
+                        Console.Out.WriteLine($"Packaging bytecode as: {Enum.GetName(typeof(AssemblerPackageOutputType), outputType)}");
+                        compiler = new BytecodeCompiler<UInt32>();
+                        break;
+                    case AssemblerPackageOutputType.Elf64:
+                        Console.Out.WriteLine($"Packaging bytecode as: {Enum.GetName(typeof(AssemblerPackageOutputType), outputType)}");
+                        compiler = new BytecodeCompiler<UInt64>();
+                        break;
+                    default:
+                        Console.Error.WriteLine($"Unsupported assembler output type {outputType}.");
+                        System.Environment.Exit(-5);
+                        return null;
+                }
+
                 compilation = compiler.Compile(input);
 
                 if (compilation.Errors.Count > 0)
@@ -116,24 +144,26 @@ namespace picovm
             }
 
             // Package.
-            var packageFormat = CompilerOutputType.Elf64;
-            Console.Out.WriteLine($"Packaging bytecode as: {Enum.GetName(typeof(CompilerOutputType), packageFormat)}");
             IPackager packager;
 
             using (var fs = new FileStream(output, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.SequentialScan))
             {
-                switch (packageFormat)
+                switch (outputType)
                 {
-                    case CompilerOutputType.AOut32:
-                        packager = new PackagerAOut32(compilation);
+                    case AssemblerPackageOutputType.AOut32:
+                        packager = new PackagerAOut32((CompilationResult32)compilation);
                         packager.Write(fs);
                         break;
-                    case CompilerOutputType.Elf64:
-                        packager = new PackagerElf64(compilation);
+                    case AssemblerPackageOutputType.Elf32:
+                        packager = new PackagerElf32((CompilationResult32)compilation);
+                        packager.Write(fs);
+                        break;
+                    case AssemblerPackageOutputType.Elf64:
+                        packager = new PackagerElf64((CompilationResult64)compilation);
                         packager.Write(fs);
                         break;
                     default:
-                        throw new InvalidOperationException($"Unknown packaging format: {packageFormat}");
+                        throw new InvalidOperationException($"Unknown packaging format: {outputType}");
                 }
 
                 fs.Flush();
@@ -142,29 +172,60 @@ namespace picovm
 
             return compilation;
         }
-        static LoaderResult Load(string input)
+
+        static ILoaderResult Load(string input, string type)
+        {
+            var inputType = Enum.Parse<AssemblerPackageOutputType>(type, true);
+            return Load(input, inputType);
+        }
+
+        static ILoaderResult Load(string input, AssemblerPackageOutputType inputType)
         {
             if (!System.IO.File.Exists(input))
-                return LoaderResult.Error($"Source input file {input} not found.");
+                throw new FileNotFoundException($"Source input file {input} not found.", input);
 
             // Loader Stage 1 - read file
-            LoaderResult loaded;
+            ILoaderResult loaded;
             using (var fs = new FileStream(input, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
-                var loader = new LoaderElf64(fs);
-                loaded = loader.Load();
+                switch (inputType)
+                {
+                    case AssemblerPackageOutputType.Elf32:
+                        loaded = new LoaderElf32(fs).Load();
+                        break;
+                    case AssemblerPackageOutputType.Elf64:
+                        loaded = new LoaderElf64(fs).Load();
+                        break;
+                    default:
+                        throw new InvalidOperationException($"Unknown packaging format: {inputType}");
+                }
             }
 
             return loaded;
         }
-        static ExecutionResult Execute(LoaderResult loaded)
+        static ExecutionResult Execute(ILoaderResult loaded)
         {
             // Loader Stage 2 - setup file
             var image = loaded.Image.ToArray();
 
-            Console.Out.WriteLine("Emulating Linux 32-bit kernel syscall interface");
-            var kernel = new Linux32Kernel();
-            var agent = new Agent(kernel, image, loaded.EntryPoint);
+            IKernel kernel;
+            Agent agent;
+
+            if (loaded.GetType() == typeof(LoaderResult32))
+            {
+                Console.Out.WriteLine("Emulating Linux 32-bit kernel syscall interface");
+                kernel = new Linux32Kernel();
+                agent = new Agent(kernel, image, ((LoaderResult32)loaded).EntryPoint);
+            }
+            else if (loaded.GetType() == typeof(LoaderResult64))
+            {
+                Console.Out.WriteLine("Emulating Linux 64-bit kernel syscall interface");
+                kernel = new Linux64Kernel();
+                agent = new Agent64(kernel, image, ((LoaderResult64)loaded).EntryPoint);
+            }
+            else
+                throw new InvalidOperationException();
+
             int? ret;
             do
             {

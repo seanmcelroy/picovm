@@ -54,6 +54,20 @@ namespace picovm
         [Description("ESP")]
         SP = 120,
 
+        [Description("RDI")]
+        RDI = 130,
+        [Description("EDI")]
+        EDI = 131,
+        [Description("DI")]
+        DI = 132,
+
+        [Description("RSI")]
+        RSI = 135,
+        [Description("ESI")]
+        ESI = 136,
+        [Description("SI")]
+        SI = 137,
+
         R8 = 208,
         R9 = 209,
         R10 = 210,

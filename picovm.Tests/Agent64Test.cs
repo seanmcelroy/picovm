@@ -1,4 +1,5 @@
-using picovm.Compiler;
+using System;
+using picovm.Assembler;
 using picovm.VM;
 using Xunit;
 
@@ -6,7 +7,7 @@ namespace picovm.Tests
 {
     public class Agent64Test
     {
-        private static Linux32Kernel kernel = new Linux64Kernel();
+        private static Linux64Kernel kernel = new Linux64Kernel();
 
         [Fact]
         public void MOV_Bonanza64()
@@ -24,10 +25,10 @@ namespace picovm.Tests
                 "                             ; again, it wiped whole register"
             };
 
-            var compiler = new BytecodeCompiler();
+            var compiler = new BytecodeCompiler<UInt64>();
             var compiled = compiler.Compile(programText, "UNIT_TEST");
 
-            var agent = new Agent(kernel, compiled.TextSegment, 0);
+            var agent = new Agent64(kernel, compiled.TextSegment, 0);
             var ret = agent.Tick();
             Xunit.Assert.Null(ret);
             Xunit.Assert.Equal((ulong)0x1111222233334444, agent.ReadR64Register(Register.RAX));

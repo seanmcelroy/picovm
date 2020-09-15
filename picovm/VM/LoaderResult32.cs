@@ -4,15 +4,15 @@ using System.Collections.Immutable;
 
 namespace picovm.VM
 {
-    public sealed class LoaderResult64 : ILoaderResult
+    public sealed class LoaderResult32 : ILoaderResult<UInt32>
     {
-        public UInt64 EntryPoint;
+        public UInt32 EntryPoint { get; private set; }
         public ImmutableArray<byte> Image { get; private set; }
         public ImmutableList<LoaderError> Errors { get; private set; }
         public bool Success => Errors == null || Errors.Count == 0;
 
-        public LoaderResult64(
-            UInt64 entryPoint,
+        public LoaderResult32(
+            UInt32 entryPoint,
             IEnumerable<byte>? image,
             IEnumerable<LoaderError>? errors = null)
         {
@@ -21,15 +21,15 @@ namespace picovm.VM
             this.Errors = errors == null ? ImmutableList<LoaderError>.Empty : ImmutableList<LoaderError>.Empty.AddRange(errors);
         }
 
-        public LoaderResult64(IEnumerable<LoaderError> errors)
+        public LoaderResult32(IEnumerable<LoaderError> errors)
         {
             this.Image = ImmutableArray<byte>.Empty;
             this.Errors = ImmutableList<LoaderError>.Empty.AddRange(errors);
         }
 
-        public static LoaderResult64 Error(string message, string? sourceFile = null, ushort? lineNumber = null, ushort? column = null)
+        public static LoaderResult32 Error(string message, string? sourceFile = null, ushort? lineNumber = null, ushort? column = null)
         {
-            return new LoaderResult64(new[] { new LoaderError(message, sourceFile, lineNumber, column) });
+            return new LoaderResult32(new[] { new LoaderError(message, sourceFile, lineNumber, column) });
         }
     }
 }

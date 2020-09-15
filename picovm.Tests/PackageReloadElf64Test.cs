@@ -1,11 +1,12 @@
-using picovm.Compiler;
-using picovm.Packager.Elf64;
+using picovm.Assembler;
+using picovm.Packager.Elf.Elf64;
+using System;
 using System.IO;
 using Xunit;
 
 namespace picovm.Tests
 {
-    public class PackageReloadElf32Test
+    public class PackageReloadElf64Test
     {
         [Fact]
         public void StructSizes()
@@ -19,11 +20,13 @@ namespace picovm.Tests
         public void ReadKeyboardAsm()
         {
             // http://www.sco.com/developers/devspecs/gabi41.pdf
-            var compiler = new BytecodeCompiler();
-            var sourceFileName = "./../../../../picovm/asm-src/read-keyboard.asm";
+            var compiler = new BytecodeCompiler<UInt64>();
+            var sourceFileName = "./../../../../picovm/asm-src/read-keyboard64.asm";
             Xunit.Assert.True(File.Exists(Path.Combine(System.Environment.CurrentDirectory, sourceFileName)), $"Cannot find file {sourceFileName} for test, current directory: {System.Environment.CurrentDirectory}");
-            var compilation = compiler.Compile(sourceFileName);
-            Xunit.Assert.Equal(0, compilation.Errors.Count);
+            var compilationInterface = compiler.Compile(sourceFileName);
+            Xunit.Assert.Equal(0, compilationInterface.Errors.Count);
+            Xunit.Assert.IsType<CompilationResult64>(compilationInterface);
+            var compilation = (CompilationResult64)compilationInterface;
 
             var packager = new PackagerElf64(compilation);
 

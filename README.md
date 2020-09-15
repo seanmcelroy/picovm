@@ -7,7 +7,7 @@ This is a toy assembly compiler and virutal machine that can build and run 32-bi
 The project is currently a single Main() function which performs the following steps:
 
 1. Reads in a .asm file
-2. Compiles the assembly to bytecode
+2. Assembles the assembly code to bytecode
 3. Writes out an a.out file (experimental, in the future will be divided into workflow tools)
 4. Loads the bytecode into a virtual machine
 5. Executes the code
@@ -38,6 +38,6 @@ A small set of unit tests are included in the picovm.Tests directory
 * :ballot_box_with_check: Interrupt vectors, initial sys_write syscall
 * :ballot_box_with_check: BSS segment, initial sys_read syscall
 * :ballot_box_with_check: Separate compliation and loader
-* :black_square_button: Output functional a.out binary
+* :ballot_box_with_check: Output functional ELF64 binary
 * :black_square_button: Floating-point unit (FPU)
 * :black_square_button: x64 support

@@ -1,5 +1,6 @@
 using Xunit;
-using picovm.Compiler;
+using picovm.Assembler;
+using System;
 
 namespace picovm.Tests
 {
@@ -57,7 +58,7 @@ namespace picovm.Tests
         public void ConvertInfixToReversePolishNotation_Simple_Number_Subtraction()
         {
             // 3-1 => 3 1 -
-            var rpn = CompilerDataAllocationDirective.ConvertInfixToReversePolishNotation(new string[] { "3", "-", "1" }, 0).ToArray();
+            var rpn = CompilerDataAllocationDirective.ConvertInfixToReversePolishNotation<UInt32>(new string[] { "3", "-", "1" }, 0).ToArray();
             Assert.Equal(3, rpn.Length);
             Assert.Equal((byte)3, rpn[0]);
             Assert.Equal((byte)1, rpn[1]);
@@ -68,7 +69,7 @@ namespace picovm.Tests
         public void ConvertInfixToReversePolishNotation_Simple_Symbolic_Subtraction()
         {
             // A-B => A B -
-            var rpn = CompilerDataAllocationDirective.ConvertInfixToReversePolishNotation(new string[] { "A", "-", "B" }, 0).ToArray();
+            var rpn = CompilerDataAllocationDirective.ConvertInfixToReversePolishNotation<UInt32>(new string[] { "A", "-", "B" }, 0).ToArray();
             Assert.Equal(3, rpn.Length);
             Assert.Equal("A", rpn[0]);
             Assert.Equal("B", rpn[1]);
@@ -79,7 +80,7 @@ namespace picovm.Tests
         public void ConvertInfixToReversePolishNotation_Complex_Symbolic_Multiple()
         {
             // A ^ 2 + 3 * A * B + B ^ 4 => A 2 ^ 3 A * B * + B 4 ^ +
-            var rpn = CompilerDataAllocationDirective.ConvertInfixToReversePolishNotation("A ^ 2 + 3 * A * B + B ^ 4".Split(' '), 0).ToArray();
+            var rpn = CompilerDataAllocationDirective.ConvertInfixToReversePolishNotation<UInt32>("A ^ 2 + 3 * A * B + B ^ 4".Split(' '), 0).ToArray();
             Assert.Equal(13, rpn.Length);
             Assert.Equal("A", rpn[0]);
             Assert.Equal((byte)2, rpn[1]);
@@ -99,9 +100,9 @@ namespace picovm.Tests
         [Fact]
         public void ConvertInfixToReversePolishNotation_NoWhitespace()
         {
-            var rpn = CompilerDataAllocationDirective.ConvertInfixToReversePolishNotation("$-msg2".Split(' '), 0).ToArray();
+            var rpn = CompilerDataAllocationDirective.ConvertInfixToReversePolishNotation<UInt32>("$-msg2".Split(' '), 0).ToArray();
             Assert.Equal(3, rpn.Length);
-            Assert.Equal((ushort)0, rpn[0]);
+            Assert.Equal(0, rpn[0]);
             Assert.Equal("msg2", rpn[1]);
             Assert.Equal("-", rpn[2]);
         }
