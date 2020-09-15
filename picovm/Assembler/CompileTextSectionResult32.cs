@@ -18,8 +18,8 @@ namespace picovm.Assembler
         public CompileTextSectionResult32(byte[] bytecode, IEnumerable<KeyValuePair<string, UInt32>> labelOffsets, IEnumerable<BytecodeTextSymbol32> symbolReferenceOffsets)
         {
             this.Bytecode = ImmutableArray.Create<byte>(bytecode);
-            this.LabelsOffsets = ImmutableDictionary<string, UInt32>.Empty.AddRange(labelOffsets);
-            this.SymbolReferenceOffsets = ImmutableList<BytecodeTextSymbol32>.Empty.AddRange(symbolReferenceOffsets);
+            this.LabelsOffsets = labelOffsets.ToImmutableDictionary();
+            this.SymbolReferenceOffsets = symbolReferenceOffsets.ToImmutableList();
         }
     }
 }

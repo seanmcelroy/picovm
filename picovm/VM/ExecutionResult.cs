@@ -15,7 +15,7 @@ namespace picovm.VM
             IEnumerable<ExecutionError>? errors = null)
         {
             this.ErrorCode = errorCode;
-            this.Errors = errors == null ? ImmutableList<ExecutionError>.Empty : ImmutableList<ExecutionError>.Empty.AddRange(errors);
+            this.Errors = errors == null ? ImmutableList<ExecutionError>.Empty : errors.ToImmutableList();
         }
 
         public static ExecutionResult Error(int errorCode, string message, string? sourceFile = null, ushort? lineNumber = null, ushort? column = null)

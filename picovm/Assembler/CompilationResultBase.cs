@@ -30,16 +30,16 @@ namespace picovm.Assembler
             this.TextSegmentSize = textSegmentSize;
             this.DataSegmentSize = dataSegmentSize;
             this.BssSegmentSize = bssSegmentSize;
-            this.TextSegment = ImmutableArray<byte>.Empty.AddRange(textSegment);
+            this.TextSegment = textSegment.ToImmutableArray();
             this.DataSegment = dataSegment;
-            this.BssSymbols = bssSymbols == null ? ImmutableList<BytecodeBssSymbol>.Empty : ImmutableList<BytecodeBssSymbol>.Empty.AddRange(bssSymbols);
-            this.Errors = ImmutableList<CompilationError>.Empty.AddRange(errors);
+            this.BssSymbols = bssSymbols == null ? ImmutableList<BytecodeBssSymbol>.Empty : bssSymbols.ToImmutableList();
+            this.Errors = errors.ToImmutableList();
         }
 
         public CompilationResultBase(IEnumerable<CompilationError> errors)
         {
             this.BssSymbols = ImmutableList<BytecodeBssSymbol>.Empty;
-            this.Errors = ImmutableList<CompilationError>.Empty.AddRange(errors);
+            this.Errors = errors.ToImmutableList();
         }
 
         public static CompilationResultBase Error(string message, string? sourceFile = null, ushort? lineNumber = null, ushort? column = null)

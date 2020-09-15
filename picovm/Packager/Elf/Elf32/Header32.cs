@@ -12,7 +12,7 @@ namespace picovm.Packager.Elf.Elf32
         public HeaderIdentityClass EI_CLASS;
         public HeaderIdentityData EI_DATA;
         public HeaderIdentityVersion EI_VERSION;
-        public byte EI_OSABI;
+        public HeaderOsAbiVersion EI_OSABI;
         public byte EI_ABIVERSION;
         public byte EI_PAD9;
         public byte EI_PAD10;
@@ -38,6 +38,44 @@ namespace picovm.Packager.Elf.Elf32
         public UInt16 E_SHNUM;
         public UInt16 E_SHSTRIDX;
 
+        public static bool IsFileType(Stream stream)
+        {
+            if (!stream.CanRead)
+                throw new ArgumentException("Stream is not available for reading", nameof(stream));
+            if (!stream.CanSeek)
+                throw new ArgumentException("Stream is not available for seeking", nameof(stream));
+
+            if (stream.Position != 0)
+                stream.Seek(0, SeekOrigin.Begin);
+
+            var magicBuffer = new byte[MAGIC.Length];
+            var bytesRead = stream.Read(magicBuffer, 0, MAGIC.Length);
+            var magicMatch = bytesRead == MAGIC.Length && Enumerable.SequenceEqual(MAGIC, magicBuffer);
+            if (!magicMatch)
+                return false;
+
+            stream.Seek(0, SeekOrigin.Begin);
+            Header32 potentialHeader;
+            if (!Header32.TryRead(stream, out potentialHeader))
+                return false;
+            return potentialHeader.EI_CLASS == HeaderIdentityClass.ELFCLASS32;
+        }
+
+        public static bool TryRead(Stream stream, out Header32 header)
+        {
+            try
+            {
+                header = new Header32();
+                header.Read(stream);
+                return true;
+            }
+            catch (Exception)
+            {
+                header = default(Header32);
+                return false;
+            }
+        }
+
         public void Read(Stream stream)
         {
             var magic = new byte[4];
@@ -48,8 +86,10 @@ namespace picovm.Packager.Elf.Elf32
             EI_CLASS = stream.ReadByteAndParse<HeaderIdentityClass>(HeaderIdentityClass.ELFCLASSNONE);
             EI_DATA = stream.ReadByteAndParse<HeaderIdentityData>(HeaderIdentityData.ELFDATANONE);
             EI_VERSION = stream.ReadByteAndParse<HeaderIdentityVersion>(HeaderIdentityVersion.EI_CURRENT);
+            EI_OSABI = stream.ReadByteAndParse<HeaderOsAbiVersion>(HeaderOsAbiVersion.ELFOSABI_NONE);
+            EI_ABIVERSION = (byte)stream.ReadByte();
 
-            stream.Seek(9, SeekOrigin.Current);
+            stream.Seek(16, SeekOrigin.Begin);
             E_TYPE = stream.ReadHalfWord<HeaderType>(HeaderType.ET_NONE);
             E_MACHINE = stream.ReadHalfWord<HeaderMachine>(HeaderMachine.EM_NONE);
             E_VERSION = stream.ReadWord<HeaderVersion>(HeaderVersion.EV_NONE);

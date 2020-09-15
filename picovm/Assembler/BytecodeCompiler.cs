@@ -6,8 +6,8 @@ using System.Linq;
 
 namespace picovm.Assembler
 {
-    public class BytecodeCompiler<TOffset> : IBytecodeCompiler
-        where TOffset : struct, IComparable, IComparable<TOffset>, IConvertible, IEquatable<TOffset>, IFormattable
+    public class BytecodeCompiler<TAddrSize> : IBytecodeCompiler
+        where TAddrSize : struct, IComparable, IComparable<TAddrSize>, IConvertible, IEquatable<TAddrSize>, IFormattable
     {
         private readonly Dictionary<string, Bytecode> opcodes;
         private readonly Dictionary<string, Register> registers;
@@ -45,9 +45,9 @@ namespace picovm.Assembler
             uint? dataSegmentSize = null;
             uint? bssSegmentSize = null;
             string? entryPointSymbol = null;
-            ValueType entryPoint = typeof(TOffset) == typeof(UInt32) ? (ValueType)(UInt32)0 : (ValueType)(UInt64)0;
-            ValueType textSegmentBase = typeof(TOffset) == typeof(UInt32) ? (ValueType)(UInt32)0 : (ValueType)(UInt64)0;
-            ValueType dataSegmentBase = typeof(TOffset) == typeof(UInt32) ? (ValueType)(UInt32)0 : (ValueType)(UInt64)0;
+            ValueType entryPoint = typeof(TAddrSize) == typeof(UInt32) ? (ValueType)(UInt32)0 : (ValueType)(UInt64)0;
+            ValueType textSegmentBase = typeof(TAddrSize) == typeof(UInt32) ? (ValueType)(UInt32)0 : (ValueType)(UInt64)0;
+            ValueType dataSegmentBase = typeof(TAddrSize) == typeof(UInt32) ? (ValueType)(UInt32)0 : (ValueType)(UInt64)0;
             byte[]? textSegment = null;
             ImmutableDictionary<string, ValueType> textLabelsOffsets = ImmutableDictionary<string, ValueType>.Empty;
             ImmutableList<IBytecodeTextSymbol> textSymbolReferenceOffsets = ImmutableList<IBytecodeTextSymbol>.Empty;
@@ -162,7 +162,7 @@ namespace picovm.Assembler
                             errors.Add(new CompilationError($"No entry point located in source file.", sourceFilename));
                             throw new NotImplementedException($"Unable to generate compiled output for section type: {section.Key}");
                         }
-                        entryPoint = typeof(TOffset) == typeof(UInt32) ? (ValueType)(UInt32)textLabelsOffsets[entryPointSymbol] : (ValueType)(UInt64)textLabelsOffsets[entryPointSymbol];
+                        entryPoint = typeof(TAddrSize) == typeof(UInt32) ? (ValueType)(UInt32)textLabelsOffsets[entryPointSymbol] : (ValueType)(UInt64)textLabelsOffsets[entryPointSymbol];
                         break;
                     case SectionType.Data:
                         var constGeneration = CompileDataSectionLines(section.Value);
@@ -213,7 +213,7 @@ namespace picovm.Assembler
                     errors.Add(new CompilationError($"Data symbol {extra.Key} is not referenced in program code", sourceFilename));
 
                 // Rebase data symbol offsets
-                if (typeof(TOffset) == typeof(UInt32))
+                if (typeof(TAddrSize) == typeof(UInt32))
                 {
                     dataSegmentBase = (UInt32)textSegmentBase + textSegmentSize.Value;
                     foreach (var ds in dataSymbolOffsets)
@@ -232,7 +232,7 @@ namespace picovm.Assembler
                     foreach (var tsr in textSymbolReferenceOffsets.Where(tsr => textLabelsOffsets.ContainsKey(tsr.Name)))
                     {
                         ValueType labelOffsetAddress = textLabelsOffsets[tsr.Name];
-                        byte[] labelOffsetAddressBytes = typeof(TOffset) == typeof(UInt32) ? BitConverter.GetBytes((UInt32)labelOffsetAddress) : BitConverter.GetBytes((UInt64)labelOffsetAddress);
+                        byte[] labelOffsetAddressBytes = typeof(TAddrSize) == typeof(UInt32) ? BitConverter.GetBytes((UInt32)labelOffsetAddress) : BitConverter.GetBytes((UInt64)labelOffsetAddress);
                         if (labelOffsetAddressBytes.Length != tsr.ReferenceLength)
                             throw new InvalidOperationException($"Address size reserved for symbol {tsr.Name} is {tsr.ReferenceLength}, but needed {labelOffsetAddressBytes.Length}");
 
@@ -241,7 +241,7 @@ namespace picovm.Assembler
 
                         for (var i = 0; i < 4; i++)
                         {
-                            if (typeof(TOffset) == typeof(UInt32))
+                            if (typeof(TAddrSize) == typeof(UInt32))
                             {
                                 if (textSegment[(long)((UInt32)(tsr.TextSegmentReferenceOffset) + i)] != 0xEE)
                                     throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
@@ -253,7 +253,7 @@ namespace picovm.Assembler
                             }
                         }
 
-                        if (typeof(TOffset) == typeof(UInt32))
+                        if (typeof(TAddrSize) == typeof(UInt32))
                             Array.Copy(labelOffsetAddressBytes, (long)0, textSegment, (long)Convert.ToUInt32(tsr.TextSegmentReferenceOffset), tsr.ReferenceLength);
                         else
                             Array.Copy(labelOffsetAddressBytes, (long)0, textSegment, (long)Convert.ToUInt64(tsr.TextSegmentReferenceOffset), tsr.ReferenceLength);
@@ -274,14 +274,14 @@ namespace picovm.Assembler
                     foreach (var tsr in textSymbolReferenceOffsets.Where(tsr => dataSymbolOffsets.ContainsKey(tsr.Name)))
                     {
                         var dataSymbol = dataSymbolOffsets[tsr.Name];
-                        ValueType dataSymbolAddress = typeof(TOffset) == typeof(UInt32)
+                        ValueType dataSymbolAddress = typeof(TAddrSize) == typeof(UInt32)
                             ? (ValueType)Convert.ToUInt32(dataSymbol.DataSegmentOffset)
                             : (ValueType)Convert.ToUInt64(dataSymbol.DataSegmentOffset);
 
                         if (dataSymbol.Constant)
                         {
                             // This is a value, just write it directly into the text.
-                            if (typeof(TOffset) == typeof(UInt32))
+                            if (typeof(TAddrSize) == typeof(UInt32))
                             {
                                 if (textSegment[(long)(UInt32)tsr.TextSegmentInstructionOffset] == (byte)Bytecode.MOV_REG_MEM)
                                     textSegment[(long)(UInt32)tsr.TextSegmentInstructionOffset] = (byte)Bytecode.MOV_REG_CON;
@@ -306,14 +306,14 @@ namespace picovm.Assembler
                                                 throw new InvalidOperationException("Unable to inline constant size of 2 bytes into reserved text section of 1 byte");
                                             case 2:
                                                 // 2 to 2, straight array copy.
-                                                if (typeof(TOffset) == typeof(UInt32))
+                                                if (typeof(TAddrSize) == typeof(UInt32))
                                                     Array.Copy(dataSegment.ToArray(), (long)((UInt32)dataSymbolAddress - (UInt32)dataSegmentBase), textSegment, (long)(UInt32)tsr.TextSegmentReferenceOffset, 2);
                                                 else
                                                     Array.Copy(dataSegment.ToArray(), (long)((UInt64)dataSymbolAddress - (UInt64)dataSegmentBase), textSegment, (long)(UInt64)tsr.TextSegmentReferenceOffset, 2);
 
                                                 for (var i = 0; i < 2; i++)
                                                 {
-                                                    if (typeof(TOffset) == typeof(UInt32))
+                                                    if (typeof(TAddrSize) == typeof(UInt32))
                                                     {
                                                         if (textSegment[(long)((UInt32)tsr.TextSegmentReferenceOffset + i)] != 0xFF)
                                                             throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
@@ -328,14 +328,14 @@ namespace picovm.Assembler
                                                 break;
                                             case 4:
                                                 // 2 to 4 upsize
-                                                var dataSymbolValue = typeof(TOffset) == typeof(UInt32)
+                                                var dataSymbolValue = typeof(TAddrSize) == typeof(UInt32)
                                                     ? BitConverter.ToUInt16(dataSegment.ToArray(), (int)((UInt32)dataSymbolAddress - (UInt32)dataSegmentBase))
                                                     : BitConverter.ToUInt16(dataSegment.ToArray(), (int)((UInt64)dataSymbolAddress - (UInt64)dataSegmentBase));
                                                 var tsrValue = Convert.ToUInt32(dataSymbolValue);
                                                 // Validate we're overwriting the right place
                                                 for (var i = 0; i < 4; i++)
                                                 {
-                                                    if (typeof(TOffset) == typeof(UInt32))
+                                                    if (typeof(TAddrSize) == typeof(UInt32))
                                                     {
                                                         if (textSegment[(long)((UInt32)tsr.TextSegmentReferenceOffset + i)] != 0xFF)
                                                             throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
@@ -346,7 +346,7 @@ namespace picovm.Assembler
                                                             throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
                                                     }
                                                 }
-                                                if (typeof(TOffset) == typeof(UInt32))
+                                                if (typeof(TAddrSize) == typeof(UInt32))
                                                     Array.Copy(BitConverter.GetBytes(tsrValue), (long)0, textSegment, (long)(UInt32)tsr.TextSegmentReferenceOffset, 4);
                                                 else
                                                     Array.Copy(BitConverter.GetBytes(tsrValue), (long)0, textSegment, (long)(UInt64)tsr.TextSegmentReferenceOffset, 4);
@@ -366,7 +366,7 @@ namespace picovm.Assembler
                                                 throw new InvalidOperationException($"Unable to inline constant size of 4 bytes into reserved text section of {tsr.ReferenceLength} bytes");
                                             case 4:
                                                 // 4 to 4, straight array copy.
-                                                if (typeof(TOffset) == typeof(UInt32))
+                                                if (typeof(TAddrSize) == typeof(UInt32))
                                                     Array.Copy(dataSegment.ToArray(), (long)((UInt32)dataSymbolAddress - (UInt32)dataSegmentBase), textSegment, (long)(UInt32)tsr.TextSegmentReferenceOffset, 4);
                                                 else
                                                     Array.Copy(dataSegment.ToArray(), (long)((UInt64)dataSymbolAddress - (UInt64)dataSegmentBase), textSegment, (long)(UInt64)tsr.TextSegmentReferenceOffset, 4);
@@ -386,7 +386,7 @@ namespace picovm.Assembler
                                                 throw new InvalidOperationException($"Unable to inline constant size of 8 bytes into reserved text section of {tsr.ReferenceLength} bytes");
                                             case 8:
                                                 // 8 to 8, straight array copy.
-                                                if (typeof(TOffset) == typeof(UInt32))
+                                                if (typeof(TAddrSize) == typeof(UInt32))
                                                     Array.Copy(dataSegment.ToArray(), (long)((UInt32)dataSymbolAddress - (UInt32)dataSegmentBase), textSegment, (long)(UInt32)tsr.TextSegmentReferenceOffset, 8);
                                                 else
                                                     Array.Copy(dataSegment.ToArray(), (long)((UInt64)dataSymbolAddress - (UInt64)dataSegmentBase), textSegment, (long)(UInt64)tsr.TextSegmentReferenceOffset, 8);
@@ -403,12 +403,12 @@ namespace picovm.Assembler
                         else
                         {
                             // This is a reference, write it's address into the text.
-                            var dataSymbolAddressBytes = (typeof(TOffset) == typeof(UInt32))
+                            var dataSymbolAddressBytes = (typeof(TAddrSize) == typeof(UInt32))
                                 ? BitConverter.GetBytes((UInt32)dataSymbolAddress)
                                 : BitConverter.GetBytes((UInt64)dataSymbolAddress);
                             if (dataSymbolAddressBytes.Length != tsr.ReferenceLength)
                                 throw new InvalidOperationException($"Address size reserved for symbol {tsr.Name} is {tsr.ReferenceLength}, but needed {dataSymbolAddressBytes.Length}");
-                            if (typeof(TOffset) == typeof(UInt32))
+                            if (typeof(TAddrSize) == typeof(UInt32))
                                 Array.Copy(dataSymbolAddressBytes, (long)0, textSegment, (long)(UInt32)tsr.TextSegmentReferenceOffset, tsr.ReferenceLength);
                             else
                                 Array.Copy(dataSymbolAddressBytes, (long)0, textSegment, (long)(UInt64)tsr.TextSegmentReferenceOffset, tsr.ReferenceLength);
@@ -433,7 +433,7 @@ namespace picovm.Assembler
                         var bss = bssSymbols.Single(bss => string.Compare(bss.name, tsr.Name, StringComparison.InvariantCultureIgnoreCase) == 0);
                         var bssIndex = bssSymbols.IndexOf(bss);
                         ValueType bssOffset;
-                        if (typeof(TOffset) == typeof(UInt32))
+                        if (typeof(TAddrSize) == typeof(UInt32))
                         {
                             bssOffset = (UInt32)textSegmentBase + textSegmentSize.Value + dataSegmentSize.Value + (UInt32)bssSymbols.Take(bssIndex).Sum(b => b.Size());
                             for (var i = 0; i < 4; i++)
@@ -461,7 +461,7 @@ namespace picovm.Assembler
             if (textSegment == null)
                 throw new InvalidOperationException("Text segment null at the end of compilation");
 
-            return typeof(TOffset) == typeof(UInt32)
+            return typeof(TAddrSize) == typeof(UInt32)
                                         ? (ICompilationResult)new CompilationResult32(
                                 textSegmentSize.Value,
                                 dataSegmentSize ?? 0,
@@ -496,7 +496,7 @@ namespace picovm.Assembler
         private ICompileTextSectionResult CompileTextSectionLinesToBytecode(
             IEnumerable<string> programLines)
         {
-            ValueType offsetBytes = typeof(TOffset) == typeof(UInt32) ? (ValueType)(UInt32)0 : (ValueType)(UInt64)0;
+            ValueType offsetBytes = typeof(TAddrSize) == typeof(UInt32) ? (ValueType)(UInt32)0 : (ValueType)(UInt64)0;
             var bytecode = new List<byte>();
             var labelsOffsets = new Dictionary<string, ValueType>();
             var symbolReferenceOffsets = new List<IBytecodeTextSymbol>();
@@ -529,7 +529,7 @@ namespace picovm.Assembler
                 // Parse label
                 if (lineParts[0].EndsWith(':'))
                 {
-                    if (typeof(TOffset) == typeof(UInt32))
+                    if (typeof(TAddrSize) == typeof(UInt32))
                         labelsOffsets.Add(lineParts[0].TrimEnd(':'), (UInt32)offsetBytes);
                     else
                         labelsOffsets.Add(lineParts[0].TrimEnd(':'), (UInt64)offsetBytes);
@@ -580,7 +580,7 @@ namespace picovm.Assembler
                 if (instruction == "END")
                 {
                     bytecode.Add((byte)Bytecode.END);
-                    offsetBytes = offsetBytes.Add<TOffset>(1);
+                    offsetBytes = offsetBytes.Add<TAddrSize>(1);
                 }
                 else if (instruction == "INT")
                 {
@@ -590,15 +590,15 @@ namespace picovm.Assembler
                         throw new Exception($"ERROR: Unable to parse INT operand, expected a constant: {line}");
 
                     bytecode.Add((byte)Bytecode.INT);
-                    offsetBytes = offsetBytes.Add<TOffset>(1);
+                    offsetBytes = offsetBytes.Add<TAddrSize>(1);
                     bytecode.Add(operand.ParseByteConstant());
-                    offsetBytes = offsetBytes.Add<TOffset>(1);
+                    offsetBytes = offsetBytes.Add<TAddrSize>(1);
                     continue;
                 }
                 else if (instruction == "SYSCALL")
                 {
                     bytecode.Add((byte)Bytecode.SYSCALL);
-                    offsetBytes = offsetBytes.Add<TOffset>(1);
+                    offsetBytes = offsetBytes.Add<TAddrSize>(1);
                     continue;
                 }
                 else if (instruction == "MOV")
@@ -617,36 +617,36 @@ namespace picovm.Assembler
                                     case ParameterType.RegisterReference:
                                         {
                                             bytecode.Add((byte)Bytecode.MOV_REG_REG);
-                                            offsetBytes = offsetBytes.Add<TOffset>(1);
+                                            offsetBytes = offsetBytes.Add<TAddrSize>(1);
 
                                             bytecode.Add((byte)registers[dst]);
-                                            offsetBytes = offsetBytes.Add<TOffset>(1);
+                                            offsetBytes = offsetBytes.Add<TAddrSize>(1);
                                             bytecode.Add((byte)registers[src]);
-                                            offsetBytes = offsetBytes.Add<TOffset>(1);
+                                            offsetBytes = offsetBytes.Add<TAddrSize>(1);
                                             continue;
                                         }
                                     case ParameterType.RegisterAddress:
                                         {
                                             bytecode.Add((byte)Bytecode.MOV_REG_MEM);
-                                            offsetBytes = offsetBytes.Add<TOffset>(1);
+                                            offsetBytes = offsetBytes.Add<TAddrSize>(1);
 
                                             bytecode.Add((byte)registers[dst]);
-                                            offsetBytes = offsetBytes.Add<TOffset>(1);
+                                            offsetBytes = offsetBytes.Add<TAddrSize>(1);
                                             bytecode.Add((byte)registers[src.TrimStart('[').TrimEnd(']')]);
-                                            offsetBytes = offsetBytes.Add<TOffset>(1);
+                                            offsetBytes = offsetBytes.Add<TAddrSize>(1);
                                             continue;
                                         }
                                     case ParameterType.Variable:
                                         {
                                             ValueType instructionOffset = offsetBytes;
                                             bytecode.Add((byte)Bytecode.MOV_REG_MEM);
-                                            offsetBytes = offsetBytes.Add<TOffset>(1);
+                                            offsetBytes = offsetBytes.Add<TAddrSize>(1);
 
                                             var regDst = registers[dst.ToUpperInvariant()];
                                             bytecode.Add((byte)regDst);
-                                            offsetBytes = offsetBytes.Add<TOffset>(1);
+                                            offsetBytes = offsetBytes.Add<TAddrSize>(1);
 
-                                            IBytecodeTextSymbol textSymbol = typeof(TOffset) == typeof(UInt32)
+                                            IBytecodeTextSymbol textSymbol = typeof(TAddrSize) == typeof(UInt32)
                                                 ? (IBytecodeTextSymbol)new BytecodeTextSymbol32(
                                                      src,
                                                      (UInt32)instructionOffset,
@@ -673,37 +673,37 @@ namespace picovm.Assembler
                                                 bytecode.Add((byte)0xFF); // UNRESOLVED SYMBOL FOR VARIABLE
 
                                             symbolReferenceOffsets.Add(textSymbol);
-                                            offsetBytes = offsetBytes.Add<TOffset>(textSymbol.ReferenceLength);
+                                            offsetBytes = offsetBytes.Add<TAddrSize>(textSymbol.ReferenceLength);
                                             continue;
                                         }
                                     case ParameterType.Constant:
                                         {
                                             bytecode.Add((byte)Bytecode.MOV_REG_CON);
-                                            offsetBytes = offsetBytes.Add<TOffset>(1);
+                                            offsetBytes = offsetBytes.Add<TAddrSize>(1);
 
                                             var dstReg = registers[dst.ToUpperInvariant()];
                                             bytecode.Add((byte)dstReg);
-                                            offsetBytes = offsetBytes.Add<TOffset>(1);
+                                            offsetBytes = offsetBytes.Add<TAddrSize>(1);
 
                                             if (typeHintSize == 8 || (!typeHintSize.HasValue && dstReg.Size() == 8))
                                             {
                                                 bytecode.AddRange(BitConverter.GetBytes(src.ParseUInt64Constant()));
-                                                offsetBytes = offsetBytes.Add<TOffset>(8);
+                                                offsetBytes = offsetBytes.Add<TAddrSize>(8);
                                             }
                                             else if (typeHintSize == 4 || (!typeHintSize.HasValue && dstReg.Size() == 4))
                                             {
                                                 bytecode.AddRange(BitConverter.GetBytes(src.ParseUInt32Constant()));
-                                                offsetBytes = offsetBytes.Add<TOffset>(4);
+                                                offsetBytes = offsetBytes.Add<TAddrSize>(4);
                                             }
                                             else if (typeHintSize == 2 || (!typeHintSize.HasValue && dstReg.Size() == 2))
                                             {
                                                 bytecode.AddRange(BitConverter.GetBytes(src.ParseUInt16Constant()));
-                                                offsetBytes = offsetBytes.Add<TOffset>(2);
+                                                offsetBytes = offsetBytes.Add<TAddrSize>(2);
                                             }
                                             else if (typeHintSize == 1 || (!typeHintSize.HasValue && dstReg.Size() == 1))
                                             {
                                                 bytecode.Add(src.ParseByteConstant());
-                                                offsetBytes = offsetBytes.Add<TOffset>(1);
+                                                offsetBytes = offsetBytes.Add<TAddrSize>(1);
                                             }
                                             else
                                                 throw new InvalidOperationException($"Unable to determin destination register type: {dstReg}");
@@ -721,14 +721,14 @@ namespace picovm.Assembler
                                     case ParameterType.Constant:
                                         {
                                             bytecode.Add((byte)Bytecode.MOV_MEM_CON);
-                                            offsetBytes = offsetBytes.Add<TOffset>(1);
+                                            offsetBytes = offsetBytes.Add<TAddrSize>(1);
 
                                             // TODO: HOW BIG?
                                             if (typeHintSize == null)
                                                 throw new InvalidOperationException("I can't handle unhinted variable loads yet.  I should scan DS!");
 
                                             symbolReferenceOffsets.Add(
-                                                (typeof(TOffset) == typeof(UInt32))
+                                                (typeof(TAddrSize) == typeof(UInt32))
                                                 ? (IBytecodeTextSymbol)new BytecodeTextSymbol32(
                                                      dst.Substring(1, dst.Length - 2), // Strip brackets
                                                      (UInt32)offsetBytes - 1,
@@ -745,7 +745,7 @@ namespace picovm.Assembler
 
                                             for (var i = 0; i < typeHintSize!.Value; i++)
                                                 bytecode.Add((byte)0xFF); // UNRESOLVED SYMBOL FOR VARIABLE
-                                            offsetBytes = offsetBytes.Add<TOffset>(typeHintSize.Value);
+                                            offsetBytes = offsetBytes.Add<TAddrSize>(typeHintSize.Value);
 
                                             var variableSize = typeHintSize.Value;
                                             switch (variableSize)
@@ -765,7 +765,7 @@ namespace picovm.Assembler
                                                 default:
                                                     throw new InvalidOperationException();
                                             }
-                                            offsetBytes = offsetBytes.Add<TOffset>(variableSize);
+                                            offsetBytes = offsetBytes.Add<TAddrSize>(variableSize);
                                             continue;
                                         }
                                     default:
@@ -784,7 +784,7 @@ namespace picovm.Assembler
                 {
                     var pbc = Pop(lineParts[lineParts.Count - 1]);
                     bytecode.AddRange(pbc);
-                    offsetBytes = offsetBytes.Add<TOffset>(pbc.Length);
+                    offsetBytes = offsetBytes.Add<TAddrSize>(pbc.Length);
                 }
                 else if (instruction == "PUSH")
                 {
@@ -796,25 +796,25 @@ namespace picovm.Assembler
                         case ParameterType.RegisterReference:
                             {
                                 bytecode.Add((byte)Bytecode.PUSH_REG);
-                                offsetBytes = offsetBytes.Add<TOffset>(1);
+                                offsetBytes = offsetBytes.Add<TAddrSize>(1);
                                 bytecode.Add((byte)registers[operand]);
-                                offsetBytes = offsetBytes.Add<TOffset>(1);
+                                offsetBytes = offsetBytes.Add<TAddrSize>(1);
                                 continue;
                             }
                         case ParameterType.RegisterAddress:
                             {
                                 bytecode.Add((byte)Bytecode.PUSH_MEM);
-                                offsetBytes = offsetBytes.Add<TOffset>(1);
+                                offsetBytes = offsetBytes.Add<TAddrSize>(1);
                                 bytecode.Add((byte)registers[operand.TrimStart('[').TrimEnd(']')]);
-                                offsetBytes = offsetBytes.Add<TOffset>(1);
+                                offsetBytes = offsetBytes.Add<TAddrSize>(1);
                                 continue;
                             }
                         case ParameterType.Constant:
                             {
                                 bytecode.Add((byte)Bytecode.PUSH_CON);
-                                offsetBytes = offsetBytes.Add<TOffset>(1);
+                                offsetBytes = offsetBytes.Add<TAddrSize>(1);
                                 bytecode.AddRange(BitConverter.GetBytes(operand.ParseUInt32Constant()));
-                                offsetBytes = offsetBytes.Add<TOffset>(4);
+                                offsetBytes = offsetBytes.Add<TAddrSize>(4);
                                 continue;
                             }
                         default:
@@ -827,19 +827,19 @@ namespace picovm.Assembler
                 {
                     var abc = Add(typeHintSize, lineParts[lineParts.Count - 2], lineParts[lineParts.Count - 1]);
                     bytecode.AddRange(abc);
-                    offsetBytes = offsetBytes.Add<TOffset>(abc.Length);
+                    offsetBytes = offsetBytes.Add<TAddrSize>(abc.Length);
                 }
                 else if (instruction == "AND")
                 {
                     var abc = And(typeHintSize, lineParts[lineParts.Count - 2], lineParts[lineParts.Count - 1]);
                     bytecode.AddRange(abc);
-                    offsetBytes = offsetBytes.Add<TOffset>(abc.Length);
+                    offsetBytes = offsetBytes.Add<TAddrSize>(abc.Length);
                 }
                 else if (string.Compare("XOR", instruction, StringComparison.InvariantCulture) == 0)
                 {
                     var abc = XOr(lineParts[lineParts.Count - 2], lineParts[lineParts.Count - 1]);
                     bytecode.AddRange(abc);
-                    offsetBytes = offsetBytes.Add<TOffset>(abc.Length);
+                    offsetBytes = offsetBytes.Add<TAddrSize>(abc.Length);
                 }
                 else if (
                     string.Compare("JZ", instruction, StringComparison.InvariantCulture) == 0 ||
@@ -851,9 +851,9 @@ namespace picovm.Assembler
                         bytecode.Add((byte)Bytecode.JZ);
                     else if (string.Compare("JMP", instruction, StringComparison.InvariantCulture) == 0)
                         bytecode.Add((byte)Bytecode.JMP);
-                    offsetBytes = offsetBytes.Add<TOffset>(1);
+                    offsetBytes = offsetBytes.Add<TAddrSize>(1);
 
-                    var textSymbol = typeof(TOffset) == typeof(UInt32)
+                    var textSymbol = typeof(TAddrSize) == typeof(UInt32)
                      ? (IBytecodeTextSymbol)new BytecodeTextSymbol32(operand, (UInt32)offsetBytes - 1, (UInt32)offsetBytes, typeHintSize ?? 4)
                      : (IBytecodeTextSymbol)new BytecodeTextSymbol64(operand, (UInt64)offsetBytes - 1, (UInt64)offsetBytes, typeHintSize ?? 4);
 
@@ -861,13 +861,13 @@ namespace picovm.Assembler
                         bytecode.Add((byte)0xEE); // UNRESOLVED SYMBOL FOR LABEL
 
                     symbolReferenceOffsets.Add(textSymbol);
-                    offsetBytes = offsetBytes.Add<TOffset>(textSymbol.ReferenceLength);
+                    offsetBytes = offsetBytes.Add<TAddrSize>(textSymbol.ReferenceLength);
                 }
                 else
                     throw new Exception($"ERROR: Cannot compile: {line}");
             }
 
-            if (typeof(TOffset) == typeof(UInt32))
+            if (typeof(TAddrSize) == typeof(UInt32))
                 return new CompileTextSectionResult32(bytecode.ToArray(), labelsOffsets.ToDictionary(k => k.Key, v => (UInt32)v.Value), symbolReferenceOffsets.Cast<BytecodeTextSymbol32>());
             else
                 return new CompileTextSectionResult64(bytecode.ToArray(), labelsOffsets.ToDictionary(k => k.Key, v => (UInt64)v.Value), symbolReferenceOffsets.Cast<BytecodeTextSymbol64>());
@@ -875,7 +875,7 @@ namespace picovm.Assembler
 
         private ICompileDataSectionResult CompileDataSectionLines(IEnumerable<string> dataLines)
         {
-            ValueType offsetBytes = typeof(TOffset) == typeof(UInt32) ? (ValueType)(UInt32)0 : (ValueType)(UInt64)0;
+            ValueType offsetBytes = typeof(TAddrSize) == typeof(UInt32) ? (ValueType)(UInt32)0 : (ValueType)(UInt64)0;
 
             var bytecode = new List<byte>();
             var symbolOffsets = new Dictionary<string, IBytecodeDataSymbol>();
@@ -900,11 +900,11 @@ namespace picovm.Assembler
 
                             if (dataAllocationDirective.Label != null && !symbolOffsets.ContainsKey(dataAllocationDirective.Label.ToUpperInvariant()))
                                 symbolOffsets.Add(dataAllocationDirective.Label.ToUpperInvariant(),
-                                typeof(TOffset) == typeof(UInt32)
+                                typeof(TAddrSize) == typeof(UInt32)
                                 ? (IBytecodeDataSymbol)new BytecodeDataSymbol32((UInt32)offsetBytes, (ushort)stringBytes.Length, false)
                                 : (IBytecodeDataSymbol)new BytecodeDataSymbol64((UInt64)offsetBytes, (ushort)stringBytes.Length, false));
 
-                            offsetBytes = offsetBytes.Add<TOffset>(stringBytes.Length);
+                            offsetBytes = offsetBytes.Add<TAddrSize>(stringBytes.Length);
                             continue;
                         }
 
@@ -914,11 +914,11 @@ namespace picovm.Assembler
 
                             if (dataAllocationDirective.Label != null && !symbolOffsets.ContainsKey(dataAllocationDirective.Label.ToUpperInvariant()))
                                 symbolOffsets.Add(dataAllocationDirective.Label.ToUpperInvariant(),
-                                typeof(TOffset) == typeof(UInt32)
+                                typeof(TAddrSize) == typeof(UInt32)
                                 ? (IBytecodeDataSymbol)new BytecodeDataSymbol32((UInt32)offsetBytes, 1, false)
                                 : (IBytecodeDataSymbol)new BytecodeDataSymbol64((UInt64)offsetBytes, 1, false));
 
-                            offsetBytes = offsetBytes.Add<TOffset>(1);
+                            offsetBytes = offsetBytes.Add<TAddrSize>(1);
                             continue;
                         }
 
@@ -946,21 +946,21 @@ namespace picovm.Assembler
                         {
                             var longBytes = BitConverter.GetBytes((double)ov); // This is an array of 8 bytes
                             bytecode.AddRange(longBytes);
-                            offsetBytes = offsetBytes.Add<TOffset>(8);
+                            offsetBytes = offsetBytes.Add<TAddrSize>(8);
                             continue;
                         }
                         else if (ov.GetType() == typeof(float))
                         {
                             var longBytes = BitConverter.GetBytes(Convert.ToDouble((float)ov)); // This is an array of 8 bytes
                             bytecode.AddRange(longBytes);
-                            offsetBytes = offsetBytes.Add<TOffset>(8);
+                            offsetBytes = offsetBytes.Add<TAddrSize>(8);
                             continue;
                         }
                         else if (ov.GetType() == typeof(byte))
                         {
                             var longBytes = BitConverter.GetBytes(Convert.ToUInt64((byte)ov)); // This is an array of 8 bytes
                             bytecode.AddRange(longBytes);
-                            offsetBytes = offsetBytes.Add<TOffset>(8);
+                            offsetBytes = offsetBytes.Add<TAddrSize>(8);
                             continue;
                         }
 
@@ -971,7 +971,7 @@ namespace picovm.Assembler
                 {
                     // Convert infix to RPN for easy processing
                     var operands = dataAllocationDirective.Operands;
-                    var rpn = CompilerDataAllocationDirective.ConvertInfixToReversePolishNotation<TOffset>(operands, offsetBytes);
+                    var rpn = CompilerDataAllocationDirective.ConvertInfixToReversePolishNotation<TAddrSize>(operands, offsetBytes);
                     var computeStack = new Stack<ValueType>();
 
                     while (rpn.Count > 0)
@@ -1033,7 +1033,7 @@ namespace picovm.Assembler
                     var ov = computeStack.Pop();
                     var ovType = ov.GetType();
                     if (ovType == typeof(ValueType))
-                        ovType = typeof(TOffset);
+                        ovType = typeof(TAddrSize);
 
                     if (ovType == typeof(ulong))
                     {
@@ -1041,11 +1041,11 @@ namespace picovm.Assembler
 
                         if (dataAllocationDirective.Label != null && !symbolOffsets.ContainsKey(dataAllocationDirective.Label.ToUpperInvariant()))
                             symbolOffsets.Add(dataAllocationDirective.Label.ToUpperInvariant(),
-                                typeof(TOffset) == typeof(UInt32)
+                                typeof(TAddrSize) == typeof(UInt32)
                                 ? (IBytecodeDataSymbol)new BytecodeDataSymbol32((UInt32)offsetBytes, 8, true)
                                 : (IBytecodeDataSymbol)new BytecodeDataSymbol64((UInt64)offsetBytes, 8, true));
 
-                        offsetBytes = offsetBytes.Add<TOffset>(8);
+                        offsetBytes = offsetBytes.Add<TAddrSize>(8);
                         continue;
                     }
                     else if (ovType == typeof(uint))
@@ -1054,11 +1054,11 @@ namespace picovm.Assembler
 
                         if (dataAllocationDirective.Label != null && !symbolOffsets.ContainsKey(dataAllocationDirective.Label.ToUpperInvariant()))
                             symbolOffsets.Add(dataAllocationDirective.Label.ToUpperInvariant(),
-                                typeof(TOffset) == typeof(UInt32)
+                                typeof(TAddrSize) == typeof(UInt32)
                                 ? (IBytecodeDataSymbol)new BytecodeDataSymbol32((UInt32)offsetBytes, 4, true)
                                 : (IBytecodeDataSymbol)new BytecodeDataSymbol64((UInt64)offsetBytes, 4, true));
 
-                        offsetBytes = offsetBytes.Add<TOffset>(4);
+                        offsetBytes = offsetBytes.Add<TAddrSize>(4);
                         continue;
                     }
                     else if (ovType == typeof(ushort))
@@ -1067,11 +1067,11 @@ namespace picovm.Assembler
 
                         if (dataAllocationDirective.Label != null && !symbolOffsets.ContainsKey(dataAllocationDirective.Label.ToUpperInvariant()))
                             symbolOffsets.Add(dataAllocationDirective.Label.ToUpperInvariant(),
-                            typeof(TOffset) == typeof(UInt32)
+                            typeof(TAddrSize) == typeof(UInt32)
                             ? (IBytecodeDataSymbol)new BytecodeDataSymbol32((UInt32)offsetBytes, 2, true)
                             : (IBytecodeDataSymbol)new BytecodeDataSymbol64((UInt64)offsetBytes, 2, true));
 
-                        offsetBytes = offsetBytes.Add<TOffset>(2);
+                        offsetBytes = offsetBytes.Add<TAddrSize>(2);
                         continue;
                     }
                     else if (ovType == typeof(byte))
@@ -1080,11 +1080,11 @@ namespace picovm.Assembler
 
                         if (dataAllocationDirective.Label != null && !symbolOffsets.ContainsKey(dataAllocationDirective.Label.ToUpperInvariant()))
                             symbolOffsets.Add(dataAllocationDirective.Label.ToUpperInvariant(),
-                                (typeof(TOffset) == typeof(UInt32))
+                                (typeof(TAddrSize) == typeof(UInt32))
                                 ? (IBytecodeDataSymbol)new BytecodeDataSymbol32((UInt32)offsetBytes, 1, true)
                                 : (IBytecodeDataSymbol)new BytecodeDataSymbol64((UInt64)offsetBytes, 1, true));
 
-                        offsetBytes = offsetBytes.Add<TOffset>(1);
+                        offsetBytes = offsetBytes.Add<TAddrSize>(1);
                         continue;
                     }
 
@@ -1094,7 +1094,7 @@ namespace picovm.Assembler
                     throw new InvalidOperationException($"Unknown mnemonic: {dataAllocationDirective.Mnemonic}");
             }
 
-            if (typeof(TOffset) == typeof(UInt32))
+            if (typeof(TAddrSize) == typeof(UInt32))
                 return new CompileDataSectionResult32(bytecode.ToArray(), symbolOffsets.ToDictionary(k => k.Key, v => (BytecodeDataSymbol32)v.Value));
             else
                 return new CompileDataSectionResult64(bytecode.ToArray(), symbolOffsets.ToDictionary(k => k.Key, v => (BytecodeDataSymbol64)v.Value));

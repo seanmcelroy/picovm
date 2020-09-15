@@ -13,7 +13,7 @@ namespace picovm.Assembler
         public CompileDataSectionResult64(byte[] bytecode, IEnumerable<KeyValuePair<string, BytecodeDataSymbol64>> symbolOffsets)
         {
             this.Bytecode = ImmutableArray.Create<byte>(bytecode);
-            this.SymbolOffsets = ImmutableDictionary<string, BytecodeDataSymbol64>.Empty.AddRange(symbolOffsets);
+            this.SymbolOffsets = symbolOffsets.ToImmutableDictionary();
         }
     }
 }

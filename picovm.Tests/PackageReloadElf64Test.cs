@@ -17,7 +17,7 @@ namespace picovm.Tests
         }
 
         [Fact]
-        public void ReadKeyboardAsm()
+        public void ReadKeyboardAsm64()
         {
             // http://www.sco.com/developers/devspecs/gabi41.pdf
             var compiler = new BytecodeCompiler<UInt64>();
@@ -86,9 +86,10 @@ namespace picovm.Tests
                 ms.Seek(0, SeekOrigin.Begin);
 
                 var loader = new LoaderElf64(ms);
-                var compilation2 = loader.Load();
+                var compilation2 = loader.LoadImage();
                 Xunit.Assert.NotNull(compilation2);
                 Xunit.Assert.Equal(compilation.EntryPoint.Value, compilation2.EntryPoint);
+                Xunit.Assert.Equal(AssemblerPackageOutputType.Elf64, Packager.Inspector.DetectPackageOutputType(ms));
             }
         }
     }

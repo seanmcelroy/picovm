@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using picovm.VM;
 
@@ -16,7 +18,7 @@ namespace picovm.Packager.Elf.Elf32
             this.stream = stream;
         }
 
-        public LoaderResult32 Load()
+        public LoaderResult32 LoadImage()
         {
             if (!stream.CanRead)
                 throw new ArgumentException("Stream is not available for reading", nameof(stream));
@@ -38,9 +40,31 @@ namespace picovm.Packager.Elf.Elf32
             stream.Seek(imageOffset, SeekOrigin.Begin);
             stream.Read(image, 0, image.Length);
 
-            return new LoaderResult32(elfFileHeader.E_ENTRY - imageOffset, image);
+            return new LoaderResult32(elfFileHeader.E_ENTRY - imageOffset, image,
+                metadata: new object[] { elfFileHeader, programHeader });
         }
 
-        ILoaderResult ILoader.Load() => this.Load();
+        public ImmutableList<object> LoadMetadata()
+        {
+            var metadata = new List<object>();
+
+            if (!stream.CanRead)
+                throw new ArgumentException("Stream is not available for reading", nameof(stream));
+            if (!stream.CanSeek)
+                throw new ArgumentException("Stream is not available for seeking", nameof(stream));
+
+            var elfFileHeader = new Header32();
+            elfFileHeader.Read(stream);
+            metadata.Add(elfFileHeader);
+
+            stream.Seek((long)elfFileHeader.E_PHOFF, SeekOrigin.Begin);
+            var programHeader = new ProgramHeader32();
+            programHeader.Read(stream);
+            metadata.Add(programHeader);
+
+            return metadata.ToImmutableList();
+        }
+
+        ILoaderResult ILoader.LoadImage() => this.LoadImage();
     }
 }

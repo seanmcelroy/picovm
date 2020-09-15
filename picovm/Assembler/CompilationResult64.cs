@@ -41,7 +41,7 @@ namespace picovm.Assembler
             this.TextSegmentBase = textSegmentBase;
             this.DataSegmentBase = dataSegmentBase;
             this.TextLabelsOffsets = textLabelsOffsets?.ToDictionary(k => k.Key, v => v.Value);
-            this.TextSymbolReferenceOffsets = ImmutableList<BytecodeTextSymbol64>.Empty.AddRange(textSymbolReferenceOffsets);
+            this.TextSymbolReferenceOffsets = textSymbolReferenceOffsets.ToImmutableList();
             this.DataSymbolOffsets = dataSymbolOffsets?.ToDictionary(k => k.Key, v => v.Value);
         }
     }

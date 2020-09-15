@@ -9,7 +9,7 @@ namespace picovm.Assembler
         public ImmutableList<BytecodeBssSymbol> Symbols { get; private set; }
 
         public CompileBssSectionResult(IEnumerable<BytecodeBssSymbol> symbols) =>
-            this.Symbols = ImmutableList<BytecodeBssSymbol>.Empty.AddRange(symbols);
+            this.Symbols = symbols.ToImmutableList();
 
         public static CompileBssSectionResult CompileBssSectionLines(IEnumerable<string> dataLines)
         {
