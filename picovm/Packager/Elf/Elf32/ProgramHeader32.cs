@@ -2,7 +2,7 @@ using System;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using picovm.Packager.Elf.Elf;
+using picovm.Packager.Elf;
 
 namespace picovm.Packager.Elf.Elf32
 {

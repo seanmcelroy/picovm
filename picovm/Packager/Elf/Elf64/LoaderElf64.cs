@@ -57,10 +57,29 @@ namespace picovm.Packager.Elf.Elf64
             elfFileHeader.Read(stream);
             metadata.Add(elfFileHeader);
 
-            stream.Seek((long)elfFileHeader.E_PHOFF, SeekOrigin.Begin);
-            var programHeader = new ProgramHeader64();
-            programHeader.Read(stream);
-            metadata.Add(programHeader);
+            if (elfFileHeader.E_PHNUM > 0)
+            {
+                for (var i = 0L; i < elfFileHeader.E_PHNUM; i++)
+                {
+                    var phOffset = (long)elfFileHeader.E_PHOFF + (i * elfFileHeader.E_PHENTSIZE);
+                    stream.Seek(phOffset, SeekOrigin.Begin);
+                    var programHeader = new ProgramHeader64();
+                    programHeader.Read(stream);
+                    metadata.Add(programHeader);
+                }
+            }
+
+            if (elfFileHeader.E_SHNUM > 0)
+            {
+                for (var i = 0L; i < elfFileHeader.E_SHNUM; i++)
+                {
+                    var shOffset = (long)elfFileHeader.E_SHOFF + (i * elfFileHeader.E_SHENTSIZE);
+                    stream.Seek(shOffset, SeekOrigin.Begin);
+                    var sectionHeader = new SectionHeader64();
+                    sectionHeader.Read(stream);
+                    metadata.Add(sectionHeader);
+                }
+            }
 
             return metadata.ToImmutableList();
         }

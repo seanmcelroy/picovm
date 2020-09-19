@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text;
 
 namespace picovm.Packager.Elf
 {
@@ -67,6 +68,20 @@ namespace picovm.Packager.Elf
             var eightBytes = new byte[8];
             stream.Read(eightBytes);
             return BitConverter.ToUInt64(eightBytes);
+        }
+
+        public static UInt64 ReadXWord(this Stream stream) => ReadUInt64(stream);
+
+        public static string ReadNulTerminatedString(this Stream stream)
+        {
+            var sb = new StringBuilder();
+            while (true)
+            {
+                var i = stream.ReadByte();
+                if (i == -1 || i == 0)
+                    return sb.ToString();
+                sb.Append((char)(byte)i);
+            }
         }
 
         public static T ReadWord<T>(this Stream stream, T defaultNoMatch) where T : struct, IConvertible

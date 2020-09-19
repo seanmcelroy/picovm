@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using picovm.Assembler;
 using picovm.Packager;
 using picovm.Packager.Elf;
@@ -303,7 +305,6 @@ namespace picovm
             if (header.Equals(default(Packager.Elf.Elf64.Header64)))
                 Console.Out.WriteLine("No Elf64 header found.");
 
-
             Console.Out.WriteLine("ELF Header:");
             stream.Seek(0, SeekOrigin.Begin);
             var first16 = new byte[16];
@@ -327,7 +328,72 @@ namespace picovm
             Console.Out.WriteLine($"  Number of program headers:         {header.E_PHNUM}");
             Console.Out.WriteLine($"  Size of section headers:           {header.E_SHENTSIZE} (bytes)");
             Console.Out.WriteLine($"  Number of section headers:         {header.E_SHNUM}");
-            Console.Out.WriteLine($"  Section header string table index: {header.E_SHSTRIDX}");
+            Console.Out.WriteLine($"  Section header string table index: {header.E_SHSTRNDX}");
+
+            Console.Out.WriteLine($"\r\nSection Headers:");
+            Console.Out.WriteLine($"  [Nr] Name              Type             Address           Offset");
+            Console.Out.WriteLine($"       Size              EntSize          Flags  Link  Info  Align");
+            var sectionHeaders = metadata.OfType<Packager.Elf.Elf64.SectionHeader64>().ToArray();
+            var sectionHeaderNames = new Dictionary<UInt32, string>();
+            long? sectionHeaderNameTableOffset = header.E_SHSTRNDX == SpecialSectionIndexes.SHN_UNDEF ? default(long?) : (long)sectionHeaders[header.E_SHSTRNDX].SH_OFFSET;
+            var i = 0;
+            foreach (var sh in sectionHeaders)
+            {
+                string name = "<MISSING TABLE>";
+                if (sectionHeaderNameTableOffset != null)
+                {
+                    stream.Seek((long)sectionHeaderNameTableOffset + sh.SH_NAME, SeekOrigin.Begin);
+                    name = stream.ReadNulTerminatedString();
+                    sectionHeaderNames.Add(sh.SH_NAME, name);
+                }
+
+                var flagString = new StringBuilder();
+                foreach (var flag in Enum.GetValues(typeof(SectionHeaderFlags)).Cast<SectionHeaderFlags>())
+                {
+                    if (((SectionHeaderFlags)sh.SH_FLAGS).HasFlag(flag))
+                        flagString.Append(PackagerUtility.GetEnumAttributeValue<SectionHeaderFlags, ShortNameAttribute>(flag, s => s.DisplayName));
+                }
+
+                Console.Out.WriteLine($"  [{i.ToString().PadLeft(2)}] {name.LeftAlignToSize(17)} {PackagerUtility.GetEnumAttributeValue<SectionHeaderType, ShortNameAttribute>(sh.SH_TYPE, sn => sn.DisplayName).LeftAlignToSize(16)} {sh.SH_ADDR.RightAlignHexToSize()}  {sh.SH_OFFSET.RightAlignHexToSize()}");
+                Console.Out.WriteLine($"       {sh.SH_SIZE.RightAlignHexToSize()}  {sh.SH_ENTSIZE.RightAlignHexToSize()}  {flagString.LeftAlignToSize(4)}  {sh.SH_LINK.RightAlignDecToSize(4, ' ')}  {sh.SH_INFO.RightAlignDecToSize(4, ' ')}  {sh.SH_ADDRALIGN.RightAlignDecToSize(4, ' ')}");
+                i++;
+            }
+            Console.Out.WriteLine("Key to Flags:");
+            Console.Out.WriteLine("  W (write), A (alloc), X (execute), M (merge), S (strings), I (info),");
+            Console.Out.WriteLine("  L (link order), O (extra OS processing required), G (group), T (TLS),");
+            Console.Out.WriteLine("  C (compressed), o (OS specific), E (exclude), p (processor specific)");
+
+            Console.Out.WriteLine("\r\nProgram Headers:");
+            Console.Out.WriteLine("  Type           Offset             VirtAddr           PhysAddr");
+            Console.Out.WriteLine("                 FileSiz            MemSiz              Flags  Align");
+            var programHeaders = metadata.OfType<Packager.Elf.Elf64.ProgramHeader64>().ToArray();
+            foreach (var ph in programHeaders)
+            {
+                var flagString = new StringBuilder();
+                flagString.Append(((SegmentPermissionFlags)ph.P_FLAGS).HasFlag(SegmentPermissionFlags.PF_R) ? 'R' : ' ');
+                flagString.Append(((SegmentPermissionFlags)ph.P_FLAGS).HasFlag(SegmentPermissionFlags.PF_W) ? 'W' : ' ');
+                flagString.Append(((SegmentPermissionFlags)ph.P_FLAGS).HasFlag(SegmentPermissionFlags.PF_X) ? 'E' : ' ');
+
+                Console.Out.WriteLine($"  {PackagerUtility.GetEnumAttributeValue<ProgramHeaderType, ShortNameAttribute>(ph.P_TYPE, s => s.DisplayName).LeftAlignToSize(13)}  0x{ph.P_OFFSET.RightAlignHexToSize()} 0x{ph.P_VADDR.RightAlignHexToSize()} 0x{ph.P_PADDR.RightAlignHexToSize()}");
+                Console.Out.WriteLine($"                 0x{ph.P_FILESZ.RightAlignHexToSize()} 0x{ph.P_MEMSZ.RightAlignHexToSize()}  {flagString.LeftAlignToSize(6)} 0x{ph.P_ALIGN:x}");
+            }
+
+            Console.Out.WriteLine("\r\nSection to Segment mapping:");
+            Console.Out.WriteLine(" Segment Sections...");
+            i = 0;
+            foreach (var ph in programHeaders)
+            {
+                var shdrs = sectionHeaders
+                    .Where(sh =>
+                        (sh.SH_ADDR > 0 || sh.SH_ENTSIZE > 0) &&
+                        sh.SH_ADDR >= ph.P_VADDR &&
+                        sh.SH_ADDR + sh.SH_SIZE <= ph.P_VADDR + ph.P_MEMSZ)
+                    .Select(sh => sectionHeaderNames[sh.SH_NAME]).ToArray();
+                var shdrNames = shdrs.Length == 0 ? string.Empty : shdrs.Aggregate((c, n) => $"{c} {n}");
+                Console.Out.WriteLine($"  {i:00}     {shdrNames}");
+                i++;
+            }
+
         }
     }
 }

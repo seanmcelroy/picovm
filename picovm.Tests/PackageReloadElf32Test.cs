@@ -55,7 +55,7 @@ namespace picovm.Tests
                 Xunit.Assert.Equal(header.E_PHNUM, header2.E_PHNUM);
                 Xunit.Assert.Equal(header.E_SHENTSIZE, header2.E_SHENTSIZE);
                 Xunit.Assert.Equal(header.E_SHNUM, header2.E_SHNUM);
-                Xunit.Assert.Equal(header.E_SHSTRIDX, header2.E_SHSTRIDX);
+                Xunit.Assert.Equal(header.E_SHSTRNDX, header2.E_SHSTRNDX);
             }
 
             // Test program header write/read/compare fidelity

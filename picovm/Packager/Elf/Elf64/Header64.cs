@@ -37,7 +37,7 @@ namespace picovm.Packager.Elf.Elf64
         public UInt16 E_PHNUM;
         public UInt16 E_SHENTSIZE;
         public UInt16 E_SHNUM;
-        public UInt16 E_SHSTRIDX;
+        public UInt16 E_SHSTRNDX;
 
         public static bool IsFileType(Stream stream)
         {
@@ -104,7 +104,7 @@ namespace picovm.Packager.Elf.Elf64
             E_PHNUM = stream.ReadUInt16();
             E_SHENTSIZE = stream.ReadUInt16();
             E_SHNUM = stream.ReadUInt16();
-            E_SHSTRIDX = stream.ReadUInt16();
+            E_SHSTRNDX = stream.ReadUInt16();
 
             if (E_EHSIZE != stream.Position)
             {
@@ -141,7 +141,7 @@ namespace picovm.Packager.Elf.Elf64
             headerLength += stream.WriteHalfWord(E_PHNUM);
             headerLength += stream.WriteHalfWord(E_SHENTSIZE);
             headerLength += stream.WriteHalfWord(E_SHNUM);
-            headerLength += stream.WriteHalfWord(E_SHSTRIDX);
+            headerLength += stream.WriteHalfWord(E_SHSTRNDX);
 
             if (E_EHSIZE != headerLength)
                 throw new InvalidOperationException("Miscalculation of E_EHSIZE");

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using picovm.Assembler;
-using picovm.Packager.Elf.Elf;
+using picovm.Packager.Elf;
 
 namespace picovm.Packager.Elf.Elf64
 {
@@ -40,7 +40,7 @@ namespace picovm.Packager.Elf.Elf64
             E_EHSIZE = 64,
             E_PHENTSIZE = 56,
             E_SHENTSIZE = 64,
-            E_SHSTRIDX = SpecialSectionIndexes.SHN_UNDEF
+            E_SHSTRNDX = SpecialSectionIndexes.SHN_UNDEF
         };
 
         public ProgramHeader64 GenerateProgramHeader64() => new ProgramHeader64
@@ -171,7 +171,7 @@ namespace picovm.Packager.Elf.Elf64
             elfFileHeader.E_ENTRY = programHeader.P_VADDR + textOffset;
             elfFileHeader.E_PHOFF = programHeaderOffset;
             elfFileHeader.E_SHOFF = sectionHeaderTableOffset;
-            elfFileHeader.E_SHSTRIDX = sections.Count == 0 ? SpecialSectionIndexes.SHN_UNDEF : (ushort)(sections.Count - 1);
+            elfFileHeader.E_SHSTRNDX = sections.Count == 0 ? SpecialSectionIndexes.SHN_UNDEF : (ushort)(sections.Count - 1);
             elfFileHeader.Write(stream, 1, (ushort)sections.Count);
 
             programHeader.P_FILESZ = sectionNamesOffset;
