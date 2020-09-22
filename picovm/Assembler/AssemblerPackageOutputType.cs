@@ -6,6 +6,7 @@ namespace picovm.Assembler
         Unknown = 0,
         AOut32 = 1,
         Elf32 = 0x0e32,
-        Elf64 = 0x0e64
+        Elf64 = 0x0e64,
+        PE = 0x5045
     }
 }

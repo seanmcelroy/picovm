@@ -51,6 +51,8 @@ namespace picovm.Packager.Elf.Elf64
 
             var magicBuffer = new byte[MAGIC.Length];
             var bytesRead = stream.Read(magicBuffer, 0, MAGIC.Length);
+            if (bytesRead != MAGIC.Length)
+                return false;
             var magicMatch = bytesRead == MAGIC.Length && Enumerable.SequenceEqual(MAGIC, magicBuffer);
             if (!magicMatch)
                 return false;
@@ -80,7 +82,7 @@ namespace picovm.Packager.Elf.Elf64
 
         public void Read(Stream stream)
         {
-            var magic = new byte[4];
+            var magic = new byte[MAGIC.Length];
             stream.Read(magic);
             if (!MAGIC.SequenceEqual(magic))
                 throw new BadImageFormatException("Magic value is not present for an ELF file");

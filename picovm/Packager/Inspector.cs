@@ -27,18 +27,10 @@ namespace picovm.Packager
                 return AssemblerPackageOutputType.Elf32;
             if (Elf.Elf64.Header64.IsFileType(stream))
                 return AssemblerPackageOutputType.Elf64;
+            if (PE.MsDosStubHeader.IsFileType(stream))
+                return AssemblerPackageOutputType.PE;
 
             return AssemblerPackageOutputType.Unknown;
-        }
-
-        public static InspectionResult InspectAsElf64(string filePath)
-        {
-            InspectionResult ret;
-            using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-            {
-                ret = InspectAsElf64(fs);
-            }
-            return ret;
         }
 
         public static InspectionResult InspectAsElf64(Stream stream)
@@ -48,9 +40,11 @@ namespace picovm.Packager
             return new InspectionResult(metadata);
         }
 
-        public InspectionResult Inspect(Stream stream)
+        public static InspectionResult InspectAsPE(Stream stream)
         {
-            return new InspectionResult();
+            var loader = new PE.LoaderPE(stream);
+            var metadata = loader.LoadMetadata();
+            return new InspectionResult(metadata);
         }
     }
 }

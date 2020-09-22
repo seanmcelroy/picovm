@@ -8,6 +8,7 @@ using picovm.Packager;
 using picovm.Packager.Elf;
 using picovm.Packager.Elf.Elf32;
 using picovm.Packager.Elf.Elf64;
+using picovm.Packager.PE;
 using picovm.VM;
 
 namespace picovm
@@ -284,8 +285,12 @@ namespace picovm
                 case AssemblerPackageOutputType.Elf64:
                     PrintInspectionElf64(target);
                     break;
+                case AssemblerPackageOutputType.PE:
+                    PrintInspectionPE(target);
+                    break;
                 default:
-                    throw new NotImplementedException();
+                    Console.Error.WriteLine($"Inspection of binary file type {type} is not yet supproted");
+                    throw new NotImplementedException($"Inspection of binary file type {type} is not yet supproted");
             }
         }
 
@@ -347,12 +352,7 @@ namespace picovm
                     sectionHeaderNames.Add(sh.SH_NAME, name);
                 }
 
-                var flagString = new StringBuilder();
-                foreach (var flag in Enum.GetValues(typeof(SectionHeaderFlags)).Cast<SectionHeaderFlags>())
-                {
-                    if (((SectionHeaderFlags)sh.SH_FLAGS).HasFlag(flag))
-                        flagString.Append(PackagerUtility.GetEnumAttributeValue<SectionHeaderFlags, ShortNameAttribute>(flag, s => s.DisplayName));
-                }
+                var flagString = PackagerUtility.GetEnumFlagsShortName<SectionHeaderFlags>(sh.SH_FLAGS);
 
                 Console.Out.WriteLine($"  [{i.ToString().PadLeft(2)}] {name.LeftAlignToSize(17)} {PackagerUtility.GetEnumAttributeValue<SectionHeaderType, ShortNameAttribute>(sh.SH_TYPE, sn => sn.DisplayName).LeftAlignToSize(16)} {sh.SH_ADDR.RightAlignHexToSize()}  {sh.SH_OFFSET.RightAlignHexToSize()}");
                 Console.Out.WriteLine($"       {sh.SH_SIZE.RightAlignHexToSize()}  {sh.SH_ENTSIZE.RightAlignHexToSize()}  {flagString.LeftAlignToSize(4)}  {sh.SH_LINK.RightAlignDecToSize(4, ' ')}  {sh.SH_INFO.RightAlignDecToSize(4, ' ')}  {sh.SH_ADDRALIGN.RightAlignDecToSize(4, ' ')}");
@@ -395,5 +395,264 @@ namespace picovm
             }
 
         }
+
+        static void PrintInspectionPE(string filePath)
+        {
+            using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                PrintInspectionPE(fs);
+            }
+        }
+
+        static void PrintInspectionPE(Stream stream)
+        {
+            var metadata = Inspector.InspectAsPE(stream).Metadata;
+            var msDosStubHeader = metadata.OfType<Packager.PE.MsDosStubHeader>().FirstOrDefault();
+
+            if (msDosStubHeader.Equals(default(Packager.PE.MsDosStubHeader)))
+                Console.Out.WriteLine("No MSDOS stub header found.");
+
+            Console.Out.WriteLine("MSDOS Header:");
+            stream.Seek(0, SeekOrigin.Begin);
+            var first2 = new byte[2];
+            stream.Read(first2, 0, 2);
+            Console.Out.WriteLine($"  Magic:   {first2.Select(b => $"{b:x2}").Aggregate((c, n) => $"{c} {n}")}");
+            Console.Out.WriteLine($"  PE Header Offset:                  0x{msDosStubHeader.e_lfanew:x}");
+            if (msDosStubHeader.e_lfanew % 8 != 0)
+                Console.Error.WriteLine("WARN: PE header should be aligned to an 8-byte boundary.");
+
+            {
+                var peHeader = metadata.OfType<Packager.PE.PEHeader>().FirstOrDefault();
+                if (peHeader.Equals(default(Packager.PE.PEHeader)))
+                    Console.Out.WriteLine("No PE header found.");
+                else
+                {
+                    stream.Seek(msDosStubHeader.e_lfanew, SeekOrigin.Begin);
+                    stream.Read(first2, 0, 2);
+                    Console.Out.WriteLine("\r\nPE Header:");
+                    Console.Out.WriteLine($"  Magic:   {first2.Select(b => $"{b:x2}").Aggregate((c, n) => $"{c} {n}")}");
+                    Console.Out.WriteLine($"  Machine:                           {PackagerUtility.GetEnumDescription<MachineType>(peHeader.mMachine)}");
+                    Console.Out.WriteLine($"  Number of sections:                {peHeader.mNumberOfSections}");
+                    var ts = DateTime.UnixEpoch.AddSeconds(peHeader.mTimeDateStamp).ToUniversalTime();
+                    Console.Out.WriteLine($"  Timestamp:                         {ts.ToLongDateString()} {ts.ToLongTimeString()} UTC");
+                    Console.Out.WriteLine($"  Pointer to symbol table:           0x{peHeader.mPointerToSymbolTable:x}");
+                    Console.Out.WriteLine($"  Number of symbols:                 {peHeader.mNumberOfSymbols}");
+                    Console.Out.WriteLine($"  Size of optional PE header:        {peHeader.mSizeOfOptionalHeader} (bytes)");
+                    Console.Out.WriteLine($"  Characteristics:                   {PackagerUtility.GetEnumFlagsShortName<PECharacteristics>(peHeader.mCharacteristics, ", ")}");
+                }
+            }
+
+            {
+                var pe32 = metadata.OfType<Packager.PE.PEHeaderOption32>().FirstOrDefault();
+                if (!pe32.Equals(default(Packager.PE.PEHeaderOption32)))
+                {
+                    Console.Out.WriteLine("\r\nPE Optional 32-bit Header:");
+                    Console.Out.WriteLine($"  Linker version:                    {pe32.mMajorLinkerVersion}.{pe32.mMinorLinkerVersion}");
+                    Console.Out.WriteLine($"  Size of code:                      {pe32.mSizeOfCode} (bytes)");
+                    Console.Out.WriteLine($"  Size of initialized data:          {pe32.mSizeOfInitializedData} (bytes)");
+                    Console.Out.WriteLine($"  Size of uninitialized data:        {pe32.mSizeOfUninitializedData} (bytes)");
+                    Console.Out.WriteLine($"  Entry point:                       0x{pe32.mAddressOfEntryPoint:x}");
+                    Console.Out.WriteLine($"  Base address of code section:      0x{pe32.mBaseOfCode:x}");
+                    Console.Out.WriteLine($"  Base address of data section:      0x{pe32.mBaseOfData:x}");
+                    Console.Out.WriteLine($"  Base address of image:             0x{pe32.mImageBase:x}");
+                    Console.Out.WriteLine($"  Section alignment:                 {pe32.mSectionAlignment}");
+                    if (pe32.mSectionAlignment < pe32.mFileAlignment)
+                        Console.Error.WriteLine($"ERROR: Section alignment value must be greater than or equal to the file alignment!");
+                    Console.Out.WriteLine($"  File alignment:                    {pe32.mFileAlignment}{(pe32.mFileAlignment != 512 ? " (Default is 512)" : string.Empty)}");
+                    if (pe32.mFileAlignment < 512 || pe32.mFileAlignment > 65536 || (pe32.mFileAlignment & (pe32.mFileAlignment - 1)) != 0)
+                        Console.Error.WriteLine($"WARN: The value should be a power of 2 between 512 and 64K (inclusive).");
+                    Console.Out.WriteLine($"  Operating system version:          {pe32.mMajorOperatingSystemVersion}.{pe32.mMinorOperatingSystemVersion} ({GetWindowsVersion(pe32.mMajorOperatingSystemVersion, pe32.mMinorOperatingSystemVersion)})");
+                    Console.Out.WriteLine($"  Image version:                     {pe32.mMajorImageVersion}.{pe32.mMinorImageVersion}");
+                    Console.Out.WriteLine($"  Subsystem version:                 {pe32.mMajorSubsystemVersion}.{pe32.mMinorSubsystemVersion}");
+                    if (pe32.mWin32VersionValue != 0)
+                    {
+                        Console.Out.WriteLine($"  Win32 version:                     {pe32.mWin32VersionValue}");
+                        Console.Error.WriteLine($"ERROR: This member is reserved and must be 0!");
+                    }
+                    Console.Out.WriteLine($"  Size of image:                     {pe32.mSizeOfImage} (bytes)");
+                    if (pe32.mSizeOfImage % pe32.mSectionAlignment != 0)
+                        Console.Error.WriteLine($"ERROR: Size of image must be a multiple of the section alignment!");
+                    Console.Out.WriteLine($"  Size of headers:                   {pe32.mSizeOfHeaders} (bytes)");
+                    Console.Out.WriteLine($"  Checksum:                          0x{pe32.mCheckSum:x}");
+                    Console.Out.WriteLine($"  Subsystem:                         {PackagerUtility.GetEnumDescription<Subsystem>(pe32.mSubsystem)} (0x{pe32.mSubsystem:x})");
+                    Console.Out.WriteLine($"  DLL characteristics:               {PackagerUtility.GetEnumFlagsShortName<DllCharacteristics>(pe32.mDllCharacteristics, ", ")}");
+                    Console.Out.WriteLine($"  Size of stack reserve:             {pe32.mSizeOfStackReserve} (bytes)");
+                    Console.Out.WriteLine($"  Size of stack commit:              {pe32.mSizeOfStackCommit} (bytes)");
+                    Console.Out.WriteLine($"  Size of heap reserve:              {pe32.mSizeOfHeapReserve} (bytes)");
+                    Console.Out.WriteLine($"  Size of heap commit:               {pe32.mSizeOfHeapCommit} (bytes)");
+                    Console.Out.WriteLine($"  Loader flags (obsolete):           0x{pe32.mLoaderFlags:x}");
+                    Console.Out.WriteLine($"  Number of directory entries:       {pe32.mNumberOfRvaAndSizes}");
+                }
+            }
+
+            {
+                var pe64 = metadata.OfType<Packager.PE.PEHeaderOption64>().FirstOrDefault();
+                if (!pe64.Equals(default(Packager.PE.PEHeaderOption64)))
+                {
+                    Console.Out.WriteLine("\r\nPE Optional 64-bit Header:");
+                    Console.Out.WriteLine($"  Linker major version:              {pe64.mMajorLinkerVersion}");
+                    Console.Out.WriteLine($"  Linker minor version:              {pe64.mMinorLinkerVersion}");
+                    Console.Out.WriteLine($"  Size of code:                      {pe64.mSizeOfCode} (bytes)");
+                    Console.Out.WriteLine($"  Size of initialized data:          {pe64.mSizeOfInitializedData} (bytes)");
+                    Console.Out.WriteLine($"  Size of uninitialized data:        {pe64.mSizeOfUninitializedData} (bytes)");
+                    Console.Out.WriteLine($"  Entry point:                       0x{pe64.mAddressOfEntryPoint:x}");
+                    Console.Out.WriteLine($"  Base address of code section:      0x{pe64.mBaseOfCode:x}");
+                    Console.Out.WriteLine($"  Base address of image:             0x{pe64.mImageBase:x}");
+                    Console.Out.WriteLine($"  Section alignment:                 {pe64.mSectionAlignment}");
+                    if (pe64.mSectionAlignment < pe64.mFileAlignment)
+                        Console.Error.WriteLine($"ERROR: Section alignment value must be greater than or equal to the file alignment!");
+                    Console.Out.WriteLine($"  File alignment:                    {pe64.mFileAlignment}{(pe64.mFileAlignment != 512 ? " (Default is 512)" : string.Empty)}");
+                    if (pe64.mFileAlignment < 512 || pe64.mFileAlignment > 65536 || (pe64.mFileAlignment & (pe64.mFileAlignment - 1)) != 0)
+                        Console.Error.WriteLine($"WARN: The value should be a power of 2 between 512 and 64K (inclusive).");
+                    Console.Out.WriteLine($"  Operating system version:          {pe64.mMajorOperatingSystemVersion}.{pe64.mMinorOperatingSystemVersion} ({GetWindowsVersion(pe64.mMajorOperatingSystemVersion, pe64.mMinorOperatingSystemVersion)})");
+                    Console.Out.WriteLine($"  Image version:                     {pe64.mMajorImageVersion}.{pe64.mMinorImageVersion}");
+                    Console.Out.WriteLine($"  Subsystem version:                 {pe64.mMajorSubsystemVersion}.{pe64.mMinorSubsystemVersion}");
+                    if (pe64.mWin32VersionValue != 0)
+                    {
+                        Console.Out.WriteLine($"  Win32 version:                     {pe64.mWin32VersionValue}");
+                        Console.Error.WriteLine($"ERROR: This member is reserved and must be 0!");
+                    }
+                    Console.Out.WriteLine($"  Size of image:                     {pe64.mSizeOfImage} (bytes)");
+                    if (pe64.mSizeOfImage % pe64.mSectionAlignment != 0)
+                        Console.Error.WriteLine($"ERROR: Size of image must be a multiple of the section alignment!");
+                    Console.Out.WriteLine($"  Size of headers:                   {pe64.mSizeOfHeaders} (bytes)");
+                    Console.Out.WriteLine($"  Checksum:                          0x{pe64.mCheckSum:x}");
+                    Console.Out.WriteLine($"  Subsystem:                         {PackagerUtility.GetEnumDescription<Subsystem>(pe64.mSubsystem)} (0x{pe64.mSubsystem:x})");
+                    Console.Out.WriteLine($"  DLL characteristics:               {PackagerUtility.GetEnumFlagsShortName<DllCharacteristics>(pe64.mDllCharacteristics, ", ")}");
+                    Console.Out.WriteLine($"  Size of stack reserve:             {pe64.mSizeOfStackReserve} (bytes)");
+                    Console.Out.WriteLine($"  Size of stack commit:              {pe64.mSizeOfStackCommit} (bytes)");
+                    Console.Out.WriteLine($"  Size of heap reserve:              {pe64.mSizeOfHeapReserve} (bytes)");
+                    Console.Out.WriteLine($"  Size of heap commit:               {pe64.mSizeOfHeapCommit} (bytes)");
+                    Console.Out.WriteLine($"  Loader flags (obsolete):           0x{pe64.mLoaderFlags:x}");
+                    Console.Out.WriteLine($"  Number of directory entries:       {pe64.mNumberOfRvaAndSizes}");
+                }
+            }
+
+            {
+                var sht = metadata.OfType<SectionHeaderTable>().FirstOrDefault();
+                Console.Out.WriteLine($"\r\nSection Headers:");
+                Console.Out.WriteLine($"  [Nr] Name      VirtualAddress  VirtualSize");
+                Console.Out.WriteLine($"       Characteristics");
+                var i = 0;
+                foreach (var sh in sht)
+                {
+                    var name = System.Text.Encoding.ASCII.GetString(BitConverter.GetBytes(sh.Name).TakeWhile(b => b != 0x00).ToArray());
+                    Console.Out.WriteLine($"  [{i.ToString().PadLeft(2)}] {name.LeftAlignToSize(8)}  {sh.VirtualAddress.RightAlignHexToSize().LeftAlignToSize(14)}  {sh.VirtualSize.RightAlignHexToSize()}");
+                    var flagString = PackagerUtility.GetEnumFlagsShortName<SectionHeaderCharacteristics>(sh.Characteristics, ", ");
+                    Console.Out.WriteLine($"       {flagString}");
+
+                    i++;
+                }
+            }
+
+            {
+                var dd = metadata.OfType<PEDataDictionary>().FirstOrDefault();
+                if (!dd.Equals(default(PEDataDictionary)))
+                {
+                    Console.Out.WriteLine("\r\nPE Data Dictionaries:");
+                    var i = 0;
+                    foreach (var dde in dd)
+                    {
+                        if (dde.RelativeVirtualAddress > 0)
+                            Console.Out.WriteLine($"  {Enum.GetName(typeof(PEDataDictionaryIndex), i)?.LeftAlignToSize(30) ?? string.Empty} at 0x{dde.RelativeVirtualAddress:x}");
+                        i++;
+                    }
+                }
+            }
+
+            var verbosity = 1;
+            {
+                var idt = metadata.OfType<PEImportDirectoryTable>().FirstOrDefault();
+                var ilts = metadata.OfType<PEImportLookupTable>().ToArray();
+
+                if (idt == default(PEImportDirectoryTable))
+                    Console.Error.WriteLine("WARN: Missing Import Directory Table..");
+                else
+                {
+                    if (ilts.Length == 0)
+                        Console.Error.WriteLine("ERROR: Missing Import Lookup Table!");
+                    if (ilts.Length != idt.Count)
+                        Console.Error.WriteLine($"ERROR: Import Lookup Table count ({ilts.Length}) did not match directory table entry count ({idt.Count})!");
+
+                    Console.Out.WriteLine("\r\nImport Directory Table:");
+                    var i = 0;
+                    foreach (var ide in idt)
+                    {
+                        Console.Out.WriteLine($"  {ide.Name}");
+                        if (verbosity > 1)
+                        {
+                            var missingNames = 0;
+                            foreach (var ile in ilts[i])
+                            {
+                                if (!string.IsNullOrEmpty(ile.Value))
+                                    Console.Out.WriteLine($"    {ile.Value}");
+                                else
+                                    missingNames++;
+                            }
+
+                            if (missingNames > 0)
+                                Console.Out.WriteLine($"   ...and {missingNames} unresolvable ordinal imports");
+                        }
+                        i++;
+                    }
+                }
+            }
+
+        }
+
+        private static string GetWindowsVersion(UInt16 major, UInt16 minor)
+        {
+            if (major == 10 && minor == 0)
+                return "Windows 10/Server 2019/Server 2016";
+            if (major == 6 && minor == 3)
+                return "Windows 8.1/Server 2012 R2";
+            if (major == 6 && minor == 2)
+                return "Windows 8/Server 2012";
+            if (major == 6 && minor == 1)
+                return "Windows 7/Server 2008 R2";
+            if (major == 6 && minor == 0)
+                return "Windows Vista/Server 2008";
+            if (major == 5 && minor == 2)
+                return "Windows XP 64-Bit Edition/Server 2003/Server 2003 R2";
+            if (major == 5 && minor == 1)
+                return "Windows XP";
+            if (major == 5 && minor == 0)
+                return "Windows 2000/NT 5.0";
+            if (major == 4 && minor == 90)
+                return "Windows Me";
+            if (major == 4 && minor == 10)
+                return "Windows 98";
+            if (major == 4 && minor == 0)
+                return "Windows 95/NT 4.0";
+            if (major == 3 && minor == 51)
+                return "Windows NT 3.51";
+            if (major == 3 && minor == 5)
+                return "Windows NT 3.5";
+            if (major == 3 && minor == 2)
+                return "Windows 3.2";
+            if (major == 3 && minor == 11)
+                return "Windows for Workgroups 3.11";
+            if (major == 3 && minor == 1)
+                return "Windows 3.1/Windows NT 3.1";
+            if (major == 3 && minor == 0)
+                return "Windows 3.0";
+            if (major == 2 && minor == 11)
+                return "Windows 2.11 (1989)";
+            if (major == 2 && minor == 10)
+                return "Windows 2.10 (1988)";
+            if (major == 2 && minor == 3)
+                return "Windows 2.03 (1987)";
+            if (major == 1 && minor == 4)
+                return "Windows 1.04 (1987)";
+            if (major == 1 && minor == 3)
+                return "Windows 1.03 (1986)";
+            if (major == 1 && minor == 2)
+                return "Windows 1.02 (1986)";
+            if (major == 1 && minor == 0)
+                return "Windows 1.0 (1985)";
+
+            return "Unrecognized OS version";
+        }
+
     }
 }
