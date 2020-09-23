@@ -19,6 +19,9 @@ namespace picovm.Assembler
             "EDX", "DX", "DH", "DL",
             "RSI", "ESI", "SI",
             "RDI", "EDI", "DI",
+            "RBP", "EBP", "BP",
+            "RIP", "EIP", "IP",
+            "CS", "DS", "SS", "ES", "FS", "GS"
         };
 
         public static ulong ParseUInt64Constant(this string operand)

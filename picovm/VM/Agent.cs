@@ -14,34 +14,35 @@ namespace picovm.VM
         public const byte R_B = 1;
         public const byte R_C = 2;
         public const byte R_D = 3;
-        // Segment registers
-        public const byte R_CS = 4;
-        public const byte R_DS = 5;
-        public const byte R_ES = 6;
-        public const byte R_FS = 7;
-        public const byte R_GS = 8;
-        public const byte R_SS = 9;
         // Index and pointers
-        public const byte R_SI = 10;
-        public const byte R_DI = 11;
-        public const byte R_BP = 12;
-        public const byte R_IP = 13;
-        public const byte R_SP = 14;
+        public const byte R_SI = 4;
+        public const byte R_DI = 5;
+        public const byte R_BP = 6;
+        public const byte R_IP = 7;
+        public const byte R_SP = 8;
         // Indicator
-        public const byte R_FLAGS = 15;
+        public const byte R_FLAGS = 9;
+        public const byte R_8 = 10;
+        public const byte R_9 = 11;
+        public const byte R_10 = 12;
+        public const byte R_11 = 13;
+        public const byte R_12 = 14;
+        public const byte R_13 = 15;
+        public const byte R_14 = 16;
+        public const byte R_15 = 17;
 
-        public const byte R_8 = 16;
-        public const byte R_9 = 17;
-        public const byte R_10 = 18;
-        public const byte R_11 = 19;
-        public const byte R_12 = 20;
-        public const byte R_13 = 21;
-        public const byte R_14 = 22;
-        public const byte R_15 = 23;
-
+        // Segment registers
+        public const byte SR_CS = 0; // Code
+        public const byte SR_DS = 1; // Data
+        public const byte SR_SS = 2; // Stack
+        public const byte SR_ES = 3; // Extra Data
+        public const byte SR_FS = 4; // Extra Data #2
+        public const byte SR_GS = 5; // Extra Data #3 
         #endregion
 
-        protected ulong[] registers = new ulong[24];
+        protected ulong[] general_registers = new ulong[18];
+
+        protected ushort[] segment_registers = new ushort[6];
 
         protected bool[] flags = new bool[2];
 
@@ -108,9 +109,34 @@ namespace picovm.VM
                         ret = (uint)(u64 & uint.MaxValue);
                     }
                     break;
+                case Register.ESP:
                 case Register.SP:
                     {
                         var u64 = registers[R_SP];
+                        ret = (uint)(u64 & uint.MaxValue);
+                    }
+                    break;
+                case Register.EDI:
+                    {
+                        var u64 = registers[R_DI];
+                        ret = (uint)(u64 & uint.MaxValue);
+                    }
+                    break;
+                case Register.ESI:
+                    {
+                        var u64 = registers[R_SI];
+                        ret = (uint)(u64 & uint.MaxValue);
+                    }
+                    break;
+                case Register.EBP:
+                    {
+                        var u64 = registers[R_BP];
+                        ret = (uint)(u64 & uint.MaxValue);
+                    }
+                    break;
+                case Register.EIP:
+                    {
+                        var u64 = registers[R_IP];
                         ret = (uint)(u64 & uint.MaxValue);
                     }
                     break;
@@ -120,7 +146,7 @@ namespace picovm.VM
             return ret;
         }
 
-        public uint ReadExtendedRegister(Register reference) => ReadExtendedRegister(this.registers, reference);
+        public uint ReadExtendedRegister(Register reference) => ReadExtendedRegister(this.general_registers, reference);
 
         public ushort ReadRegister(Register reference)
         {
@@ -130,22 +156,46 @@ namespace picovm.VM
             switch (reference)
             {
                 case Register.AX:
-                    ret = (ushort)(registers[R_A] & (ulong)ushort.MaxValue);
+                    ret = (ushort)(general_registers[R_A] & (ulong)ushort.MaxValue);
                     break;
                 case Register.BX:
-                    ret = (ushort)(registers[R_B] & (ulong)ushort.MaxValue);
+                    ret = (ushort)(general_registers[R_B] & (ulong)ushort.MaxValue);
                     break;
                 case Register.CX:
-                    ret = (ushort)(registers[R_C] & (ulong)ushort.MaxValue);
+                    ret = (ushort)(general_registers[R_C] & (ulong)ushort.MaxValue);
                     break;
                 case Register.DX:
-                    ret = (ushort)(registers[R_D] & (ulong)ushort.MaxValue);
+                    ret = (ushort)(general_registers[R_D] & (ulong)ushort.MaxValue);
                     break;
                 case Register.DI:
-                    ret = (ushort)(registers[R_DI] & (ulong)ushort.MaxValue);
+                    ret = (ushort)(general_registers[R_DI] & (ulong)ushort.MaxValue);
                     break;
                 case Register.SI:
-                    ret = (ushort)(registers[R_SI] & (ulong)ushort.MaxValue);
+                    ret = (ushort)(general_registers[R_SI] & (ulong)ushort.MaxValue);
+                    break;
+                case Register.BP:
+                    ret = (ushort)(general_registers[R_BP] & (ulong)ushort.MaxValue);
+                    break;
+                case Register.IP:
+                    ret = (ushort)(general_registers[R_IP] & (ulong)ushort.MaxValue);
+                    break;
+                case Register.CS:
+                    ret = segment_registers[SR_CS];
+                    break;
+                case Register.DS:
+                    ret = segment_registers[SR_DS];
+                    break;
+                case Register.SS:
+                    ret = segment_registers[SR_SS];
+                    break;
+                case Register.ES:
+                    ret = segment_registers[SR_ES];
+                    break;
+                case Register.FS:
+                    ret = segment_registers[SR_FS];
+                    break;
+                case Register.GS:
+                    ret = segment_registers[SR_GS];
                     break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
@@ -161,28 +211,28 @@ namespace picovm.VM
             switch (reference)
             {
                 case Register.AH:
-                    ret = (byte)((registers[R_A] & (ulong)0xFF00) >> 8);
+                    ret = (byte)((general_registers[R_A] & (ulong)0xFF00) >> 8);
                     break;
                 case Register.AL:
-                    ret = (byte)(registers[R_A] & (ulong)0x00FF);
+                    ret = (byte)(general_registers[R_A] & (ulong)0x00FF);
                     break;
                 case Register.BH:
-                    ret = (byte)((registers[R_B] & (ulong)0xFF00) >> 8);
+                    ret = (byte)((general_registers[R_B] & (ulong)0xFF00) >> 8);
                     break;
                 case Register.BL:
-                    ret = (byte)(registers[R_B] & (ulong)0x00FF);
+                    ret = (byte)(general_registers[R_B] & (ulong)0x00FF);
                     break;
                 case Register.CH:
-                    ret = (byte)((registers[R_C] & (ulong)0xFF00) >> 8);
+                    ret = (byte)((general_registers[R_C] & (ulong)0xFF00) >> 8);
                     break;
                 case Register.CL:
-                    ret = (byte)(registers[R_C] & (ulong)0x00FF);
+                    ret = (byte)(general_registers[R_C] & (ulong)0x00FF);
                     break;
                 case Register.DH:
-                    ret = (byte)((registers[R_D] & (ulong)0xFF00) >> 8);
+                    ret = (byte)((general_registers[R_D] & (ulong)0xFF00) >> 8);
                     break;
                 case Register.DL:
-                    ret = (byte)(registers[R_D] & (ulong)0x00FF);
+                    ret = (byte)(general_registers[R_D] & (ulong)0x00FF);
                     break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
@@ -208,6 +258,7 @@ namespace picovm.VM
                 case Register.EDX:
                     registers[R_D] = (ulong)hi << 32 | lo;
                     break;
+                case Register.ESP:
                 case Register.SP:
                     registers[R_SP] = (ulong)hi << 32 | lo;
                     break;
@@ -216,7 +267,7 @@ namespace picovm.VM
             }
         }
 
-        public void WriteExtendedRegister(Register reference, uint value) => WriteExtendedRegister(this.registers, reference, value);
+        public void WriteExtendedRegister(Register reference, uint value) => WriteExtendedRegister(this.general_registers, reference, value);
 
         public static void WriteExtendedRegister(ulong[] registers, Register reference, int value)
         {
@@ -251,22 +302,46 @@ namespace picovm.VM
             switch (reference)
             {
                 case Register.AX:
-                    registers[R_A] = registers[R_A] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    general_registers[R_A] = general_registers[R_A] & ~((ulong)ushort.MaxValue) | (ulong)value;
                     break;
                 case Register.BX:
-                    registers[R_B] = registers[R_B] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    general_registers[R_B] = general_registers[R_B] & ~((ulong)ushort.MaxValue) | (ulong)value;
                     break;
                 case Register.CX:
-                    registers[R_C] = registers[R_C] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    general_registers[R_C] = general_registers[R_C] & ~((ulong)ushort.MaxValue) | (ulong)value;
                     break;
                 case Register.DX:
-                    registers[R_D] = registers[R_D] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    general_registers[R_D] = general_registers[R_D] & ~((ulong)ushort.MaxValue) | (ulong)value;
                     break;
                 case Register.DI:
-                    registers[R_DI] = registers[R_DI] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    general_registers[R_DI] = general_registers[R_DI] & ~((ulong)ushort.MaxValue) | (ulong)value;
                     break;
                 case Register.SI:
-                    registers[R_SI] = registers[R_SI] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    general_registers[R_SI] = general_registers[R_SI] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    break;
+                case Register.BP:
+                    general_registers[R_BP] = general_registers[R_BP] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    break;
+                case Register.IP:
+                    general_registers[R_IP] = general_registers[R_IP] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    break;
+                case Register.CS:
+                    segment_registers[SR_CS] = value;
+                    break;
+                case Register.DS:
+                    segment_registers[SR_DS] = value;
+                    break;
+                case Register.SS:
+                    segment_registers[SR_SS] = value;
+                    break;
+                case Register.ES:
+                    segment_registers[SR_ES] = value;
+                    break;
+                case Register.FS:
+                    segment_registers[SR_FS] = value;
+                    break;
+                case Register.GS:
+                    segment_registers[SR_GS] = value;
                     break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
@@ -279,28 +354,28 @@ namespace picovm.VM
             switch (reference)
             {
                 case Register.AH:
-                    registers[R_A] = registers[R_A] & ~((ulong)0xFF00) | ((ulong)value << 8);
+                    general_registers[R_A] = general_registers[R_A] & ~((ulong)0xFF00) | ((ulong)value << 8);
                     break;
                 case Register.AL:
-                    registers[R_A] = registers[R_A] & ~((ulong)0x00FF) | (ulong)value;
+                    general_registers[R_A] = general_registers[R_A] & ~((ulong)0x00FF) | (ulong)value;
                     break;
                 case Register.BH:
-                    registers[R_B] = registers[R_B] & ~((ulong)0xFF00) | ((ulong)value << 8);
+                    general_registers[R_B] = general_registers[R_B] & ~((ulong)0xFF00) | ((ulong)value << 8);
                     break;
                 case Register.BL:
-                    registers[R_B] = registers[R_B] & ~((ulong)0x00FF) | (ulong)value;
+                    general_registers[R_B] = general_registers[R_B] & ~((ulong)0x00FF) | (ulong)value;
                     break;
                 case Register.CH:
-                    registers[R_C] = registers[R_C] & ~((ulong)0xFF00) | ((ulong)value << 8);
+                    general_registers[R_C] = general_registers[R_C] & ~((ulong)0xFF00) | ((ulong)value << 8);
                     break;
                 case Register.CL:
-                    registers[R_C] = registers[R_C] & ~((ulong)0x00FF) | (ulong)value;
+                    general_registers[R_C] = general_registers[R_C] & ~((ulong)0x00FF) | (ulong)value;
                     break;
                 case Register.DH:
-                    registers[R_D] = registers[R_D] & ~((ulong)0xFF00) | ((ulong)value << 8);
+                    general_registers[R_D] = general_registers[R_D] & ~((ulong)0xFF00) | ((ulong)value << 8);
                     break;
                 case Register.DL:
-                    registers[R_D] = registers[R_D] & ~((ulong)0x00FF) | (ulong)value;
+                    general_registers[R_D] = general_registers[R_D] & ~((ulong)0x00FF) | (ulong)value;
                     break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
@@ -498,7 +573,7 @@ namespace picovm.VM
                         break;
                     }
                 case Bytecode.SYSCALL:
-                    if (kernel.HandleInterrupt(ref registers, ref memory))
+                    if (kernel.HandleInterrupt(ref general_registers, ref memory))
                         return 0;
                     break;
                 case Bytecode.INT:
@@ -511,7 +586,7 @@ namespace picovm.VM
                         {
                             // Linux kernel interrupt
                             case 0x80:
-                                if (kernel.HandleInterrupt(ref registers, ref memory))
+                                if (kernel.HandleInterrupt(ref general_registers, ref memory))
                                     return 0;
                                 break;
                         }
@@ -661,7 +736,12 @@ namespace picovm.VM
 
                         if (operand == Register.EAX || operand == Register.EBX || operand == Register.ECX || operand == Register.EDX || operand == Register.EDI || operand == Register.ESI)
                             WriteExtendedRegister(operand, StackPop32());
-                        else if (operand == Register.AX || operand == Register.BX || operand == Register.CX || operand == Register.DX || operand == Register.DI || operand == Register.SI)
+                        else if (
+                            operand == Register.AX || operand == Register.BX || operand == Register.CX || operand == Register.DX ||
+                            operand == Register.DI || operand == Register.SI || operand == Register.BP || operand == Register.IP ||
+                            operand == Register.CS || operand == Register.DS ||
+                            operand == Register.SS || operand == Register.ES ||
+                            operand == Register.FS || operand == Register.GS)
                             WriteRegister(operand, StackPop16());
                         else if (operand == Register.AH || operand == Register.AL
                             || operand == Register.BH || operand == Register.BL
@@ -739,7 +819,12 @@ namespace picovm.VM
                             var val = BitConverter.ToUInt32(memory, (int)loc);
                             StackPush(val);
                         }
-                        else if (operand == Register.AX || operand == Register.BX || operand == Register.CX || operand == Register.DX || operand == Register.DI || operand == Register.SI)
+                        else if (
+                            operand == Register.AX || operand == Register.BX || operand == Register.CX || operand == Register.DX ||
+                            operand == Register.DI || operand == Register.SI || operand == Register.BP || operand == Register.IP ||
+                            operand == Register.CS || operand == Register.DS ||
+                            operand == Register.SS || operand == Register.ES ||
+                            operand == Register.FS || operand == Register.GS)
                         {
                             var loc = ReadRegister(operand);
                             var val = BitConverter.ToUInt16(memory, (int)loc);
@@ -802,7 +887,12 @@ namespace picovm.VM
                                 var dstVal = ReadExtendedRegister(dst);
                                 WriteExtendedRegister(dst, dstVal ^ srcVal);
                             }
-                            else if (dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX || dst == Register.DI || dst == Register.SI)
+                            else if (
+                                dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX ||
+                                dst == Register.DI || dst == Register.SI || dst == Register.BP || dst == Register.IP ||
+                                dst == Register.CS || dst == Register.DS ||
+                                dst == Register.SS || dst == Register.ES ||
+                                dst == Register.FS || dst == Register.GS)
                                 throw new InvalidOperationException("ERROR: XOR dst is a word but source is a dword");
                             else if (dst == Register.AH || dst == Register.AL
                                 || dst == Register.BH || dst == Register.BL
@@ -812,7 +902,12 @@ namespace picovm.VM
                             else
                                 throw new InvalidOperationException("ERROR: Unrecognized register for XOR dst");
                         }
-                        else if (src == Register.AX || src == Register.BX || src == Register.CX || src == Register.DX || src == Register.DI || src == Register.SI)
+                        else if (
+                                src == Register.AX || src == Register.BX || src == Register.CX || src == Register.DX ||
+                                src == Register.DI || src == Register.SI || src == Register.BP || src == Register.IP ||
+                                src == Register.CS || src == Register.DS ||
+                                src == Register.SS || src == Register.ES ||
+                                src == Register.FS || src == Register.GS)
                         {
                             var srcVal = ReadRegister(src);
                             if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX || dst == Register.EDI || dst == Register.ESI)
@@ -820,7 +915,12 @@ namespace picovm.VM
                                 var dstVal = ReadExtendedRegister(dst);
                                 WriteExtendedRegister(dst, dstVal ^ srcVal);
                             }
-                            else if (dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX || dst == Register.DI || dst == Register.SI)
+                            else if (
+                                dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX ||
+                                dst == Register.DI || dst == Register.SI || dst == Register.BP || dst == Register.IP ||
+                                dst == Register.CS || dst == Register.DS ||
+                                dst == Register.SS || dst == Register.ES ||
+                                dst == Register.FS || dst == Register.GS)
                             {
                                 var dstVal = ReadRegister(dst);
                                 WriteRegister(dst, (ushort)(dstVal ^ srcVal));
@@ -844,7 +944,12 @@ namespace picovm.VM
                                 var dstVal = ReadExtendedRegister(dst);
                                 WriteExtendedRegister(dst, dstVal ^ srcVal);
                             }
-                            else if (dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX || dst == Register.DI || dst == Register.SI)
+                            else if (
+                                dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX ||
+                                dst == Register.DI || dst == Register.SI || dst == Register.BP || dst == Register.IP ||
+                                dst == Register.CS || dst == Register.DS ||
+                                dst == Register.SS || dst == Register.ES ||
+                                dst == Register.FS || dst == Register.GS)
                             {
                                 var dstVal = ReadRegister(dst);
                                 WriteRegister(dst, (ushort)(dstVal ^ srcVal));

@@ -38,10 +38,17 @@ namespace picovm.VM
                     return registers[R_C];
                 case Register.RDX:
                     return registers[R_D];
-                case Register.RDI:
-                    return registers[R_DI];
                 case Register.RSI:
                     return registers[R_SI];
+                case Register.RDI:
+                    return registers[R_DI];
+                case Register.RBP:
+                    return registers[R_BP];
+                case Register.RIP:
+                    return registers[R_IP];
+                case Register.RSP:
+                case Register.SP:
+                    return registers[R_SP];
                 case Register.R8:
                     return registers[R_8];
                 case Register.R9:
@@ -58,14 +65,12 @@ namespace picovm.VM
                     return registers[R_14];
                 case Register.R15:
                     return registers[R_15];
-                case Register.SP:
-                    return registers[R_SP];
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown x64 register {reference}!");
             }
         }
 
-        public ulong ReadR64Register(Register reference) => ReadR64Register(this.registers, reference);
+        public ulong ReadR64Register(Register reference) => ReadR64Register(this.general_registers, reference);
 
         public static void WriteR64Register(ulong[] registers, Register reference, ulong value)
         {
@@ -82,6 +87,21 @@ namespace picovm.VM
                     break;
                 case Register.RDX:
                     registers[R_D] = value;
+                    break;
+                case Register.SP:
+                    registers[R_SP] = value;
+                    break;
+                case Register.RDI:
+                    registers[R_DI] = value;
+                    break;
+                case Register.RSI:
+                    registers[R_SI] = value;
+                    break;
+                case Register.RBP:
+                    registers[R_BP] = value;
+                    break;
+                case Register.RIP:
+                    registers[R_IP] = value;
                     break;
                 case Register.R8:
                     registers[R_8] = value;
@@ -107,21 +127,12 @@ namespace picovm.VM
                 case Register.R15:
                     registers[R_15] = value;
                     break;
-                case Register.SP:
-                    registers[R_SP] = value;
-                    break;
-                case Register.RDI:
-                    registers[R_DI] = value;
-                    break;
-                case Register.RSI:
-                    registers[R_SI] = value;
-                    break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown x64 register {reference}!");
             }
         }
 
-        public void WriteR64Register(Register reference, ulong value) => WriteR64Register(this.registers, reference, value);
+        public void WriteR64Register(Register reference, ulong value) => WriteR64Register(this.general_registers, reference, value);
 
         public ulong StackPop64()
         {
@@ -326,7 +337,7 @@ namespace picovm.VM
                         break;
                     }
                 case Bytecode.SYSCALL:
-                    if (kernel.HandleInterrupt(ref registers, ref memory))
+                    if (kernel.HandleInterrupt(ref general_registers, ref memory))
                         return 0;
                     break;
                 case Bytecode.INT:
@@ -339,7 +350,7 @@ namespace picovm.VM
                         {
                             // Linux kernel interrupt
                             case 0x80:
-                                if (kernel.HandleInterrupt(ref registers, ref memory))
+                                if (kernel.HandleInterrupt(ref general_registers, ref memory))
                                     return 0;
                                 break;
                         }
@@ -531,7 +542,12 @@ namespace picovm.VM
 
                         if (operand == Register.EAX || operand == Register.EBX || operand == Register.ECX || operand == Register.EDX || operand == Register.EDI || operand == Register.ESI)
                             WriteExtendedRegister(operand, StackPop32());
-                        else if (operand == Register.AX || operand == Register.BX || operand == Register.CX || operand == Register.DX || operand == Register.DI || operand == Register.SI)
+                        else if (
+                            operand == Register.AX || operand == Register.BX || operand == Register.CX || operand == Register.DX ||
+                            operand == Register.DI || operand == Register.SI || operand == Register.BP || operand == Register.IP ||
+                            operand == Register.CS || operand == Register.DS ||
+                            operand == Register.SS || operand == Register.ES ||
+                            operand == Register.FS || operand == Register.GS)
                             WriteRegister(operand, StackPop16());
                         else if (operand == Register.AH || operand == Register.AL
                             || operand == Register.BH || operand == Register.BL
@@ -618,7 +634,12 @@ namespace picovm.VM
                             var val = BitConverter.ToUInt32(memory, (int)loc);
                             StackPush(val);
                         }
-                        else if (operand == Register.AX || operand == Register.BX || operand == Register.CX || operand == Register.DX || operand == Register.DI || operand == Register.SI)
+                        else if (
+                            operand == Register.AX || operand == Register.BX || operand == Register.CX || operand == Register.DX ||
+                            operand == Register.DI || operand == Register.SI || operand == Register.BP || operand == Register.IP ||
+                            operand == Register.CS || operand == Register.DS ||
+                            operand == Register.SS || operand == Register.ES ||
+                            operand == Register.FS || operand == Register.GS)
                         {
                             var loc = ReadRegister(operand);
                             var val = BitConverter.ToUInt16(memory, (int)loc);
@@ -681,7 +702,12 @@ namespace picovm.VM
                                 var dstVal = ReadExtendedRegister(dst);
                                 WriteExtendedRegister(dst, dstVal ^ srcVal);
                             }
-                            else if (dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX || dst == Register.DI || dst == Register.SI)
+                            else if (
+                                dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX ||
+                                dst == Register.DI || dst == Register.SI || dst == Register.BP || dst == Register.IP ||
+                                dst == Register.CS || dst == Register.DS ||
+                                dst == Register.SS || dst == Register.ES ||
+                                dst == Register.FS || dst == Register.GS)
                                 throw new InvalidOperationException("ERROR: XOR dst is a word but source is a dword");
                             else if (dst == Register.AH || dst == Register.AL
                                 || dst == Register.BH || dst == Register.BL
@@ -691,7 +717,12 @@ namespace picovm.VM
                             else
                                 throw new InvalidOperationException("ERROR: Unrecognized register for XOR dst");
                         }
-                        else if (src == Register.AX || src == Register.BX || src == Register.CX || src == Register.DX || src == Register.DI || src == Register.SI)
+                        else if (
+                                src == Register.AX || src == Register.BX || src == Register.CX || src == Register.DX ||
+                                src == Register.DI || src == Register.SI || src == Register.BP || src == Register.IP ||
+                                src == Register.CS || src == Register.DS ||
+                                src == Register.SS || src == Register.ES ||
+                                src == Register.FS || src == Register.GS)
                         {
                             var srcVal = ReadRegister(src);
                             if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX || dst == Register.EDI || dst == Register.ESI)
@@ -699,7 +730,12 @@ namespace picovm.VM
                                 var dstVal = ReadExtendedRegister(dst);
                                 WriteExtendedRegister(dst, dstVal ^ srcVal);
                             }
-                            else if (dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX || dst == Register.DI || dst == Register.SI)
+                            else if (
+                                dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX ||
+                                dst == Register.DI || dst == Register.SI || dst == Register.BP || dst == Register.IP ||
+                                dst == Register.CS || dst == Register.DS ||
+                                dst == Register.SS || dst == Register.ES ||
+                                dst == Register.FS || dst == Register.GS)
                             {
                                 var dstVal = ReadRegister(dst);
                                 WriteRegister(dst, (ushort)(dstVal ^ srcVal));
@@ -723,7 +759,12 @@ namespace picovm.VM
                                 var dstVal = ReadExtendedRegister(dst);
                                 WriteExtendedRegister(dst, dstVal ^ srcVal);
                             }
-                            else if (dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX || dst == Register.DI || dst == Register.SI)
+                            else if (
+                                dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX ||
+                                dst == Register.DI || dst == Register.SI || dst == Register.BP || dst == Register.IP ||
+                                dst == Register.CS || dst == Register.DS ||
+                                dst == Register.SS || dst == Register.ES ||
+                                dst == Register.FS || dst == Register.GS)
                             {
                                 var dstVal = ReadRegister(dst);
                                 WriteRegister(dst, (ushort)(dstVal ^ srcVal));

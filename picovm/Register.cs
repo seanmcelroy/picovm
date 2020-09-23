@@ -6,6 +6,19 @@ namespace picovm
     {
         Unknown = 0,
 
+        [Description("CS")]
+        CS = 10,
+        [Description("DS")]
+        DS = 11,
+        [Description("SS")]
+        SS = 12,
+        [Description("ES")]
+        ES = 13,
+        [Description("FS")]
+        FS = 14,
+        [Description("GS")]
+        GS = 15,
+
         [Description("RAX")]
         RAX = 100,
         [Description("EAX")]
@@ -51,8 +64,12 @@ namespace picovm
         [Description("DL")]
         DL = 119,
 
+        [Description("RSP")]
+        RSP = 120,
         [Description("ESP")]
-        SP = 120,
+        ESP = 121,
+        [Description("SP")]
+        SP = 122,
 
         [Description("RDI")]
         RDI = 130,
@@ -67,6 +84,20 @@ namespace picovm
         ESI = 136,
         [Description("SI")]
         SI = 137,
+
+        [Description("RBP")]
+        RBP = 140,
+        [Description("EBP")]
+        EBP = 141,
+        [Description("BP")]
+        BP = 142,
+
+        [Description("RIP")]
+        RIP = 150,
+        [Description("EIP")]
+        EIP = 151,
+        [Description("IP")]
+        IP = 152,
 
         R8 = 208,
         R9 = 209,

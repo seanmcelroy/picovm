@@ -62,6 +62,7 @@ namespace picovm.Assembler
 
             ushort lineNumber = 0;
 
+            var defines = new Dictionary<string, string>();
             var macros = new List<Macro>();
             var inMacroDefinition = false;
             foreach (var programLine in programLines)
@@ -74,8 +75,22 @@ namespace picovm.Assembler
                 if (string.IsNullOrWhiteSpace(line))
                     continue;
 
+                // Defines
+                if (line.TrimStart(' ', '\t').StartsWith("%define ", StringComparison.OrdinalIgnoreCase))
+                {
+                    var defineParts = line.Substring(line.IndexOf("%define ") + 8).Split(' ', '\t', StringSplitOptions.RemoveEmptyEntries);
+                    var term = defineParts[0];
+                    var definition = line.Substring(line.IndexOf(term) + term.Length).TrimStart(' ', '\t');
+                    defines.Add(term, definition);
+                    continue;
+                }
+                foreach (var define in defines)
+                {
+                    line = line.Replace(define.Key, define.Value);
+                }
+
                 // Macros
-                if (line.TrimStart(' ', '\t').StartsWith("%macro"))
+                if (line.TrimStart(' ', '\t').StartsWith("%macro", StringComparison.OrdinalIgnoreCase))
                 {
                     inMacroDefinition = true;
                     var macroParts = line.Substring(line.IndexOf("%macro") + 6).Split(' ', '\t', StringSplitOptions.RemoveEmptyEntries);
@@ -84,7 +99,7 @@ namespace picovm.Assembler
                 }
                 else if (inMacroDefinition)
                 {
-                    if (line.TrimStart(' ', '\t').StartsWith("%endmacro"))
+                    if (line.TrimStart(' ', '\t').StartsWith("%endmacro", StringComparison.OrdinalIgnoreCase))
                     {
                         inMacroDefinition = false;
                         continue;
@@ -100,15 +115,11 @@ namespace picovm.Assembler
                     // New section
                     if (line.IndexOf(".text", StringComparison.OrdinalIgnoreCase) > -1)
                     {
-                        // if (dataSegmentStarted)
-                        //     throw new InvalidOperationException("Currently the compiler only supports data sections after all text sections");
-
                         currentSection = new KeyValuePair<SectionType, List<string>>(SectionType.Text, new List<string>());
                         sections.Add(currentSection.Key, currentSection.Value);
                     }
                     else if (line.IndexOf(".data", StringComparison.OrdinalIgnoreCase) > -1)
                     {
-                        //  dataSegmentStarted = true;
                         currentSection = new KeyValuePair<SectionType, List<string>>(SectionType.Data, new List<string>());
                         sections.Add(currentSection.Key, currentSection.Value);
                     }
@@ -122,23 +133,29 @@ namespace picovm.Assembler
                         errors.Add(new CompilationError($"Unknown section type: {line}", sourceFilename, lineNumber));
                         throw new InvalidOperationException($"Unknown section type: '{line}' ({sourceFilename}:{lineNumber})");
                     }
+                    continue;
                 }
-                else
-                {
-                    // Special handling for linker directives at this layer-above.
-                    switch (currentSection.Key)
-                    {
-                        case SectionType.Text:
-                            if (line.StartsWith("global ", StringComparison.OrdinalIgnoreCase))
-                            {
-                                entryPointSymbol = line.Substring(line.IndexOf("global ", StringComparison.OrdinalIgnoreCase) + "global ".Length);
-                                continue;
-                            }
-                            break;
-                    }
 
-                    currentSection.Value.Add(line);
+                // No .section defined.  Assume we are real-mode assembly and auto-create a text section.
+                if (currentSection.Equals(default(KeyValuePair<SectionType, List<string>>)))
+                {
+                    currentSection = new KeyValuePair<SectionType, List<string>>(SectionType.Text, new List<string>());
+                    sections.Add(currentSection.Key, currentSection.Value);
                 }
+
+                // Special handling for linker directives at this layer-above.
+                switch (currentSection.Key)
+                {
+                    case SectionType.Text:
+                        if (line.StartsWith("global ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            entryPointSymbol = line.Substring(line.IndexOf("global ", StringComparison.OrdinalIgnoreCase) + "global ".Length);
+                            continue;
+                        }
+                        break;
+                }
+
+                currentSection.Value.Add(line);
             }
 
             foreach (var section in sections)
@@ -775,7 +792,7 @@ namespace picovm.Assembler
                                 throw new NotImplementedException();
                             }
                         default:
-                            throw new Exception($"ERROR: Unable to parse MOV parameters into an opcode, unhandled dst type: {line}");
+                                throw new Exception($"ERROR: Unable to parse MOV parameters into an opcode, unhandled dst type: {line}");
                     }
 
                     throw new Exception($"ERROR: Unable to parse MOV parameters into an opcode: {line}");
