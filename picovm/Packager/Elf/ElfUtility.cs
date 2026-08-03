@@ -12,7 +12,7 @@ namespace picovm.Packager.Elf
                 throw new ArgumentException("T must be an enumerated type");
 
             var twoBytes = new byte[2];
-            stream.Read(twoBytes);
+            stream.ReadExactly(twoBytes);
             var value = BitConverter.ToUInt16(twoBytes);
 
             if (Enum.GetName(typeof(T), value) == null)
@@ -28,7 +28,7 @@ namespace picovm.Packager.Elf
                 throw new ArgumentException("T must be an enumerated type");
 
             var fourBytes = new byte[4];
-            stream.Read(fourBytes);
+            stream.ReadExactly(fourBytes);
             var value = BitConverter.ToUInt32(fourBytes);
 
             if (Enum.GetName(typeof(T), value) == null)

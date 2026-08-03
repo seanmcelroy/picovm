@@ -74,7 +74,7 @@ namespace picovm.Packager.Elf.Elf64
             }
             catch (Exception ex)
             {
-                header = default(Header64);
+                header = default;
                 Console.Error.WriteLine(ex);
                 return false;
             }
@@ -83,20 +83,20 @@ namespace picovm.Packager.Elf.Elf64
         public void Read(Stream stream)
         {
             var magic = new byte[MAGIC.Length];
-            stream.Read(magic);
+            stream.ReadExactly(magic);
             if (!MAGIC.SequenceEqual(magic))
                 throw new BadImageFormatException("Magic value is not present for an ELF file");
 
-            EI_CLASS = stream.ReadByteAndParse<HeaderIdentityClass>(HeaderIdentityClass.ELFCLASSNONE);
-            EI_DATA = stream.ReadByteAndParse<HeaderIdentityData>(HeaderIdentityData.ELFDATANONE);
-            EI_VERSION = stream.ReadByteAndParse<HeaderIdentityVersion>(HeaderIdentityVersion.EI_CURRENT);
-            EI_OSABI = stream.ReadByteAndParse<HeaderOsAbiVersion>(HeaderOsAbiVersion.ELFOSABI_NONE);
+            EI_CLASS = stream.ReadByteAndParse(HeaderIdentityClass.ELFCLASSNONE);
+            EI_DATA = stream.ReadByteAndParse(HeaderIdentityData.ELFDATANONE);
+            EI_VERSION = stream.ReadByteAndParse(HeaderIdentityVersion.EI_CURRENT);
+            EI_OSABI = stream.ReadByteAndParse(HeaderOsAbiVersion.ELFOSABI_NONE);
             EI_ABIVERSION = (byte)stream.ReadByte();
 
             stream.Seek(16, SeekOrigin.Begin);
-            E_TYPE = stream.ReadHalfWord<HeaderType>(HeaderType.ET_NONE);
-            E_MACHINE = stream.ReadHalfWord<HeaderMachine>(HeaderMachine.EM_NONE);
-            E_VERSION = stream.ReadWord<HeaderVersion>(HeaderVersion.EV_NONE);
+            E_TYPE = stream.ReadHalfWord(HeaderType.ET_NONE);
+            E_MACHINE = stream.ReadHalfWord(HeaderMachine.EM_NONE);
+            E_VERSION = stream.ReadWord(HeaderVersion.EV_NONE);
             E_ENTRY = stream.ReadAddress64();
             E_PHOFF = stream.ReadOffset64();
             E_SHOFF = stream.ReadOffset64();

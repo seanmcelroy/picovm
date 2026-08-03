@@ -444,29 +444,32 @@ namespace picovm.Assembler
                     if (dataSegmentSize == null)
                         throw new InvalidOperationException("Data segment size is null when attempting to perform BSS replacements");
 
-                    var tsrBss = textSymbolReferenceOffsets.Where(tsr => bssSymbols.Exists(bss => string.Compare(bss.name, tsr.Name, StringComparison.InvariantCultureIgnoreCase) == 0)).ToArray();
-                    foreach (var tsr in tsrBss)
+                    if (textSymbolReferenceOffsets != null)
                     {
-                        var bss = bssSymbols.Single(bss => string.Compare(bss.name, tsr.Name, StringComparison.InvariantCultureIgnoreCase) == 0);
-                        var bssIndex = bssSymbols.IndexOf(bss);
-                        ValueType bssOffset;
-                        if (typeof(TAddrSize) == typeof(UInt32))
+                        var tsrBss = textSymbolReferenceOffsets.Where(tsr => bssSymbols.Exists(bss => string.Compare(bss.name, tsr.Name, StringComparison.InvariantCultureIgnoreCase) == 0)).ToArray();
+                        foreach (var tsr in tsrBss)
                         {
-                            bssOffset = (UInt32)textSegmentBase + textSegmentSize.Value + dataSegmentSize.Value + (UInt32)bssSymbols.Take(bssIndex).Sum(b => b.Size());
-                            for (var i = 0; i < 4; i++)
-                                if (textSegment[(long)((UInt32)tsr.TextSegmentReferenceOffset + i)] != 0xFF)
-                                    throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
-                            Array.Copy(BitConverter.GetBytes((UInt32)bssOffset), (long)0, textSegment, (long)(UInt32)tsr.TextSegmentReferenceOffset, 4);
+                            var bss = bssSymbols.Single(bss => string.Compare(bss.name, tsr.Name, StringComparison.InvariantCultureIgnoreCase) == 0);
+                            var bssIndex = bssSymbols.IndexOf(bss);
+                            ValueType bssOffset;
+                            if (typeof(TAddrSize) == typeof(UInt32))
+                            {
+                                bssOffset = (UInt32)textSegmentBase + textSegmentSize.Value + dataSegmentSize.Value + (UInt32)bssSymbols.Take(bssIndex).Sum(b => b.Size());
+                                for (var i = 0; i < 4; i++)
+                                    if (textSegment[(long)((UInt32)tsr.TextSegmentReferenceOffset + i)] != 0xFF)
+                                        throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
+                                Array.Copy(BitConverter.GetBytes((UInt32)bssOffset), (long)0, textSegment, (long)(UInt32)tsr.TextSegmentReferenceOffset, 4);
+                            }
+                            else
+                            {
+                                bssOffset = (UInt64)textSegmentBase + textSegmentSize.Value + dataSegmentSize.Value + (UInt64)bssSymbols.Take(bssIndex).Sum(b => b.Size());
+                                for (var i = 0; i < 4; i++)
+                                    if (textSegment[(long)((UInt64)tsr.TextSegmentReferenceOffset + (UInt64)i)] != 0xFF)
+                                        throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
+                                Array.Copy(BitConverter.GetBytes((UInt64)bssOffset), (long)0, textSegment, (long)(UInt64)tsr.TextSegmentReferenceOffset, 4);
+                            }
+                            Console.Out.WriteLine($"\tBSS {bss.name}->{bssOffset}");
                         }
-                        else
-                        {
-                            bssOffset = (UInt64)textSegmentBase + textSegmentSize.Value + dataSegmentSize.Value + (UInt64)bssSymbols.Take(bssIndex).Sum(b => b.Size());
-                            for (var i = 0; i < 4; i++)
-                                if (textSegment[(long)((UInt64)tsr.TextSegmentReferenceOffset + (UInt64)i)] != 0xFF)
-                                    throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
-                            Array.Copy(BitConverter.GetBytes((UInt64)bssOffset), (long)0, textSegment, (long)(UInt64)tsr.TextSegmentReferenceOffset, 4);
-                        }
-                        Console.Out.WriteLine($"\tBSS {bss.name}->{bssOffset}");
                     }
                 }
             }
@@ -792,7 +795,7 @@ namespace picovm.Assembler
                                 throw new NotImplementedException();
                             }
                         default:
-                                throw new Exception($"ERROR: Unable to parse MOV parameters into an opcode, unhandled dst type: {line}");
+                            throw new Exception($"ERROR: Unable to parse MOV parameters into an opcode, unhandled dst type: {line}");
                     }
 
                     throw new Exception($"ERROR: Unable to parse MOV parameters into an opcode: {line}");

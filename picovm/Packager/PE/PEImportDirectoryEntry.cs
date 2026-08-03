@@ -18,16 +18,16 @@ namespace picovm.Packager.PE
 
         public PEImportDirectoryEntry(Stream stream, IEnumerable<SectionHeaderEntry> sectionHeaders)
         {
-            this.ImportLookupTableRva = stream.ReadUInt32();
-            this.Timestamp = stream.ReadUInt32();
-            this.ForwarderChain = stream.ReadUInt32();
-            this.NameRva = stream.ReadUInt32();
-            this.ImportAddressTableRva = stream.ReadUInt32();
+            ImportLookupTableRva = stream.ReadUInt32();
+            Timestamp = stream.ReadUInt32();
+            ForwarderChain = stream.ReadUInt32();
+            NameRva = stream.ReadUInt32();
+            ImportAddressTableRva = stream.ReadUInt32();
             var current = stream.Position;
 
-            if (this.NameRva > 0)
+            if (NameRva > 0)
             {
-                stream.SeekToRVA(sectionHeaders, this.NameRva);
+                stream.SeekToRVA(sectionHeaders, NameRva);
                 _name = stream.ReadNulTerminatedString();
                 stream.Seek(current, SeekOrigin.Begin);
             }
@@ -37,19 +37,18 @@ namespace picovm.Packager.PE
 
         public override bool Equals(object? obj)
         {
-            if (!(obj is PEImportDirectoryEntry))
+            if (obj is not PEImportDirectoryEntry mys)
                 return false;
 
-            var mys = (PEImportDirectoryEntry)obj;
             return
-                mys.ImportLookupTableRva == this.ImportLookupTableRva &&
-                mys.Timestamp == this.Timestamp &&
-                mys.ForwarderChain == this.ForwarderChain &&
-                mys.NameRva == this.NameRva &&
-                mys.ImportAddressTableRva == this.ImportAddressTableRva;
+                mys.ImportLookupTableRva == ImportLookupTableRva &&
+                mys.Timestamp == Timestamp &&
+                mys.ForwarderChain == ForwarderChain &&
+                mys.NameRva == NameRva &&
+                mys.ImportAddressTableRva == ImportAddressTableRva;
         }
 
         public override int GetHashCode() => HashCode.Combine(ImportLookupTableRva, Timestamp, ForwarderChain, NameRva, ImportAddressTableRva);
-        public override string ToString() => $"IltRVAv={this.ImportLookupTableRva}, NameRVA={this.NameRva}";
+        public override string ToString() => $"IltRVAv={ImportLookupTableRva}, NameRVA={NameRva}";
     }
 }

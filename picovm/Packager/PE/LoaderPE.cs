@@ -13,10 +13,7 @@ namespace picovm.Packager.PE
 
         public LoaderPE(Stream stream)
         {
-            if (stream == null)
-                throw new ArgumentNullException(nameof(stream));
-
-            this.stream = stream;
+            this.stream = stream ?? throw new ArgumentNullException(nameof(stream));
         }
 
         public LoaderResult64 LoadImage()

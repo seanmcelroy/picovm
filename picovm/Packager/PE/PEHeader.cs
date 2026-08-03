@@ -8,7 +8,7 @@ namespace picovm.Packager.PE
     public struct PEHeader // aka COFF header
     {
         // Magic number, always PE\0\0
-        public static readonly ImmutableArray<byte> MAGIC = ImmutableArray<byte>.Empty.AddRange(new byte[] { 0x50, 0x45, 0x00, 0x00 });
+        public static readonly ImmutableArray<byte> MAGIC = [.. new byte[] { 0x50, 0x45, 0x00, 0x00 }];
 
         public UInt16 mMachine;
         public UInt16 mNumberOfSections;
@@ -28,7 +28,7 @@ namespace picovm.Packager.PE
             }
             catch (Exception ex)
             {
-                header = default(PEHeader);
+                header = default;
                 Console.Error.WriteLine(ex);
                 return false;
             }
@@ -37,7 +37,7 @@ namespace picovm.Packager.PE
         public void Read(Stream stream)
         {
             var magic = new byte[MAGIC.Length];
-            stream.Read(magic);
+            stream.ReadExactly(magic);
             if (!MAGIC.SequenceEqual(magic))
                 throw new BadImageFormatException("Magic value is not present for a PE file");
 

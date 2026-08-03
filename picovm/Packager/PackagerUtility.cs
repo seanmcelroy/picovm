@@ -16,10 +16,8 @@ namespace picovm.Packager
             if (fi == null)
                 return value.ToString();
 
-            var attributes = fi.GetCustomAttributes(typeof(TAttr), false) as TAttr[];
-
-            if (attributes != null && attributes.Any())
-                return attributes.Select(a => selector.Invoke(a)).First();
+            if (fi.GetCustomAttributes(typeof(TAttr), false) is TAttr[] attributes && attributes.Length != 0)
+                return attributes.Select(selector.Invoke).First();
 
             return value.ToString();
         }
@@ -30,7 +28,7 @@ namespace picovm.Packager
         public static string GetEnumDescription<TEnum>(UInt16 value) where TEnum : Enum
         {
             TEnum ev = (TEnum)Enum.ToObject(typeof(TEnum), value);
-            return GetEnumDescription<TEnum>(ev);
+            return GetEnumDescription(ev);
         }
 
         public static string GetEnumFlagsShortName<TEnum>(object value, string? separator = null) where TEnum : Enum
@@ -42,7 +40,7 @@ namespace picovm.Packager
                 {
                     if (flagString.Length > 0 && !string.IsNullOrEmpty(separator))
                         flagString.Append(separator);
-                    flagString.Append(PackagerUtility.GetEnumAttributeValue<TEnum, ShortNameAttribute>(flag, s => s.DisplayName));
+                    flagString.Append(GetEnumAttributeValue<TEnum, ShortNameAttribute>(flag, s => s.DisplayName));
                 }
             }
             return flagString.ToString();

@@ -313,7 +313,7 @@ namespace picovm
             Console.Out.WriteLine("ELF Header:");
             stream.Seek(0, SeekOrigin.Begin);
             var first16 = new byte[16];
-            stream.Read(first16, 0, 16);
+            stream.ReadExactly(first16, 0, 16);
             var first16String = first16.Select(b => $"{b:x2}").Aggregate((c, n) => $"{c} {n}");
             Console.Out.WriteLine($"  Magic:   {first16String}");
             Console.Out.WriteLine($"  Class:                             {PackagerUtility.GetEnumDescription(header.EI_CLASS)}");
@@ -415,7 +415,7 @@ namespace picovm
             Console.Out.WriteLine("MSDOS Header:");
             stream.Seek(0, SeekOrigin.Begin);
             var first2 = new byte[2];
-            stream.Read(first2, 0, 2);
+            stream.ReadExactly(first2, 0, 2);
             Console.Out.WriteLine($"  Magic:   {first2.Select(b => $"{b:x2}").Aggregate((c, n) => $"{c} {n}")}");
             Console.Out.WriteLine($"  PE Header Offset:                  0x{msDosStubHeader.e_lfanew:x}");
             if (msDosStubHeader.e_lfanew % 8 != 0)
@@ -428,7 +428,7 @@ namespace picovm
                 else
                 {
                     stream.Seek(msDosStubHeader.e_lfanew, SeekOrigin.Begin);
-                    stream.Read(first2, 0, 2);
+                    stream.ReadExactly(first2, 0, 2);
                     Console.Out.WriteLine("\r\nPE Header:");
                     Console.Out.WriteLine($"  Magic:   {first2.Select(b => $"{b:x2}").Aggregate((c, n) => $"{c} {n}")}");
                     Console.Out.WriteLine($"  Machine:                           {PackagerUtility.GetEnumDescription<MachineType>(peHeader.mMachine)}");
@@ -530,24 +530,34 @@ namespace picovm
 
             {
                 var sht = metadata.OfType<SectionHeaderTable>().FirstOrDefault();
-                Console.Out.WriteLine($"\r\nSection Headers:");
-                Console.Out.WriteLine($"  [Nr] Name      VirtualAddress  VirtualSize");
-                Console.Out.WriteLine($"       Characteristics");
-                var i = 0;
-                foreach (var sh in sht)
+                if (sht == null)
                 {
-                    var name = System.Text.Encoding.ASCII.GetString(BitConverter.GetBytes(sh.Name).TakeWhile(b => b != 0x00).ToArray());
-                    Console.Out.WriteLine($"  [{i.ToString().PadLeft(2)}] {name.LeftAlignToSize(8)}  {sh.VirtualAddress.RightAlignHexToSize().LeftAlignToSize(14)}  {sh.VirtualSize.RightAlignHexToSize()}");
-                    var flagString = PackagerUtility.GetEnumFlagsShortName<SectionHeaderCharacteristics>(sh.Characteristics, ", ");
-                    Console.Out.WriteLine($"       {flagString}");
+                    Console.Out.WriteLine($"\r\nSection Headers: NONE");
+                }
+                else
+                {
+                    Console.Out.WriteLine($"  [Nr] Name      VirtualAddress  VirtualSize");
+                    Console.Out.WriteLine($"       Characteristics");
+                    var i = 0;
+                    foreach (var sh in sht)
+                    {
+                        var name = Encoding.ASCII.GetString(BitConverter.GetBytes(sh.Name).TakeWhile(b => b != 0x00).ToArray());
+                        Console.Out.WriteLine($"  [{i.ToString().PadLeft(2)}] {name.LeftAlignToSize(8)}  {sh.VirtualAddress.RightAlignHexToSize().LeftAlignToSize(14)}  {sh.VirtualSize.RightAlignHexToSize()}");
+                        var flagString = PackagerUtility.GetEnumFlagsShortName<SectionHeaderCharacteristics>(sh.Characteristics, ", ");
+                        Console.Out.WriteLine($"       {flagString}");
 
-                    i++;
+                        i++;
+                    }
                 }
             }
 
             {
                 var dd = metadata.OfType<PEDataDictionary>().FirstOrDefault();
-                if (!dd.Equals(default(PEDataDictionary)))
+                if (dd == null)
+                {
+                    Console.Out.WriteLine("\r\nPE Data Dictionaries: NONE");
+                }
+                else if (!dd.Equals(default(PEDataDictionary)))
                 {
                     Console.Out.WriteLine("\r\nPE Data Dictionaries:");
                     var i = 0;

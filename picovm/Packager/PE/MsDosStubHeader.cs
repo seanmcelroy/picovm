@@ -7,7 +7,7 @@ namespace picovm.Packager.PE
     public struct MsDosStubHeader
     {
         // Magic number, always 0x5A4D (MZ in LE)
-        private static readonly byte[] MAGIC = new byte[] { 0x4d, 0x5a };
+        private static readonly byte[] MAGIC = [0x4d, 0x5a];
 
         public UInt32 e_lfanew;
 
@@ -41,8 +41,7 @@ namespace picovm.Packager.PE
 
                 var peHeaderLocation = BitConverter.ToUInt32(lfaNewBuffer);
                 stream.Seek(peHeaderLocation, SeekOrigin.Begin);
-                PEHeader potentialHeader;
-                if (!PEHeader.TryRead(stream, out potentialHeader))
+                if (!PEHeader.TryRead(stream, out PEHeader potentialHeader))
                     return false;
             }
 
@@ -68,7 +67,7 @@ namespace picovm.Packager.PE
         public void Read(Stream stream)
         {
             var magic = new byte[MAGIC.Length];
-            stream.Read(magic);
+            stream.ReadExactly(magic);
             if (!MAGIC.SequenceEqual(magic))
                 throw new BadImageFormatException("Magic value is not present for an ELF file");
 

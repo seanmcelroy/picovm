@@ -12,8 +12,7 @@ namespace picovm.Packager.Elf.Elf32
 
         public LoaderElf32(Stream stream)
         {
-            if (stream == null)
-                throw new ArgumentNullException(nameof(stream));
+            ArgumentNullException.ThrowIfNull(stream);
 
             this.stream = stream;
         }
@@ -38,10 +37,10 @@ namespace picovm.Packager.Elf.Elf32
                 + (UInt32)elfFileHeader.E_EHSIZE.CalculateRoundUpTo16Pad()
                 + (UInt32)(elfFileHeader.E_PHNUM * (elfFileHeader.E_PHENTSIZE + elfFileHeader.E_PHENTSIZE.CalculateRoundUpTo16Pad()));
             stream.Seek(imageOffset, SeekOrigin.Begin);
-            stream.Read(image, 0, image.Length);
+            stream.ReadExactly(image);
 
             return new LoaderResult32(elfFileHeader.E_ENTRY - imageOffset, image,
-                metadata: new object[] { elfFileHeader, programHeader });
+                metadata: [elfFileHeader, programHeader]);
         }
 
         public ImmutableList<object> LoadMetadata()
@@ -65,6 +64,6 @@ namespace picovm.Packager.Elf.Elf32
             return metadata.ToImmutableList();
         }
 
-        ILoaderResult ILoader.LoadImage() => this.LoadImage();
+        ILoaderResult ILoader.LoadImage() => LoadImage();
     }
 }

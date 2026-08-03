@@ -38,7 +38,7 @@ namespace picovm.Packager.Elf.Elf64
                 + (UInt64)elfFileHeader.E_EHSIZE.CalculateRoundUpTo16Pad()
                 + (UInt64)(elfFileHeader.E_PHNUM * (elfFileHeader.E_PHENTSIZE + elfFileHeader.E_PHENTSIZE.CalculateRoundUpTo16Pad()));
             stream.Seek((long)imageOffset, SeekOrigin.Begin);
-            stream.Read(image, 0, image.Length);
+            stream.ReadExactly(image);
 
             return new LoaderResult64(elfFileHeader.E_ENTRY - (ulong)imageOffset, image,
                 metadata: new object[] { elfFileHeader, programHeader });

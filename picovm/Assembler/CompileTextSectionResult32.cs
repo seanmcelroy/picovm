@@ -5,21 +5,14 @@ using System.Linq;
 
 namespace picovm.Assembler
 {
-    public sealed class CompileTextSectionResult32 : ICompileTextSectionResult
+    public sealed class CompileTextSectionResult32(byte[] bytecode, IEnumerable<KeyValuePair<string, UInt32>> labelOffsets, IEnumerable<BytecodeTextSymbol32> symbolReferenceOffsets) : ICompileTextSectionResult
     {
-        public ImmutableArray<byte> Bytecode { get; private set; }
-        public ImmutableDictionary<string, UInt32> LabelsOffsets { get; private set; }
-        public ImmutableList<BytecodeTextSymbol32> SymbolReferenceOffsets { get; private set; }
+        public ImmutableArray<byte> Bytecode { get; private set; } = ImmutableArray.Create<byte>(bytecode);
+        public ImmutableDictionary<string, UInt32> LabelsOffsets { get; private set; } = labelOffsets.ToImmutableDictionary();
+        public ImmutableList<BytecodeTextSymbol32> SymbolReferenceOffsets { get; private set; } = symbolReferenceOffsets.ToImmutableList();
 
         ImmutableDictionary<string, ValueType> ICompileTextSectionResult.LabelsOffsets => this.LabelsOffsets.ToImmutableDictionary(k => k.Key, v => (ValueType)v.Value);
 
         ImmutableList<IBytecodeTextSymbol> ICompileTextSectionResult.SymbolReferenceOffsets => this.SymbolReferenceOffsets.Cast<IBytecodeTextSymbol>().ToImmutableList();
-
-        public CompileTextSectionResult32(byte[] bytecode, IEnumerable<KeyValuePair<string, UInt32>> labelOffsets, IEnumerable<BytecodeTextSymbol32> symbolReferenceOffsets)
-        {
-            this.Bytecode = ImmutableArray.Create<byte>(bytecode);
-            this.LabelsOffsets = labelOffsets.ToImmutableDictionary();
-            this.SymbolReferenceOffsets = symbolReferenceOffsets.ToImmutableList();
-        }
     }
 }

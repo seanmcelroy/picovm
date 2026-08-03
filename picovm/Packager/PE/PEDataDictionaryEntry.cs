@@ -2,29 +2,22 @@ using System;
 
 namespace picovm.Packager.PE
 {
-    public readonly struct PEDataDictionaryEntry
+    public readonly struct PEDataDictionaryEntry(UInt32 rva, UInt32 size)
     {
-        public readonly UInt32 RelativeVirtualAddress;
-        public readonly UInt32 Size;
-
-        public PEDataDictionaryEntry(UInt32 rva, UInt32 size)
-        {
-            this.RelativeVirtualAddress = rva;
-            this.Size = size;
-        }
+        public readonly UInt32 RelativeVirtualAddress = rva;
+        public readonly UInt32 Size = size;
 
         public override bool Equals(object? obj)
         {
-            if (!(obj is PEDataDictionaryEntry))
+            if (obj is not PEDataDictionaryEntry mys)
                 return false;
 
-            var mys = (PEDataDictionaryEntry)obj;
             return
-                mys.RelativeVirtualAddress == this.RelativeVirtualAddress &&
-                mys.Size == this.Size;
+                mys.RelativeVirtualAddress == RelativeVirtualAddress &&
+                mys.Size == Size;
         }
 
         public override int GetHashCode() => HashCode.Combine(RelativeVirtualAddress, Size);
-        public override string ToString() => $"RVA={this.RelativeVirtualAddress}, RVAx=0x{this.RelativeVirtualAddress:x}, SZ={this.Size}";
+        public override string ToString() => $"RVA={RelativeVirtualAddress}, RVAx=0x{RelativeVirtualAddress:x}, SZ={Size}";
     }
 }

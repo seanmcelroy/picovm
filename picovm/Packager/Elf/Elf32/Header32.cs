@@ -7,7 +7,7 @@ namespace picovm.Packager.Elf.Elf32
     public struct Header32
     {
         // Magic number, always 0x7f E L F
-        private static readonly byte[] MAGIC = new byte[] { 0x7f, 0x45, 0x4c, 0x46 };
+        private static readonly byte[] MAGIC = [0x7f, 0x45, 0x4c, 0x46];
 
         public HeaderIdentityClass EI_CLASS;
         public HeaderIdentityData EI_DATA;
@@ -81,7 +81,7 @@ namespace picovm.Packager.Elf.Elf32
         public void Read(Stream stream)
         {
             var magic = new byte[MAGIC.Length];
-            stream.Read(magic);
+            stream.ReadExactly(magic);
             if (!MAGIC.SequenceEqual(magic))
                 throw new BadImageFormatException("Magic value is not present for an ELF file");
 

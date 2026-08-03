@@ -22,14 +22,14 @@ namespace picovm.Packager
         public static UInt32 ReadAddress32(this Stream stream)
         {
             var fourBytes = new byte[4];
-            stream.Read(fourBytes);
+            stream.ReadExactly(fourBytes);
             return BitConverter.ToUInt32(fourBytes);
         }
 
         public static UInt64 ReadAddress64(this Stream stream)
         {
             var eightBytes = new byte[8];
-            stream.Read(eightBytes);
+            stream.ReadExactly(eightBytes);
             return BitConverter.ToUInt64(eightBytes);
         }
 
@@ -40,21 +40,21 @@ namespace picovm.Packager
         public static UInt16 ReadUInt16(this Stream stream)
         {
             var twoBytes = new byte[2];
-            stream.Read(twoBytes);
+            stream.ReadExactly(twoBytes);
             return BitConverter.ToUInt16(twoBytes);
         }
 
         public static UInt32 ReadUInt32(this Stream stream)
         {
             var fourBytes = new byte[4];
-            stream.Read(fourBytes);
+            stream.ReadExactly(fourBytes);
             return BitConverter.ToUInt32(fourBytes);
         }
 
         public static UInt64 ReadUInt64(this Stream stream)
         {
             var eightBytes = new byte[8];
-            stream.Read(eightBytes);
+            stream.ReadExactly(eightBytes);
             return BitConverter.ToUInt64(eightBytes);
         }
 

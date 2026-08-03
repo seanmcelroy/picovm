@@ -7,13 +7,13 @@ namespace picovm.Tests
 {
     public class Agent32Test
     {
-        private static Linux32Kernel kernel = new Linux32Kernel();
+        private static readonly Linux32Kernel kernel = new();
 
         [Fact]
         public void GetOperand_Constant()
         {
-            Xunit.Assert.Equal(ParameterType.Constant, AssemblerUtility.GetOperandType("4294945365"));
-            Xunit.Assert.Equal(ParameterType.Constant, AssemblerUtility.GetOperandType("2863315917"));
+            Assert.Equal(ParameterType.Constant, AssemblerUtility.GetOperandType("4294945365"));
+            Assert.Equal(ParameterType.Constant, AssemblerUtility.GetOperandType("2863315917"));
         }
 
         [Fact]
@@ -45,43 +45,43 @@ namespace picovm.Tests
 
             var agent = new Agent(kernel, compiled.TextSegment, 0);
             var ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal(4294967295, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Null(ret);
+            Assert.Equal(4294967295, agent.ReadExtendedRegister(Register.EAX));
 
-            ret = agent.Tick();
-            Xunit.Assert.Equal(0U, agent.ReadRegister(Register.AX));
+            _ = agent.Tick();
+            Assert.Equal(0U, agent.ReadRegister(Register.AX));
 
-            ret = agent.Tick();
-            Xunit.Assert.Equal(170, agent.ReadHalfRegister(Register.AH));
+            _ = agent.Tick();
+            Assert.Equal(170, agent.ReadHalfRegister(Register.AH));
 
-            ret = agent.Tick();
-            Xunit.Assert.Equal(85, agent.ReadHalfRegister(Register.AL));
+            _ = agent.Tick();
+            Assert.Equal(85, agent.ReadHalfRegister(Register.AL));
 
-            ret = agent.Tick();
-            Xunit.Assert.Equal(5U, agent.ReadExtendedRegister(Register.EBX));
+            _ = agent.Tick();
+            Assert.Equal(5U, agent.ReadExtendedRegister(Register.EBX));
 
-            ret = agent.Tick();
-            Xunit.Assert.Equal(5U, agent.ReadExtendedRegister(Register.EAX));
-            Xunit.Assert.Equal(5U, agent.ReadExtendedRegister(Register.EBX));
+            _ = agent.Tick();
+            Assert.Equal(5U, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Equal(5U, agent.ReadExtendedRegister(Register.EBX));
 
-            ret = agent.Tick();
-            ret = agent.Tick();
-            ret = agent.Tick();
+            _ = agent.Tick();
+            _ = agent.Tick();
+            _ = agent.Tick();
 
-            ret = agent.Tick();
-            Xunit.Assert.Equal(6U, agent.ReadExtendedRegister(Register.EBX));
+            _ = agent.Tick();
+            Assert.Equal(6U, agent.ReadExtendedRegister(Register.EBX));
 
-            ret = agent.Tick();
-            Xunit.Assert.Equal(5U, agent.ReadExtendedRegister(Register.EBX));
+            _ = agent.Tick();
+            Assert.Equal(5U, agent.ReadExtendedRegister(Register.EBX));
 
-            ret = agent.Tick();
-            Xunit.Assert.Equal(5U, agent.ReadExtendedRegister(Register.EBX));
+            _ = agent.Tick();
+            Assert.Equal(5U, agent.ReadExtendedRegister(Register.EBX));
 
+            _ = agent.Tick();
+            _ = agent.Tick();
             ret = agent.Tick();
-            ret = agent.Tick();
-            ret = agent.Tick();
-            Xunit.Assert.NotNull(ret);
-            Xunit.Assert.Equal(0, ret); // Program should have terminated on the second tick
+            Assert.NotNull(ret);
+            Assert.Equal(0, ret); // Program should have terminated on the second tick
         }
 
         [Fact]
@@ -104,38 +104,38 @@ namespace picovm.Tests
 
             var agent = new Agent(kernel, compiled.TextSegment, 0);
             var ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((uint)0xFFFFFFFF, agent.ReadExtendedRegister(Register.EAX));
-            Xunit.Assert.Equal((ushort)0xFFFF, agent.ReadRegister(Register.AX));
-            Xunit.Assert.Equal((byte)0xFF, agent.ReadHalfRegister(Register.AH));
-            Xunit.Assert.Equal((byte)0xFF, agent.ReadHalfRegister(Register.AL));
+            Assert.Null(ret);
+            Assert.Equal((uint)0xFFFFFFFF, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Equal((ushort)0xFFFF, agent.ReadRegister(Register.AX));
+            Assert.Equal((byte)0xFF, agent.ReadHalfRegister(Register.AH));
+            Assert.Equal((byte)0xFF, agent.ReadHalfRegister(Register.AL));
 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((uint)0xFFFF0000, agent.ReadExtendedRegister(Register.EAX));
-            Xunit.Assert.Equal((uint)0, agent.ReadRegister(Register.AX));
-            Xunit.Assert.Equal((uint)0, agent.ReadHalfRegister(Register.AH));
-            Xunit.Assert.Equal((uint)0, agent.ReadHalfRegister(Register.AL));
+            Assert.Null(ret);
+            Assert.Equal((uint)0xFFFF0000, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Equal((uint)0, agent.ReadRegister(Register.AX));
+            Assert.Equal((uint)0, agent.ReadHalfRegister(Register.AH));
+            Assert.Equal((uint)0, agent.ReadHalfRegister(Register.AL));
 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((uint)0xFFFFAA00, agent.ReadExtendedRegister(Register.EAX));
-            Xunit.Assert.Equal((uint)170, agent.ReadHalfRegister(Register.AH));
-            Xunit.Assert.Equal((uint)0, agent.ReadHalfRegister(Register.AL));
+            Assert.Null(ret);
+            Assert.Equal((uint)0xFFFFAA00, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Equal((uint)170, agent.ReadHalfRegister(Register.AH));
+            Assert.Equal((uint)0, agent.ReadHalfRegister(Register.AL));
 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((uint)0xFFFFAA55, agent.ReadExtendedRegister(Register.EAX));
-            Xunit.Assert.Equal((uint)170, agent.ReadHalfRegister(Register.AH));
-            Xunit.Assert.Equal((uint)85, agent.ReadHalfRegister(Register.AL));
+            Assert.Null(ret);
+            Assert.Equal((uint)0xFFFFAA55, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Equal((uint)170, agent.ReadHalfRegister(Register.AH));
+            Assert.Equal((uint)85, agent.ReadHalfRegister(Register.AL));
 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((uint)0, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Null(ret);
+            Assert.Equal((uint)0, agent.ReadExtendedRegister(Register.EAX));
 
             ret = agent.Tick();
-            Xunit.Assert.NotNull(ret);
-            Xunit.Assert.Equal(0, ret); // Program should have terminated on the second tick
+            Assert.NotNull(ret);
+            Assert.Equal(0, ret); // Program should have terminated on the second tick
         }
 
         [Fact]
@@ -161,40 +161,40 @@ namespace picovm.Tests
 
             var agent = new Agent(kernel, compiled.TextSegment, 0);
             var ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((uint)0x11112222, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Null(ret);
+            Assert.Equal((uint)0x11112222, agent.ReadExtendedRegister(Register.EAX));
 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((uint)0x11113333, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Null(ret);
+            Assert.Equal((uint)0x11113333, agent.ReadExtendedRegister(Register.EAX));
 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((uint)0x11113344, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Null(ret);
+            Assert.Equal((uint)0x11113344, agent.ReadExtendedRegister(Register.EAX));
 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((uint)0x11115544, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Null(ret);
+            Assert.Equal((uint)0x11115544, agent.ReadExtendedRegister(Register.EAX));
 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((uint)0x11110044, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Null(ret);
+            Assert.Equal((uint)0x11110044, agent.ReadExtendedRegister(Register.EAX));
 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((uint)0x11112222, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Null(ret);
+            Assert.Equal((uint)0x11112222, agent.ReadExtendedRegister(Register.EAX));
 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((uint)0x11112200, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Null(ret);
+            Assert.Equal((uint)0x11112200, agent.ReadExtendedRegister(Register.EAX));
 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((uint)0x11112222, agent.ReadExtendedRegister(Register.EAX)); // Program should have terminated on the second tick
+            Assert.Null(ret);
+            Assert.Equal((uint)0x11112222, agent.ReadExtendedRegister(Register.EAX)); // Program should have terminated on the second tick
 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((uint)0x11110000, agent.ReadExtendedRegister(Register.EAX)); // Program should have terminated on the second tick
+            Assert.Null(ret);
+            Assert.Equal((uint)0x11110000, agent.ReadExtendedRegister(Register.EAX)); // Program should have terminated on the second tick
         }
 
         [Fact]
@@ -215,39 +215,39 @@ namespace picovm.Tests
             var compiled = compiler.Compile(programText, "UNIT_TEST");
 
             var agent = new Agent(kernel, compiled.TextSegment, 0);
-            Xunit.Assert.Equal((uint)65535, agent.StackPointer);
+            Assert.Equal((uint)65535, agent.StackPointer);
             var ret = agent.Tick();
 
             // PUSH 4294945365
-            Xunit.Assert.Null(ret);
+            Assert.Null(ret);
             agent.Dump();
-            Xunit.Assert.Equal((uint)(65535 - 4), agent.StackPointer);
-            Xunit.Assert.Equal(4294945365, agent.StackPeek32());
-            Xunit.Assert.Equal((uint)0, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Equal((uint)(65535 - 4), agent.StackPointer);
+            Assert.Equal(4294945365, agent.StackPeek32());
+            Assert.Equal((uint)0, agent.ReadExtendedRegister(Register.EAX));
 
             // POP EAX #1 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((uint)(65535), agent.StackPointer);
-            Xunit.Assert.Equal((uint)4294945365, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Null(ret);
+            Assert.Equal((uint)65535, agent.StackPointer);
+            Assert.Equal((uint)4294945365, agent.ReadExtendedRegister(Register.EAX));
 
             // PUSH 2863315917
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((uint)(65535 - 4), agent.StackPointer);
-            Xunit.Assert.Equal(2863315917, agent.StackPeek32());
-            Xunit.Assert.Equal((uint)4294945365, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Null(ret);
+            Assert.Equal((uint)(65535 - 4), agent.StackPointer);
+            Assert.Equal(2863315917, agent.StackPeek32());
+            Assert.Equal((uint)4294945365, agent.ReadExtendedRegister(Register.EAX));
 
             // POP EAX #2
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((uint)(65535), agent.StackPointer);
-            Xunit.Assert.Equal((uint)2863315917, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Null(ret);
+            Assert.Equal((uint)65535, agent.StackPointer);
+            Assert.Equal((uint)2863315917, agent.ReadExtendedRegister(Register.EAX));
 
             // END
             ret = agent.Tick();
-            Xunit.Assert.NotNull(ret);
-            Xunit.Assert.Equal(0, ret); // Program should have terminated on the second tick
+            Assert.NotNull(ret);
+            Assert.Equal(0, ret); // Program should have terminated on the second tick
         }
     }
 }

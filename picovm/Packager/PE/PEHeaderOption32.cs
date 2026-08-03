@@ -102,7 +102,7 @@ namespace picovm.Packager.PE
             }
             catch (Exception ex)
             {
-                header = default(PEHeaderOption32);
+                header = default;
                 Console.Error.WriteLine(ex);
                 return false;
             }
@@ -111,7 +111,7 @@ namespace picovm.Packager.PE
         public void Read(Stream stream)
         {
             var magic = new byte[MAGIC.Length];
-            stream.Read(magic);
+            stream.ReadExactly(magic);
             if (!MAGIC.SequenceEqual(magic))
                 throw new BadImageFormatException($"Magic value ({magic.ToByteString()}) is not present for a PE32 header");
 
