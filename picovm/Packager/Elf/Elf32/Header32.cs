@@ -57,8 +57,7 @@ namespace picovm.Packager.Elf.Elf32
                 return false;
 
             stream.Seek(0, SeekOrigin.Begin);
-            Header32 potentialHeader;
-            if (!Header32.TryRead(stream, out potentialHeader))
+            if (!TryRead(stream, out Header32 potentialHeader))
                 return false;
             return potentialHeader.EI_CLASS == HeaderIdentityClass.ELFCLASS32;
         }
@@ -85,16 +84,16 @@ namespace picovm.Packager.Elf.Elf32
             if (!MAGIC.SequenceEqual(magic))
                 throw new BadImageFormatException("Magic value is not present for an ELF file");
 
-            EI_CLASS = stream.ReadByteAndParse<HeaderIdentityClass>(HeaderIdentityClass.ELFCLASSNONE);
-            EI_DATA = stream.ReadByteAndParse<HeaderIdentityData>(HeaderIdentityData.ELFDATANONE);
-            EI_VERSION = stream.ReadByteAndParse<HeaderIdentityVersion>(HeaderIdentityVersion.EI_CURRENT);
-            EI_OSABI = stream.ReadByteAndParse<HeaderOsAbiVersion>(HeaderOsAbiVersion.ELFOSABI_NONE);
+            EI_CLASS = stream.ReadByteAndParse(HeaderIdentityClass.ELFCLASSNONE);
+            EI_DATA = stream.ReadByteAndParse(HeaderIdentityData.ELFDATANONE);
+            EI_VERSION = stream.ReadByteAndParse(HeaderIdentityVersion.EI_CURRENT);
+            EI_OSABI = stream.ReadByteAndParse(HeaderOsAbiVersion.ELFOSABI_NONE);
             EI_ABIVERSION = (byte)stream.ReadByte();
 
             stream.Seek(16, SeekOrigin.Begin);
-            E_TYPE = stream.ReadHalfWord<HeaderType>(HeaderType.ET_NONE);
-            E_MACHINE = stream.ReadHalfWord<HeaderMachine>(HeaderMachine.EM_NONE);
-            E_VERSION = stream.ReadWord<HeaderVersion>(HeaderVersion.EV_NONE);
+            E_TYPE = stream.ReadHalfWord(HeaderType.ET_NONE);
+            E_MACHINE = stream.ReadHalfWord(HeaderMachine.EM_NONE);
+            E_VERSION = stream.ReadWord(HeaderVersion.EV_NONE);
             E_ENTRY = stream.ReadAddress32();
             E_PHOFF = stream.ReadOffset32();
             E_SHOFF = stream.ReadOffset32();
@@ -106,7 +105,7 @@ namespace picovm.Packager.Elf.Elf32
             E_SHNUM = stream.ReadUInt16();
             E_SHSTRNDX = stream.ReadUInt16();
 
-            if (E_EHSIZE != stream.Position && E_EHSIZE != 64)
+            if (E_EHSIZE != stream.Position)
             {
                 throw new InvalidOperationException("E_EHSIZE does not equal the current reader position");
             }
@@ -126,7 +125,7 @@ namespace picovm.Packager.Elf.Elf32
             headerLength += stream.WriteOneByte((byte)EI_DATA);
             headerLength += stream.WriteOneByte((byte)EI_VERSION);
             // Index 7-15 are padding
-            headerLength += stream.WriteAndCount(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
+            headerLength += stream.WriteAndCount([0, 0, 0, 0, 0, 0, 0, 0]);
             headerLength += stream.WriteOneByte((byte)16); // Size of this header, always 16 bytes
 
             headerLength += stream.WriteHalfWord((UInt16)E_TYPE);

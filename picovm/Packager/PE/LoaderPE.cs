@@ -2,19 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
-using System.Linq;
 using picovm.VM;
 
 namespace picovm.Packager.PE
 {
-    public sealed class LoaderPE : ILoader
+    public sealed class LoaderPE(Stream stream) : ILoader
     {
-        private readonly Stream stream;
-
-        public LoaderPE(Stream stream)
-        {
-            this.stream = stream ?? throw new ArgumentNullException(nameof(stream));
-        }
+        private readonly Stream stream = stream ?? throw new ArgumentNullException(nameof(stream));
 
         public LoaderResult64 LoadImage()
         {
@@ -37,15 +31,14 @@ namespace picovm.Packager.PE
             UInt32 entryPoint = 0;
             if (peHeader.mSizeOfOptionalHeader > 0)
             {
-                PEHeaderOption64 pe64;
-                if (!PEHeaderOption64.TryRead(stream, out pe64))
+                if (!PEHeaderOption64.TryRead(stream, out PEHeaderOption64 pe64))
                     return LoaderResult64.Error("Unable to read Pe64OptionalHeader");
                 metadata.Add(pe64);
 
                 entryPoint = pe64.mAddressOfEntryPoint;
             }
 
-            return new LoaderResult64(entryPoint, new byte[0], metadata: metadata);
+            return new LoaderResult64(entryPoint, [], metadata: metadata);
         }
 
         public ImmutableList<object> LoadMetadata()

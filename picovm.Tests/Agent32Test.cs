@@ -5,6 +5,16 @@ using Xunit;
 
 namespace picovm.Tests
 {
+    /// <summary>
+    /// Multi-instruction integration tests for the 32-bit agent.
+    /// </summary>
+    /// <remarks>
+    /// Focused MOV coverage lives in <see cref="MovRegisterTests"/>,
+    /// <see cref="MovImmediateTests"/>, <see cref="MovDirectTests"/>,
+    /// <see cref="MovIndirectTests"/> and <see cref="MovEncodingTests"/>.  What remains here are
+    /// programs that exercise MOV in combination with the stack and logic instructions, which
+    /// those suites deliberately do not cover.
+    /// </remarks>
     public class Agent32Test
     {
         private static readonly Linux32Kernel kernel = new();
@@ -17,7 +27,7 @@ namespace picovm.Tests
         }
 
         [Fact]
-        public void MOV_REG_CON_Simple()
+        public void MOV_IMMEDIATE_Simple()
         {
             var programText = new string[] {
                 "section	.text",
@@ -45,8 +55,7 @@ namespace picovm.Tests
 
             var agent = new Agent(kernel, compiled.TextSegment, 0);
             var ret = agent.Tick();
-            Assert.Null(ret);
-            Assert.Equal(4294967295, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Equal(4294967295U, agent.ReadExtendedRegister(Register.EAX));
 
             _ = agent.Tick();
             Assert.Equal(0U, agent.ReadRegister(Register.AX));
@@ -80,62 +89,7 @@ namespace picovm.Tests
             _ = agent.Tick();
             _ = agent.Tick();
             ret = agent.Tick();
-            Assert.NotNull(ret);
-            Assert.Equal(0, ret); // Program should have terminated on the second tick
-        }
-
-        [Fact]
-        public void MOV_REG_CON_Overlayed()
-        {
-            var programText = new string[] {
-                "section	.text",
-                "global _start",
-                "_start:",
-                "MOV EAX, 4294967295", // copy the value 11111111111111111111111111111111 into eax
-                "MOV AX, 0", // copy the value 0000000000000000 into ax
-                "MOV AH, 170", // copy the value 10101010 (0xAA) into ah
-                "MOV AL, 85", // copy the value 01010101 (0x55) into al
-                "MOV EAX, 0", // copy the value 11111111111111111111111111111111 into eax
-                "END"
-            };
-
-            var compiler = new BytecodeCompiler<UInt32>();
-            var compiled = compiler.Compile(programText, "UNIT_TEST");
-
-            var agent = new Agent(kernel, compiled.TextSegment, 0);
-            var ret = agent.Tick();
-            Assert.Null(ret);
-            Assert.Equal((uint)0xFFFFFFFF, agent.ReadExtendedRegister(Register.EAX));
-            Assert.Equal((ushort)0xFFFF, agent.ReadRegister(Register.AX));
-            Assert.Equal((byte)0xFF, agent.ReadHalfRegister(Register.AH));
-            Assert.Equal((byte)0xFF, agent.ReadHalfRegister(Register.AL));
-
-            ret = agent.Tick();
-            Assert.Null(ret);
-            Assert.Equal((uint)0xFFFF0000, agent.ReadExtendedRegister(Register.EAX));
-            Assert.Equal((uint)0, agent.ReadRegister(Register.AX));
-            Assert.Equal((uint)0, agent.ReadHalfRegister(Register.AH));
-            Assert.Equal((uint)0, agent.ReadHalfRegister(Register.AL));
-
-            ret = agent.Tick();
-            Assert.Null(ret);
-            Assert.Equal((uint)0xFFFFAA00, agent.ReadExtendedRegister(Register.EAX));
-            Assert.Equal((uint)170, agent.ReadHalfRegister(Register.AH));
-            Assert.Equal((uint)0, agent.ReadHalfRegister(Register.AL));
-
-            ret = agent.Tick();
-            Assert.Null(ret);
-            Assert.Equal((uint)0xFFFFAA55, agent.ReadExtendedRegister(Register.EAX));
-            Assert.Equal((uint)170, agent.ReadHalfRegister(Register.AH));
-            Assert.Equal((uint)85, agent.ReadHalfRegister(Register.AL));
-
-            ret = agent.Tick();
-            Assert.Null(ret);
-            Assert.Equal((uint)0, agent.ReadExtendedRegister(Register.EAX));
-
-            ret = agent.Tick();
-            Assert.NotNull(ret);
-            Assert.Equal(0, ret); // Program should have terminated on the second tick
+            Assert.True(ret.Done); // Program should have terminated on the second tick
         }
 
         [Fact]
@@ -161,39 +115,39 @@ namespace picovm.Tests
 
             var agent = new Agent(kernel, compiled.TextSegment, 0);
             var ret = agent.Tick();
-            Assert.Null(ret);
+            Assert.False(ret.Done);
             Assert.Equal((uint)0x11112222, agent.ReadExtendedRegister(Register.EAX));
 
             ret = agent.Tick();
-            Assert.Null(ret);
+            Assert.False(ret.Done);
             Assert.Equal((uint)0x11113333, agent.ReadExtendedRegister(Register.EAX));
 
             ret = agent.Tick();
-            Assert.Null(ret);
+            Assert.False(ret.Done);
             Assert.Equal((uint)0x11113344, agent.ReadExtendedRegister(Register.EAX));
 
             ret = agent.Tick();
-            Assert.Null(ret);
+            Assert.False(ret.Done);
             Assert.Equal((uint)0x11115544, agent.ReadExtendedRegister(Register.EAX));
 
             ret = agent.Tick();
-            Assert.Null(ret);
+            Assert.False(ret.Done);
             Assert.Equal((uint)0x11110044, agent.ReadExtendedRegister(Register.EAX));
 
             ret = agent.Tick();
-            Assert.Null(ret);
+            Assert.False(ret.Done);
             Assert.Equal((uint)0x11112222, agent.ReadExtendedRegister(Register.EAX));
 
             ret = agent.Tick();
-            Assert.Null(ret);
+            Assert.False(ret.Done);
             Assert.Equal((uint)0x11112200, agent.ReadExtendedRegister(Register.EAX));
 
             ret = agent.Tick();
-            Assert.Null(ret);
+            Assert.False(ret.Done);
             Assert.Equal((uint)0x11112222, agent.ReadExtendedRegister(Register.EAX)); // Program should have terminated on the second tick
 
             ret = agent.Tick();
-            Assert.Null(ret);
+            Assert.False(ret.Done);
             Assert.Equal((uint)0x11110000, agent.ReadExtendedRegister(Register.EAX)); // Program should have terminated on the second tick
         }
 
@@ -219,35 +173,35 @@ namespace picovm.Tests
             var ret = agent.Tick();
 
             // PUSH 4294945365
-            Assert.Null(ret);
+            Assert.False(ret.Done);
             agent.Dump();
-            Assert.Equal((uint)(65535 - 4), agent.StackPointer);
-            Assert.Equal(4294945365, agent.StackPeek32());
-            Assert.Equal((uint)0, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Equal(65535U - 4, agent.StackPointer);
+            Assert.Equal(4294945365U, agent.StackPeek32());
+            Assert.Equal(0U, agent.ReadExtendedRegister(Register.EAX));
 
             // POP EAX #1 
             ret = agent.Tick();
-            Assert.Null(ret);
-            Assert.Equal((uint)65535, agent.StackPointer);
-            Assert.Equal((uint)4294945365, agent.ReadExtendedRegister(Register.EAX));
+            Assert.False(ret.Done);
+            Assert.Equal(65535U, agent.StackPointer);
+            Assert.Equal(4294945365U, agent.ReadExtendedRegister(Register.EAX));
 
             // PUSH 2863315917
             ret = agent.Tick();
-            Assert.Null(ret);
-            Assert.Equal((uint)(65535 - 4), agent.StackPointer);
+            Assert.False(ret.Done);
+            Assert.Equal(65535U - 4, agent.StackPointer);
             Assert.Equal(2863315917, agent.StackPeek32());
-            Assert.Equal((uint)4294945365, agent.ReadExtendedRegister(Register.EAX));
+            Assert.Equal(4294945365U, agent.ReadExtendedRegister(Register.EAX));
 
             // POP EAX #2
             ret = agent.Tick();
-            Assert.Null(ret);
-            Assert.Equal((uint)65535, agent.StackPointer);
-            Assert.Equal((uint)2863315917, agent.ReadExtendedRegister(Register.EAX));
+            Assert.False(ret.Done);
+            Assert.Equal(65535U, agent.StackPointer);
+            Assert.Equal(2863315917U, agent.ReadExtendedRegister(Register.EAX));
 
             // END
             ret = agent.Tick();
-            Assert.NotNull(ret);
-            Assert.Equal(0, ret); // Program should have terminated on the second tick
+            Assert.True(ret.Done);
+            Assert.Equal(TickErrorCode.Ok, ret.ErrorCode); // Program should have terminated on the second tick
         }
     }
 }

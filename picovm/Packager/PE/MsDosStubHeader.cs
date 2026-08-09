@@ -69,7 +69,7 @@ namespace picovm.Packager.PE
             var magic = new byte[MAGIC.Length];
             stream.ReadExactly(magic);
             if (!MAGIC.SequenceEqual(magic))
-                throw new BadImageFormatException("Magic value is not present for an ELF file");
+                throw new BadImageFormatException("Magic value (MZ) is not present for a PE file.");
 
             stream.Seek(0x3C, SeekOrigin.Begin);
 

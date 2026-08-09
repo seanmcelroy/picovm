@@ -2,7 +2,6 @@ using System;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using picovm.Packager.Elf;
 
 namespace picovm.Packager.Elf.Elf64
 {
@@ -49,7 +48,7 @@ namespace picovm.Packager.Elf.Elf64
             return (msProgramHeader, programHeaderSizeReal, programHeaderSizePad);
         }
 
-        public UInt16 Write(Stream stream)
+        public readonly UInt16 Write(Stream stream)
         {
             UInt16 headerLength = 0;
 

@@ -7,9 +7,9 @@ namespace picovm.Assembler
 {
     public static class AssemblerUtility
     {
-        internal static readonly char[] NUMERALS = new char[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' };
+        internal static readonly char[] NUMERALS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
-        internal static readonly string[] REGISTER_NAMES = new string[] {
+        internal static readonly string[] REGISTER_NAMES = [
             "RAX", "RBX", "RCX", "RDX",
             "R8", "R9", "R10", "R11",
             "R12", "R13", "R14", "R15",
@@ -22,15 +22,15 @@ namespace picovm.Assembler
             "RBP", "EBP", "BP",
             "RIP", "EIP", "IP",
             "CS", "DS", "SS", "ES", "FS", "GS"
-        };
+        ];
 
         public static ulong ParseUInt64Constant(this string operand)
         {
             if (operand.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-                return ulong.Parse(operand.Substring(2), System.Globalization.NumberStyles.HexNumber);
+                return ulong.Parse(operand[2..], NumberStyles.HexNumber);
 
             if (NUMERALS.Any(c => c == operand[0]) && operand.EndsWith("h", StringComparison.OrdinalIgnoreCase))
-                return ulong.Parse(operand.Substring(0, operand.Length - 1), System.Globalization.NumberStyles.HexNumber);
+                return ulong.Parse(operand[..^1], NumberStyles.HexNumber);
 
             return ulong.Parse(operand);
         }
@@ -38,10 +38,10 @@ namespace picovm.Assembler
         public static uint ParseUInt32Constant(this string operand)
         {
             if (operand.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-                return uint.Parse(operand.Substring(2), System.Globalization.NumberStyles.HexNumber);
+                return uint.Parse(operand[2..], NumberStyles.HexNumber);
 
             if (NUMERALS.Any(c => c == operand[0]) && operand.EndsWith("h", StringComparison.OrdinalIgnoreCase))
-                return uint.Parse(operand.Substring(0, operand.Length - 1), System.Globalization.NumberStyles.HexNumber);
+                return uint.Parse(operand[..^1], NumberStyles.HexNumber);
 
             return uint.Parse(operand);
         }
@@ -49,10 +49,10 @@ namespace picovm.Assembler
         public static ushort ParseUInt16Constant(this string operand)
         {
             if (operand.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-                return ushort.Parse(operand.Substring(2), System.Globalization.NumberStyles.HexNumber);
+                return ushort.Parse(operand[2..], NumberStyles.HexNumber);
 
             if (NUMERALS.Any(c => c == operand[0]) && operand.EndsWith("h", StringComparison.OrdinalIgnoreCase))
-                return ushort.Parse(operand.Substring(0, operand.Length - 1), System.Globalization.NumberStyles.HexNumber);
+                return ushort.Parse(operand[..^1], NumberStyles.HexNumber);
 
             return ushort.Parse(operand);
         }
@@ -60,10 +60,10 @@ namespace picovm.Assembler
         public static byte ParseByteConstant(this string operand)
         {
             if (operand.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-                return byte.Parse(operand.Substring(2), System.Globalization.NumberStyles.HexNumber);
+                return byte.Parse(operand[2..], NumberStyles.HexNumber);
 
             if (NUMERALS.Any(c => c == operand[0]) && operand.EndsWith("h", StringComparison.OrdinalIgnoreCase))
-                return byte.Parse(operand.Substring(0, operand.Length - 1), System.Globalization.NumberStyles.HexNumber);
+                return byte.Parse(operand[..^1], NumberStyles.HexNumber);
 
             return byte.Parse(operand);
         }
@@ -107,7 +107,7 @@ namespace picovm.Assembler
                     if (lastYield == null)
                     {
                         // Whitespace seen right after another yielded element (probably end of a delimiter).  Skip along.
-                        yield return operandLine.Substring(0, i);
+                        yield return operandLine[..i];
                         lastYield = i + 1;
                         continue;
                     }
@@ -118,14 +118,14 @@ namespace picovm.Assembler
                     }
                     else
                     {
-                        yield return operandLine.Substring(lastYield.Value, i - lastYield.Value);
+                        yield return operandLine[lastYield.Value..i];
                         lastYield = i + 1;
                         continue;
                     }
                     continue;
                 }
 
-                if (c == ',' || i == operandLine.Length - 1)
+                if (c == ',')
                 {
                     if (lastYield != null && i == lastYield.Value)
                     {
@@ -139,6 +139,19 @@ namespace picovm.Assembler
                     lastYield = i + 1;
                     continue;
                 }
+
+                if (i == operandLine.Length - 1)
+                {
+                    // Final character of the line, so close out whatever operand is still open.
+                    // This must not reuse the delimiter skip above: a one-character trailing
+                    // operand begins at exactly the position the previous element ended, so
+                    // treating it as a delimiter that follows an already-yielded element
+                    // silently discards it.  That dropped the last byte of every data
+                    // directive ending in a single character, such as "db 0, 0, 0, 0".
+                    yield return operandLine.Substring(lastYield ?? 0, i - (lastYield ?? 0) + 1).TrimEnd(',');
+                    lastYield = i + 1;
+                    continue;
+                }
             }
 
             yield break;
@@ -148,21 +161,21 @@ namespace picovm.Assembler
         {
             if (operand.StartsWith('[') && operand.EndsWith(']'))
             {
-                if (AssemblerUtility.REGISTER_NAMES.Any(r => string.Compare(r, operand.Substring(1, operand.Length - 2), StringComparison.InvariantCultureIgnoreCase) == 0))
-                    return ParameterType.RegisterAddress;
+                if (REGISTER_NAMES.Any(r => string.Compare(r, operand[1..^1], StringComparison.InvariantCultureIgnoreCase) == 0))
+                    return ParameterType.RegisterIndirect;
                 else
-                    return ParameterType.VariableAddress;
+                    return ParameterType.VariableDirect;
             }
-            if (AssemblerUtility.REGISTER_NAMES.Contains(operand.ToUpperInvariant()))
+            if (REGISTER_NAMES.Contains(operand.ToUpperInvariant()))
                 return ParameterType.RegisterReference;
-            if (ulong.TryParse(operand, System.Globalization.NumberStyles.Integer, System.Globalization.NumberFormatInfo.InvariantInfo, out ulong operandl))
+            if (ulong.TryParse(operand, NumberStyles.Integer, NumberFormatInfo.InvariantInfo, out ulong operandl))
                 return ParameterType.Constant;
-            if (operand.StartsWith("0x", StringComparison.OrdinalIgnoreCase) && ulong.TryParse(operand.Substring(2), System.Globalization.NumberStyles.HexNumber, System.Globalization.NumberFormatInfo.InvariantInfo, out ulong operandlh))
+            if (operand.StartsWith("0x", StringComparison.OrdinalIgnoreCase) && ulong.TryParse(operand[2..], NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out ulong operandlh))
                 return ParameterType.Constant;
-            if (AssemblerUtility.NUMERALS.Any(c => c == operand[0]) && operand.EndsWith("h", StringComparison.OrdinalIgnoreCase))
+            if (NUMERALS.Any(c => c == operand[0]) && operand.EndsWith("h", StringComparison.OrdinalIgnoreCase))
                 return ParameterType.Constant;
-            if (System.Text.RegularExpressions.Regex.IsMatch(operand, @"\w[\w\d]+"))
-                return ParameterType.Variable;
+            if (System.Text.RegularExpressions.Regex.IsMatch(operand, @"\w[\w\d]*"))
+                return ParameterType.VariableAddress;
             return ParameterType.Unknown;
         }
 
@@ -170,26 +183,26 @@ namespace picovm.Assembler
         {
             if (operandPart.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
             {
-                if (byte.TryParse(operandPart.Substring(2), NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out byte parsedByte))
+                if (byte.TryParse(operandPart[2..], NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out byte parsedByte))
                     return parsedByte;
-                if (UInt16.TryParse(operandPart.Substring(2), NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out ushort parsedU16))
+                if (UInt16.TryParse(operandPart[2..], NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out ushort parsedU16))
                     return parsedU16;
-                if (UInt32.TryParse(operandPart.Substring(2), NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out uint parsedU32))
+                if (UInt32.TryParse(operandPart[2..], NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out uint parsedU32))
                     return parsedU32;
-                if (UInt64.TryParse(operandPart.Substring(2), NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out ulong parsedU64))
+                if (UInt64.TryParse(operandPart[2..], NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out ulong parsedU64))
                     return parsedU64;
                 throw new InvalidOperationException($"Unable to parse operand appearing to be a hexadecimal number: {operandPart}");
             }
 
-            if (AssemblerUtility.NUMERALS.Any(c => c == operandPart[0]) && operandPart.EndsWith("h", StringComparison.OrdinalIgnoreCase))
+            if (NUMERALS.Any(c => c == operandPart[0]) && operandPart.EndsWith("h", StringComparison.OrdinalIgnoreCase))
             {
-                if (byte.TryParse(operandPart.Substring(0, operandPart.Length - 1), NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out byte parsedByte))
+                if (byte.TryParse(operandPart[..^1], NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out byte parsedByte))
                     return parsedByte;
-                if (UInt16.TryParse(operandPart.Substring(0, operandPart.Length - 1), NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out ushort parsedU16))
+                if (UInt16.TryParse(operandPart[..^1], NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out ushort parsedU16))
                     return parsedU16;
-                if (UInt32.TryParse(operandPart.Substring(0, operandPart.Length - 1), NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out uint parsedU32))
+                if (UInt32.TryParse(operandPart[..^1], NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out uint parsedU32))
                     return parsedU32;
-                if (UInt64.TryParse(operandPart.Substring(0, operandPart.Length - 1), NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out ulong parsedU64))
+                if (UInt64.TryParse(operandPart[..^1], NumberStyles.HexNumber, NumberFormatInfo.InvariantInfo, out ulong parsedU64))
                     return parsedU64;
                 throw new InvalidOperationException($"Unable to parse operand appearing to be a hexadecimal number: {operandPart}");
             }
@@ -208,28 +221,29 @@ namespace picovm.Assembler
             }
 
             if (operandPart.StartsWith('\'') && operandPart.EndsWith('\'') && operandPart.Length >= 2)
-                operandPart = operandPart.Substring(1, operandPart.Length - 2);
+                operandPart = operandPart[1..^1];
             else if (operandPart.StartsWith('\"') && operandPart.EndsWith('\"') && operandPart.Length >= 2)
-                operandPart = operandPart.Substring(1, operandPart.Length - 2);
+                operandPart = operandPart[1..^1];
 
             return operandPart;
         }
 
-
-        public static ValueType ResolveDataAllocationReference(string operandPart, Dictionary<string, IBytecodeDataSymbol> symbolOffsets)
+        public static TAddrSize ResolveDataAllocationReference<TAddrSize>(string operandPart, Dictionary<string, BytecodeDataSymbol<TAddrSize>> symbolOffsets)
+            where TAddrSize : struct, IComparable, IComparable<TAddrSize>, IConvertible, IEquatable<TAddrSize>, IFormattable
         {
-            if (TryResolveDataAllocationReference(operandPart, symbolOffsets, out ValueType result))
+            if (TryResolveDataAllocationReference(operandPart, symbolOffsets, out TAddrSize result))
                 return result;
 
             throw new InvalidOperationException($"Unable to resolve operand: {operandPart}");
         }
 
-        public static bool TryResolveDataAllocationReference(string operandPart, Dictionary<string, IBytecodeDataSymbol> symbolOffsets, out ValueType result)
+        public static bool TryResolveDataAllocationReference<TAddrSize>(string operandPart, Dictionary<string, BytecodeDataSymbol<TAddrSize>> symbolOffsets, out TAddrSize result)
+            where TAddrSize : struct, IComparable, IComparable<TAddrSize>, IConvertible, IEquatable<TAddrSize>, IFormattable
         {
-            var unboxAttempt = AssemblerUtility.UnboxParsedOperand(operandPart);
-            if (unboxAttempt is ValueType)
+            var unboxAttempt = UnboxParsedOperand(operandPart);
+            if (unboxAttempt is TAddrSize vt)
             {
-                result = (ValueType)unboxAttempt;
+                result = vt;
                 return true;
             }
             else if (unboxAttempt.GetType() == typeof(string) && symbolOffsets.ContainsKey(operandPart.ToUpperInvariant()))
@@ -238,7 +252,7 @@ namespace picovm.Assembler
                 return true;
             }
 
-            result = 0;
+            result = typeof(TAddrSize) == typeof(UInt32) ? (TAddrSize)(ValueType)(UInt32)0 : (TAddrSize)(ValueType)(UInt64)0;
             return false;
         }
     }

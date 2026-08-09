@@ -25,8 +25,8 @@ namespace picovm.Tests
             Assert.True(File.Exists(Path.Combine(Environment.CurrentDirectory, sourceFileName)), $"Cannot find file {sourceFileName} for test, current directory: {Environment.CurrentDirectory}");
             var compilationInterface = compiler.Compile(sourceFileName);
             Assert.Empty(compilationInterface.Errors);
-            Assert.IsType<CompilationResult64>(compilationInterface);
-            var compilation = (CompilationResult64)compilationInterface;
+            Assert.IsType<CompilationResult<UInt64>>(compilationInterface);
+            var compilation = (CompilationResult<UInt64>)compilationInterface;
 
             var packager = new PackagerElf64(compilation);
 
@@ -61,7 +61,7 @@ namespace picovm.Tests
             // Test program header write/read/compare fidelity
             {
                 var ms = new MemoryStream();
-                var ph = packager.GenerateProgramHeader64();
+                var ph = PackagerElf64.GenerateProgramHeader64();
                 ph.Write(ms);
 
                 ms.Seek(0, SeekOrigin.Begin);

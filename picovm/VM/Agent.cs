@@ -8,45 +8,95 @@ namespace picovm.VM
 
     public class Agent
     {
-        #region Registers
+        #region General Purpose Registers
         // General registers
+        /// <summary>
+        /// Accumulator register (AX). Used in arithmetic operations. Opcodes combining constants into accumulator are 1-byte.
+        /// </summary>
         public const byte R_A = 0;
+        /// <summary>
+        /// Base register (BX). Used as a pointer to data (located in segment register DS, when in segmented mode).
+        /// </summary>
         public const byte R_B = 1;
+        /// <summary>
+        /// Counter register (CX). Used in shift/rotate instructions and loops.
+        /// </summary>
         public const byte R_C = 2;
+        /// <summary>
+        /// Data register (DX). Used in arithmetic operations and I/O operations.
+        /// </summary>
         public const byte R_D = 3;
-        // Index and pointers
-        public const byte R_SI = 4;
-        public const byte R_DI = 5;
-        public const byte R_BP = 6;
-        public const byte R_IP = 7;
-        public const byte R_SP = 8;
-        // Indicator
-        public const byte R_FLAGS = 9;
-        public const byte R_8 = 10;
-        public const byte R_9 = 11;
-        public const byte R_10 = 12;
-        public const byte R_11 = 13;
-        public const byte R_12 = 14;
-        public const byte R_13 = 15;
-        public const byte R_14 = 16;
-        public const byte R_15 = 17;
 
-        // Segment registers
+        // Index and pointers
+        /// <summary>
+        /// Source Index register (SI). Used as a pointer to a source in stream operations.
+        /// </summary>
+        public const byte R_SI = 4;
+        /// <summary>
+        /// Destination Index register (DI). Used as a pointer to a destination in stream operations.
+        /// </summary>
+        public const byte R_DI = 5;
+        /// <summary>
+        /// Stack Base Pointer register (BP). Used to point to the base of the stack.
+        /// </summary>
+        public const byte R_BP = 7;
+        /// <summary>
+        /// Stack Pointer register (SP). Pointer to the top of the stack.
+        /// </summary>
+        public const byte R_SP = 8;
+        #endregion
+
+        #region Pointer Registers
+        public const byte R_IP = 9; // Instruciton Pionter
+        #endregion 
+
+        public const byte R_FLAGS = 10; // Status register
+        public const byte R_8 = 11;
+        public const byte R_9 = 12;
+        public const byte R_10 = 13;
+        public const byte R_11 = 14;
+        public const byte R_12 = 15;
+        public const byte R_13 = 16;
+        public const byte R_14 = 17;
+        public const byte R_15 = 18;
+
+        #region Segment registers
+        /// <summary>
+        /// Code Segment (CS). Pointer to the code ('C' stands for 'Code').
+        /// </summary>
         public const byte SR_CS = 0; // Code
+        /// <summary>
+        /// Data Segment (DS). Pointer to the data ('D' stands for 'Data').
+        /// </summary>
         public const byte SR_DS = 1; // Data
+        /// <summary>
+        /// Stack Segment (SS). Pointer to the stack ('S' stands for 'Stack').
+        /// </summary>
         public const byte SR_SS = 2; // Stack
+        /// <summary>
+        /// Extra Segment (ES). Pointer to extra data ('E' stands for 'Extra'; 'E' comes after 'D').
+        /// </summary>
         public const byte SR_ES = 3; // Extra Data
+        /// <summary>
+        /// F Segment (FS). Pointer to more extra data ('F' comes after 'E').
+        /// </summary>
         public const byte SR_FS = 4; // Extra Data #2
+        /// <summary>
+        /// G Segment (GS). Pointer to still more extra data ('G' comes after 'F').
+        /// </summary>
         public const byte SR_GS = 5; // Extra Data #3 
         #endregion
 
-        protected ulong[] general_registers = new ulong[18];
+        protected ulong[] general_registers = new ulong[19];
 
         protected ushort[] segment_registers = new ushort[6];
 
-        protected bool[] flags = new bool[2];
+        /// <summary>
+        /// The size of the flat address space. Any access at or beyond this faults.
+        /// </summary>
+        public const int AddressSpaceSize = 65536;
 
-        protected byte[] memory = new byte[65536];
+        protected byte[] memory = new byte[AddressSpaceSize];
 
         private UInt32 instructionPointer = 0;
 
@@ -75,6 +125,21 @@ namespace picovm.VM
             this.kernel = kernel;
             Array.Copy(program, memory, program.Length);
             StackPointer = (uint)(memory.Length - 1);
+        }
+
+        public static bool ReadStatusRegister(ulong flagsRegister, Flag flag)
+        {
+            var status32 = (uint)(flagsRegister & uint.MaxValue);
+            return (status32 & (1u << (int)flag)) != 0;
+        }
+
+        public void WriteStatusRegister(Flag flag, bool value) => WriteStatusRegister(general_registers, flag, value);
+
+        public static void WriteStatusRegister(ulong[] registers, Flag flag, bool value)
+        {
+            registers[R_FLAGS] = value
+                ? registers[R_FLAGS] | (1ul << (int)flag)
+                : registers[R_FLAGS] & ~(1ul << (int)flag);
         }
 
         public static uint ReadExtendedRegister(ulong[] registers, Register reference)
@@ -146,7 +211,7 @@ namespace picovm.VM
             return ret;
         }
 
-        public uint ReadExtendedRegister(Register reference) => ReadExtendedRegister(this.general_registers, reference);
+        public uint ReadExtendedRegister(Register reference) => ReadExtendedRegister(general_registers, reference);
 
         public ushort ReadRegister(Register reference)
         {
@@ -207,36 +272,18 @@ namespace picovm.VM
         {
             // 8 bits
             // We want to read the right-most 8 bits of the 64-bit value
-            byte ret;
-            switch (reference)
+            var ret = reference switch
             {
-                case Register.AH:
-                    ret = (byte)((general_registers[R_A] & (ulong)0xFF00) >> 8);
-                    break;
-                case Register.AL:
-                    ret = (byte)(general_registers[R_A] & (ulong)0x00FF);
-                    break;
-                case Register.BH:
-                    ret = (byte)((general_registers[R_B] & (ulong)0xFF00) >> 8);
-                    break;
-                case Register.BL:
-                    ret = (byte)(general_registers[R_B] & (ulong)0x00FF);
-                    break;
-                case Register.CH:
-                    ret = (byte)((general_registers[R_C] & (ulong)0xFF00) >> 8);
-                    break;
-                case Register.CL:
-                    ret = (byte)(general_registers[R_C] & (ulong)0x00FF);
-                    break;
-                case Register.DH:
-                    ret = (byte)((general_registers[R_D] & (ulong)0xFF00) >> 8);
-                    break;
-                case Register.DL:
-                    ret = (byte)(general_registers[R_D] & (ulong)0x00FF);
-                    break;
-                default:
-                    throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
-            }
+                Register.AH => (byte)((general_registers[R_A] & (ulong)0xFF00) >> 8),
+                Register.AL => (byte)(general_registers[R_A] & (ulong)0x00FF),
+                Register.BH => (byte)((general_registers[R_B] & (ulong)0xFF00) >> 8),
+                Register.BL => (byte)(general_registers[R_B] & (ulong)0x00FF),
+                Register.CH => (byte)((general_registers[R_C] & (ulong)0xFF00) >> 8),
+                Register.CL => (byte)(general_registers[R_C] & (ulong)0x00FF),
+                Register.DH => (byte)((general_registers[R_D] & (ulong)0xFF00) >> 8),
+                Register.DL => (byte)(general_registers[R_D] & (ulong)0x00FF),
+                _ => throw new InvalidOperationException($"ERROR: Unknown register {reference}!"),
+            };
             return ret;
         }
 
@@ -262,12 +309,21 @@ namespace picovm.VM
                 case Register.SP:
                     registers[R_SP] = (ulong)hi << 32 | lo;
                     break;
+                case Register.ESI:
+                    registers[R_SI] = (ulong)hi << 32 | lo;
+                    break;
+                case Register.EDI:
+                    registers[R_DI] = (ulong)hi << 32 | lo;
+                    break;
+                case Register.EBP:
+                    registers[R_BP] = (ulong)hi << 32 | lo;
+                    break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown extended register {reference}!");
             }
         }
 
-        public void WriteExtendedRegister(Register reference, uint value) => WriteExtendedRegister(this.general_registers, reference, value);
+        public void WriteExtendedRegister(Register reference, uint value) => WriteExtendedRegister(general_registers, reference, value);
 
         public static void WriteExtendedRegister(ulong[] registers, Register reference, int value)
         {
@@ -287,6 +343,19 @@ namespace picovm.VM
                 case Register.EDX:
                     registers[R_D] = (ulong)(hi << 32 | lo);
                     break;
+                case Register.ESP:
+                case Register.SP:
+                    registers[R_SP] = (ulong)(hi << 32 | lo);
+                    break;
+                case Register.ESI:
+                    registers[R_SI] = (ulong)(hi << 32 | lo);
+                    break;
+                case Register.EDI:
+                    registers[R_DI] = (ulong)(hi << 32 | lo);
+                    break;
+                case Register.EBP:
+                    registers[R_BP] = (ulong)(hi << 32 | lo);
+                    break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown extended register {reference}!");
             }
@@ -302,28 +371,28 @@ namespace picovm.VM
             switch (reference)
             {
                 case Register.AX:
-                    general_registers[R_A] = general_registers[R_A] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    general_registers[R_A] = general_registers[R_A] & ~(ulong)ushort.MaxValue | (ulong)value;
                     break;
                 case Register.BX:
-                    general_registers[R_B] = general_registers[R_B] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    general_registers[R_B] = general_registers[R_B] & ~(ulong)ushort.MaxValue | (ulong)value;
                     break;
                 case Register.CX:
-                    general_registers[R_C] = general_registers[R_C] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    general_registers[R_C] = general_registers[R_C] & ~(ulong)ushort.MaxValue | (ulong)value;
                     break;
                 case Register.DX:
-                    general_registers[R_D] = general_registers[R_D] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    general_registers[R_D] = general_registers[R_D] & ~(ulong)ushort.MaxValue | (ulong)value;
                     break;
                 case Register.DI:
-                    general_registers[R_DI] = general_registers[R_DI] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    general_registers[R_DI] = general_registers[R_DI] & ~(ulong)ushort.MaxValue | (ulong)value;
                     break;
                 case Register.SI:
-                    general_registers[R_SI] = general_registers[R_SI] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    general_registers[R_SI] = general_registers[R_SI] & ~(ulong)ushort.MaxValue | (ulong)value;
                     break;
                 case Register.BP:
-                    general_registers[R_BP] = general_registers[R_BP] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    general_registers[R_BP] = general_registers[R_BP] & ~(ulong)ushort.MaxValue | (ulong)value;
                     break;
                 case Register.IP:
-                    general_registers[R_IP] = general_registers[R_IP] & ~((ulong)ushort.MaxValue) | (ulong)value;
+                    general_registers[R_IP] = general_registers[R_IP] & ~(ulong)ushort.MaxValue | (ulong)value;
                     break;
                 case Register.CS:
                     segment_registers[SR_CS] = value;
@@ -354,53 +423,69 @@ namespace picovm.VM
             switch (reference)
             {
                 case Register.AH:
-                    general_registers[R_A] = general_registers[R_A] & ~((ulong)0xFF00) | ((ulong)value << 8);
+                    general_registers[R_A] = general_registers[R_A] & ~(ulong)0xFF00 | ((ulong)value << 8);
                     break;
                 case Register.AL:
-                    general_registers[R_A] = general_registers[R_A] & ~((ulong)0x00FF) | (ulong)value;
+                    general_registers[R_A] = general_registers[R_A] & ~(ulong)0x00FF | (ulong)value;
                     break;
                 case Register.BH:
-                    general_registers[R_B] = general_registers[R_B] & ~((ulong)0xFF00) | ((ulong)value << 8);
+                    general_registers[R_B] = general_registers[R_B] & ~(ulong)0xFF00 | ((ulong)value << 8);
                     break;
                 case Register.BL:
-                    general_registers[R_B] = general_registers[R_B] & ~((ulong)0x00FF) | (ulong)value;
+                    general_registers[R_B] = general_registers[R_B] & ~(ulong)0x00FF | (ulong)value;
                     break;
                 case Register.CH:
-                    general_registers[R_C] = general_registers[R_C] & ~((ulong)0xFF00) | ((ulong)value << 8);
+                    general_registers[R_C] = general_registers[R_C] & ~(ulong)0xFF00 | ((ulong)value << 8);
                     break;
                 case Register.CL:
-                    general_registers[R_C] = general_registers[R_C] & ~((ulong)0x00FF) | (ulong)value;
+                    general_registers[R_C] = general_registers[R_C] & ~(ulong)0x00FF | (ulong)value;
                     break;
                 case Register.DH:
-                    general_registers[R_D] = general_registers[R_D] & ~((ulong)0xFF00) | ((ulong)value << 8);
+                    general_registers[R_D] = general_registers[R_D] & ~(ulong)0xFF00 | ((ulong)value << 8);
                     break;
                 case Register.DL:
-                    general_registers[R_D] = general_registers[R_D] & ~((ulong)0x00FF) | (ulong)value;
+                    general_registers[R_D] = general_registers[R_D] & ~(ulong)0x00FF | (ulong)value;
                     break;
                 default:
                     throw new InvalidOperationException($"ERROR: Unknown register {reference}!");
             }
         }
 
-        public uint StackPeek32() => BitConverter.ToUInt32(memory, (int)ReadExtendedRegister(Register.SP));
+        /// <summary>
+        /// Copies <paramref name="length"/> bytes of the agent's memory starting at
+        /// <paramref name="address"/>.  Intended for inspection and for asserting the effect
+        /// of stores; the copy keeps callers from mutating the running agent.
+        /// </summary>
+        public byte[] PeekMemory(ulong address, int length)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(length);
+            if (address + (ulong)length > (ulong)memory.Length)
+                throw new ArgumentOutOfRangeException(nameof(length), $"Read of {length} bytes at 0x{address:X} runs past the end of the {memory.Length} byte address space.");
+
+            var slice = new byte[length];
+            Array.Copy(memory, (long)address, slice, 0, length);
+            return slice;
+        }
+
+        public uint StackPeek32() => ReadMemoryUInt32(ReadExtendedRegister(Register.SP));
 
         public uint StackPop32()
         {
-            var ret = BitConverter.ToUInt32(memory, (int)StackPointer);
+            var ret = ReadMemoryUInt32(StackPointer);
             StackPointer += 4;
             return ret;
         }
 
         public ushort StackPop16()
         {
-            var ret = BitConverter.ToUInt16(memory, (int)StackPointer);
+            var ret = ReadMemoryUInt16(StackPointer);
             StackPointer += 2;
             return ret;
         }
 
         public byte StackPop8()
         {
-            var ret = memory[(int)StackPointer];
+            var ret = ReadMemoryByte(StackPointer);
             StackPointer++;
             return ret;
         }
@@ -414,47 +499,45 @@ namespace picovm.VM
 
         public virtual void Dump()
         {
-            Console.WriteLine();
+            Console.Error.WriteLine();
             Console.Error.Write($"EAX: 0x{ReadExtendedRegister(Register.EAX):X4} ({ReadExtendedRegister(Register.EAX).ToString().PadLeft(2)})\t");
-            Console.Write($"EBX: 0x{ReadExtendedRegister(Register.EBX):X4} ({ReadExtendedRegister(Register.EBX).ToString().PadLeft(2)})\t");
-            Console.Write($"ECX: 0x{ReadExtendedRegister(Register.ECX):X4} ({ReadExtendedRegister(Register.ECX).ToString().PadLeft(2)})\t");
-            Console.WriteLine($"EDX: 0x{ReadExtendedRegister(Register.EDX):X4} ({ReadExtendedRegister(Register.EDX).ToString().PadLeft(2)})");
-            Console.WriteLine($"EIP: 0x{instructionPointer:X4} ({instructionPointer})\tESP: 0x{StackPointer:X4} ({StackPointer})");
-            Console.WriteLine("(Stack)");
+            Console.Error.Write($"EBX: 0x{ReadExtendedRegister(Register.EBX):X4} ({ReadExtendedRegister(Register.EBX).ToString().PadLeft(2)})\t");
+            Console.Error.Write($"ECX: 0x{ReadExtendedRegister(Register.ECX):X4} ({ReadExtendedRegister(Register.ECX).ToString().PadLeft(2)})\t");
+            Console.Error.WriteLine($"EDX: 0x{ReadExtendedRegister(Register.EDX):X4} ({ReadExtendedRegister(Register.EDX).ToString().PadLeft(2)})");
+            Console.Error.WriteLine($"EIP: 0x{instructionPointer:X4} ({instructionPointer})\tESP: 0x{StackPointer:X4} ({StackPointer})");
+            Console.Error.WriteLine("(Stack)");
             var i = (ulong)memory.Length;
             var qword = new byte[8];
             do
             {
                 Array.Copy(memory, (int)i - 8, qword, 0, 8);
                 var output = qword.Select(b => $"{b:X2}").Aggregate((c, n) => $"{c} {n}");
-                Console.WriteLine($"{i}\t: {output}");
+                Console.Error.WriteLine($"{i}\t: {output}");
                 i -= 8;
             } while (i > StackPointer);
-            Console.WriteLine("...");
+            Console.Error.WriteLine("...");
             i = instructionPointer + (8 - instructionPointer % 8);
             do
             {
                 Array.Copy(memory, (uint)i - 8, qword, 0, 8);
                 var output = qword.Select(b => $"{b:X2}").Aggregate((c, n) => $"{c} {n}");
-                Console.WriteLine($"{i}\t: {output}");
+                Console.Error.WriteLine($"{i}\t: {output}");
                 i -= 8;
             } while (i > 0);
         }
 
-        public virtual int? Tick()
+        public virtual TickResult Tick()
         {
-            var instruction = (Bytecode)memory[instructionPointer];
+            var instruction = (Bytecode)ReadMemoryByte(instructionPointer);
             instructionPointer++;
 
-            int? ret = null;
             switch (instruction)
             {
                 case Bytecode.END:
-                    ret = 0;
-                    break;
+                    return new TickResult(TickErrorCode.Ok, true);
                 case Bytecode.ADD_REG_CON:
                     {
-                        var operand1 = (Register)memory[instructionPointer];
+                        var operand1 = (Register)ReadMemoryByte(instructionPointer);
                         instructionPointer++;
 
                         switch (operand1.Size())
@@ -462,28 +545,61 @@ namespace picovm.VM
                             case 4:
                                 {
                                     var operand1value = ReadExtendedRegister(operand1);
-                                    instructionPointer++;
-                                    var operand2value = BitConverter.ToUInt32(memory, (int)instructionPointer);
+                                    var operand2value = ReadMemoryUInt32(instructionPointer);
                                     instructionPointer += 4;
                                     WriteExtendedRegister(operand1, operand1value + operand2value);
+
+                                    var result = (long)operand1value + operand2value;
+                                    var operand1Signed = (int)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (int)operand2value; // Re-interpret as signed
+                                    var resultSigned = operand1Signed + operand2Signed;
+
+                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
+                                    WriteStatusRegister(Flag.CARRY_FLAG, result > uint.MaxValue);
+                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
+                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0);
+                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) + (operand2value & 0xF) > 0xF);
+                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
                                     break;
                                 }
                             case 2:
                                 {
                                     var operand1value = ReadRegister(operand1);
-                                    instructionPointer++;
-                                    var operand2value = BitConverter.ToUInt16(memory, (int)instructionPointer);
+                                    var operand2value = ReadMemoryUInt16(instructionPointer);
                                     instructionPointer += 2;
-                                    WriteRegister(operand1, ((ushort)(operand1value + operand2value)));
+                                    WriteRegister(operand1, (ushort)(operand1value + operand2value));
+
+                                    var result = (uint)operand1value + operand2value;
+                                    var operand1Signed = (short)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (short)operand2value; // Re-interpret as signed
+                                    var resultSigned = (short)(operand1Signed + operand2Signed);
+
+                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
+                                    WriteStatusRegister(Flag.CARRY_FLAG, result > ushort.MaxValue);
+                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
+                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0);
+                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) + (operand2value & 0xF) > 0xF);
+                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
                                     break;
                                 }
                             case 1:
                                 {
                                     var operand1value = ReadHalfRegister(operand1);
+                                    var operand2value = ReadMemoryByte(instructionPointer);
                                     instructionPointer++;
-                                    var operand2value = memory[(int)instructionPointer];
-                                    instructionPointer++;
-                                    WriteHalfRegister(operand1, ((byte)(operand1value + operand2value)));
+                                    WriteHalfRegister(operand1, (byte)(operand1value + operand2value));
+
+                                    var result = operand1value + operand2value;
+                                    var operand1Signed = (sbyte)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (sbyte)operand2value; // Re-interpret as signed
+                                    var resultSigned = (sbyte)(operand1Signed + operand2Signed);
+
+                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
+                                    WriteStatusRegister(Flag.CARRY_FLAG, result > byte.MaxValue);
+                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
+                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0);
+                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) + (operand2value & 0xF) > 0xF);
+                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
                                     break;
                                 }
                             default:
@@ -493,7 +609,7 @@ namespace picovm.VM
                     }
                 case Bytecode.ADD_MEM_CON:
                     {
-                        var operand1 = (Register)memory[instructionPointer];
+                        var operand1 = (Register)ReadMemoryByte(instructionPointer);
                         instructionPointer++;
 
                         switch (operand1.Size())
@@ -501,28 +617,65 @@ namespace picovm.VM
                             case 4:
                                 {
                                     var loc = ReadExtendedRegister(operand1);
-                                    var operand1value = BitConverter.ToUInt32(memory, (int)loc);
-                                    var operand2value = BitConverter.ToUInt32(memory, (int)instructionPointer);
+                                    var operand1value = ReadMemoryUInt32(loc);
+                                    var operand2value = ReadMemoryUInt32(instructionPointer);
                                     instructionPointer += 4;
                                     Array.Copy(BitConverter.GetBytes(operand1value + operand2value), 0, memory, loc, 4);
+
+                                    var result = (long)operand1value + operand2value;
+                                    var operand1Signed = (int)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (int)operand2value; // Re-interpret as signed
+                                    var resultSigned = operand1Signed + operand2Signed;
+
+                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
+                                    WriteStatusRegister(Flag.CARRY_FLAG, result > uint.MaxValue);
+                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
+                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0);
+                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) + (operand2value & 0xF) > 0xF);
+                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
                                     break;
                                 }
                             case 2:
                                 {
                                     var loc = ReadRegister(operand1);
-                                    var operand1value = BitConverter.ToUInt16(memory, (int)loc);
-                                    var operand2value = BitConverter.ToUInt16(memory, (int)instructionPointer);
+                                    var operand1value = ReadMemoryUInt16(loc);
+                                    var operand2value = ReadMemoryUInt16(instructionPointer);
                                     instructionPointer += 2;
                                     Array.Copy(BitConverter.GetBytes((ushort)(operand1value + operand2value)), 0, memory, loc, 2);
+
+                                    var result = (uint)operand1value + operand2value;
+                                    var operand1Signed = (short)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (short)operand2value; // Re-interpret as signed
+                                    var resultSigned = (short)(operand1Signed + operand2Signed);
+
+                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
+                                    WriteStatusRegister(Flag.CARRY_FLAG, result > ushort.MaxValue);
+                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
+                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0);
+                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) + (operand2value & 0xF) > 0xF);
+                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
                                     break;
                                 }
                             case 1:
                                 {
                                     var loc = ReadHalfRegister(operand1);
-                                    var operand1value = memory[(int)loc];
-                                    var operand2value = memory[(int)instructionPointer];
+                                    var operand1value = ReadMemoryByte(loc);
+                                    var operand2value = ReadMemoryByte(instructionPointer);
                                     instructionPointer += 1;
-                                    memory[(int)loc] = (byte)(operand1value + operand2value);
+                                    memory[loc] = (byte)(operand1value + operand2value);
+
+                                    var result = operand1value + operand2value;
+                                    var operand1Signed = (sbyte)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (sbyte)operand2value; // Re-interpret as signed
+                                    var resultSigned = (sbyte)(operand1Signed + operand2Signed);
+
+                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
+                                    WriteStatusRegister(Flag.CARRY_FLAG, result > byte.MaxValue);
+                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
+                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0);
+                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) + (operand2value & 0xF) > 0xF);
+                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+
                                     break;
                                 }
                             default:
@@ -532,7 +685,7 @@ namespace picovm.VM
                     }
                 case Bytecode.AND_REG_CON:
                     {
-                        var operand1 = (Register)memory[instructionPointer];
+                        var operand1 = (Register)ReadMemoryByte(instructionPointer);
                         instructionPointer++;
 
                         switch (operand1.Size())
@@ -540,31 +693,64 @@ namespace picovm.VM
                             case 4:
                                 {
                                     var operand1value = ReadExtendedRegister(operand1);
-                                    var operand2value = BitConverter.ToUInt32(memory, (int)instructionPointer);
+                                    var operand2value = ReadMemoryUInt32(instructionPointer);
                                     instructionPointer += 4;
                                     var val = operand1value & operand2value;
-                                    flags[(int)Flag.ZERO_FLAG] = val == 0;
                                     WriteExtendedRegister(operand1, val);
+
+                                    var result = (long)operand1value & operand2value;
+                                    var operand1Signed = (int)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (int)operand2value; // Re-interpret as signed
+                                    var resultSigned = operand1Signed & operand2Signed;
+
+                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
+                                    WriteStatusRegister(Flag.CARRY_FLAG, false);
+                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
+                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
+                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
+                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
                                     break;
                                 }
                             case 2:
                                 {
                                     var operand1value = ReadRegister(operand1);
-                                    var operand2value = BitConverter.ToUInt16(memory, (int)instructionPointer);
+                                    var operand2value = ReadMemoryUInt16(instructionPointer);
                                     instructionPointer += 2;
                                     var val = (ushort)(operand1value & operand2value);
-                                    flags[(int)Flag.ZERO_FLAG] = val == 0;
                                     WriteRegister(operand1, val);
+
+                                    var result = (uint)operand1value & operand2value;
+                                    var operand1Signed = (short)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (short)operand2value; // Re-interpret as signed
+                                    var resultSigned = (short)(operand1Signed & operand2Signed);
+
+                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
+                                    WriteStatusRegister(Flag.CARRY_FLAG, false);
+                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
+                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
+                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
+                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
                                     break;
                                 }
                             case 1:
                                 {
                                     var operand1value = ReadHalfRegister(operand1);
-                                    var operand2value = memory[(int)instructionPointer];
+                                    var operand2value = ReadMemoryByte(instructionPointer);
                                     instructionPointer++;
                                     var val = (byte)(operand1value & operand2value);
-                                    flags[(int)Flag.ZERO_FLAG] = val == 0;
                                     WriteHalfRegister(operand1, val);
+
+                                    var result = operand1value & operand2value;
+                                    var operand1Signed = (sbyte)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (sbyte)operand2value; // Re-interpret as signed
+                                    var resultSigned = (sbyte)(operand1Signed & operand2Signed);
+
+                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
+                                    WriteStatusRegister(Flag.CARRY_FLAG, false);
+                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
+                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
+                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
+                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
                                     break;
                                 }
                             default:
@@ -572,9 +758,84 @@ namespace picovm.VM
                         }
                         break;
                     }
+                case Bytecode.CMP_REG_CON:
+                    {
+                        var operand1 = (Register)ReadMemoryByte(instructionPointer);
+
+                        switch (operand1.Size())
+                        {
+                            case 4:
+                                {
+                                    // For example: CMP EAX, imm32
+                                    var operand1value = ReadExtendedRegister(operand1);
+                                    instructionPointer++;
+                                    var operand2value = ReadMemoryUInt32(instructionPointer);
+                                    instructionPointer += 4;
+
+                                    var result = (long)operand1value - operand2value;
+                                    var operand1valueInt = (int)operand1value; // Re-interpret as signed
+                                    var operand2valueInt = (int)operand2value; // Re-interpret as signed
+                                    var resultSignedInt = operand1valueInt - operand2valueInt;
+
+                                    WriteStatusRegister(Flag.ZERO_FLAG, result == 0);
+                                    WriteStatusRegister(Flag.CARRY_FLAG, operand1value < operand2value);
+                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSignedInt < 0);
+                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1valueInt ^ operand2valueInt) & (operand1valueInt ^ resultSignedInt)) < 0);
+                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) < (operand2value & 0xF));
+                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                    break;
+                                }
+                            case 2:
+                                {
+                                    // For example: CMP AX, imm16
+                                    var operand1value = ReadRegister(operand1);
+                                    instructionPointer++;
+                                    var operand2value = ReadMemoryUInt16(instructionPointer);
+                                    instructionPointer += 2;
+
+                                    var result = operand1value - operand2value;
+                                    var operand1valueShort = (short)operand1value; // Re-interpret as signed
+                                    var operand2valueShort = (short)operand2value; // Re-interpret as signed
+                                    var resultSignedShort = (short)(operand1valueShort - operand2valueShort);
+
+                                    WriteStatusRegister(Flag.ZERO_FLAG, result == 0);
+                                    WriteStatusRegister(Flag.CARRY_FLAG, operand1value < operand2value);
+                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSignedShort < 0);
+                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1valueShort ^ operand2valueShort) & (operand1valueShort ^ resultSignedShort)) < 0);
+                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) < (operand2value & 0xF));
+                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                    break;
+                                }
+                            case 1:
+                                {
+                                    // For example: CMP AL, imm8
+                                    var operand1value = ReadHalfRegister(operand1);
+                                    instructionPointer++;
+                                    var operand2value = memory[(int)instructionPointer];
+                                    instructionPointer++;
+
+                                    var result = operand1value - operand2value;
+                                    var operand1valueSbyte = (sbyte)operand1value; // Re-interpret as signed
+                                    var operand2valueSbyte = (sbyte)operand2value; // Re-interpret as signed
+                                    var resultSignedSbyte = (sbyte)(operand1valueSbyte - operand2valueSbyte);
+
+                                    WriteStatusRegister(Flag.ZERO_FLAG, result == 0);
+                                    WriteStatusRegister(Flag.CARRY_FLAG, operand1value < operand2value);
+                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSignedSbyte < 0);
+                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1valueSbyte ^ operand2valueSbyte) & (operand1valueSbyte ^ resultSignedSbyte)) < 0);
+                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) < (operand2value & 0xF));
+                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                    break;
+                                }
+                            default:
+                                throw new InvalidOperationException($"ERROR: CMP cannot handle the type of register targeted: {operand1}");
+                        }
+                        break;
+                    }
                 case Bytecode.SYSCALL:
+                    // A true result from the kernel means the syscall terminated the program (sys_exit).
                     if (kernel.HandleInterrupt(ref general_registers, ref memory))
-                        return 0;
+                        return new TickResult(TickErrorCode.Ok, true);
                     break;
                 case Bytecode.INT:
                     {
@@ -586,18 +847,19 @@ namespace picovm.VM
                         {
                             // Linux kernel interrupt
                             case 0x80:
+                                // A true result from the kernel means the syscall terminated the program (sys_exit).
                                 if (kernel.HandleInterrupt(ref general_registers, ref memory))
-                                    return 0;
+                                    return new TickResult(TickErrorCode.Ok, true);
                                 break;
                         }
 
                         break;
                     }
-                case Bytecode.MOV_REG_REG:
+                case Bytecode.MOV_REGISTER: // aka MOV EAX, EBX
                     {
-                        var dst = (Register)memory[instructionPointer];
+                        var dst = (Register)ReadMemoryByte(instructionPointer);
                         instructionPointer++;
-                        var src = (Register)memory[instructionPointer];
+                        var src = (Register)ReadMemoryByte(instructionPointer);
                         instructionPointer++;
 
                         switch (src.Size())
@@ -662,56 +924,23 @@ namespace picovm.VM
                         }
                         break;
                     }
-                case Bytecode.MOV_REG_MEM:
+                case Bytecode.MOV_IMMEDIATE: // aka MOV EAX, 65 (or) MOV EAX, counter
                     {
-                        var dst = (Register)memory[instructionPointer];
-                        instructionPointer++;
-                        switch (dst.Size())
-                        {
-                            case 4:
-                                {
-                                    var loc = BitConverter.ToUInt32(memory, (int)instructionPointer);
-                                    instructionPointer += 4;
-                                    WriteExtendedRegister(dst, loc);
-                                    break;
-                                }
-                            case 2:
-                                {
-                                    var loc = BitConverter.ToUInt16(memory, (int)instructionPointer);
-                                    instructionPointer += 2;
-                                    WriteRegister(dst, loc);
-                                    break;
-                                }
-                            case 1:
-                                {
-                                    var loc = memory[instructionPointer];
-                                    instructionPointer++;
-                                    WriteHalfRegister(dst, loc);
-                                    break;
-                                }
-                            default:
-                                Dump();
-                                throw new InvalidOperationException($"ERROR: Unrecognized register for MOV dst: {dst}");
-                        }
-                        break;
-                    }
-                case Bytecode.MOV_REG_CON:
-                    {
-                        var dst = (Register)memory[instructionPointer];
+                        var dst = (Register)ReadMemoryByte(instructionPointer);
                         instructionPointer++;
 
                         switch (dst.Size())
                         {
                             case 4:
                                 {
-                                    var val = BitConverter.ToUInt32(memory, (int)instructionPointer);
+                                    var val = ReadMemoryUInt32(instructionPointer);
                                     instructionPointer += 4;
                                     WriteExtendedRegister(dst, val);
                                     break;
                                 }
                             case 2:
                                 {
-                                    var val = BitConverter.ToUInt16(memory, (int)instructionPointer);
+                                    var val = ReadMemoryUInt16(instructionPointer);
                                     instructionPointer += 2;
                                     WriteRegister(dst, val);
                                     break;
@@ -729,9 +958,75 @@ namespace picovm.VM
                         }
                         break;
                     }
+                case Bytecode.MOV_INDIRECT: // aka MOV EAX, [EBX]
+                    {
+                        var dst = (Register)ReadMemoryByte(instructionPointer);
+                        instructionPointer++;
+                        var src = (Register)ReadMemoryByte(instructionPointer);
+                        instructionPointer++;
+
+                        // The source register holds the address to dereference, not a value.
+                        uint addr = src.Size() switch
+                        {
+                            4 => ReadExtendedRegister(src),
+                            2 => ReadRegister(src),
+                            1 => ReadHalfRegister(src),
+                            _ => throw new InvalidOperationException($"ERROR: Unrecognized register for MOV src: {src}")
+                        };
+
+                        // The destination register's width decides how much to load.
+                        switch (dst.Size())
+                        {
+                            case 4:
+                                {
+                                    var val = ReadMemoryUInt32(addr);
+                                    WriteExtendedRegister(dst, val);
+                                    break;
+                                }
+                            case 2:
+                                {
+                                    var val = ReadMemoryUInt16(addr);
+                                    WriteRegister(dst, val);
+                                    break;
+                                }
+                            case 1:
+                                {
+                                    var val = ReadMemoryByte(addr);
+                                    WriteHalfRegister(dst, val);
+                                    break;
+                                }
+                            default:
+                                Dump();
+                                throw new InvalidOperationException($"ERROR: Unrecognized register for MOV dst: {dst}");
+                        }
+                        break;
+                    }
+                case Bytecode.MOV_DIRECT: // aka MOV [counter], 65 ; Formerly MOV_MEM_CON
+                    {
+                        // Absolute destination address, always machine width, patched at link time.
+                        var addr = ReadMemoryUInt32(instructionPointer);
+                        instructionPointer += 4;
+
+                        // Width of the store.  Unlike every other MOV, no operand implies it: the
+                        // destination is a bare address, so the assembler states it explicitly.
+                        var size = ReadMemoryByte(instructionPointer);
+                        instructionPointer++;
+
+                        if (size != 1 && size != 2 && size != 4)
+                        {
+                            Dump();
+                            throw new InvalidOperationException($"ERROR: Unsupported operand size for MOV: {size}");
+                        }
+
+                        // The immediate is already little-endian in the instruction stream and the
+                        // destination is raw memory, so the store is a byte copy at any width.
+                        Array.Copy(memory, (int)instructionPointer, memory, (int)addr, size);
+                        instructionPointer += size;
+                        break;
+                    }
                 case Bytecode.POP_REG:
                     {
-                        var operand = (Register)memory[instructionPointer];
+                        var operand = (Register)ReadMemoryByte(instructionPointer);
                         instructionPointer++;
 
                         if (operand == Register.EAX || operand == Register.EBX || operand == Register.ECX || operand == Register.EDX || operand == Register.EDI || operand == Register.ESI)
@@ -758,7 +1053,7 @@ namespace picovm.VM
                     }
                 case Bytecode.POP_MEM:
                     {
-                        var operand = (Register)memory[instructionPointer];
+                        var operand = (Register)ReadMemoryByte(instructionPointer);
                         instructionPointer++;
 
                         switch (operand.Size())
@@ -778,7 +1073,7 @@ namespace picovm.VM
                             case 1:
                                 {
                                     var loc = ReadHalfRegister(operand);
-                                    memory[(int)loc] = StackPop8();
+                                    memory[loc] = StackPop8();
                                     break;
                                 }
                             default:
@@ -789,7 +1084,7 @@ namespace picovm.VM
                     }
                 case Bytecode.PUSH_REG:
                     {
-                        var operand = (Register)memory[instructionPointer];
+                        var operand = (Register)ReadMemoryByte(instructionPointer);
                         instructionPointer++;
                         switch (operand.Size())
                         {
@@ -810,13 +1105,13 @@ namespace picovm.VM
                     }
                 case Bytecode.PUSH_MEM:
                     {
-                        var operand = (Register)memory[instructionPointer];
+                        var operand = (Register)ReadMemoryByte(instructionPointer);
                         instructionPointer++;
 
                         if (operand == Register.EAX || operand == Register.EBX || operand == Register.ECX || operand == Register.EDX || operand == Register.EDI || operand == Register.ESI)
                         {
                             var loc = ReadExtendedRegister(operand);
-                            var val = BitConverter.ToUInt32(memory, (int)loc);
+                            var val = ReadMemoryUInt32(loc);
                             StackPush(val);
                         }
                         else if (
@@ -827,7 +1122,7 @@ namespace picovm.VM
                             operand == Register.FS || operand == Register.GS)
                         {
                             var loc = ReadRegister(operand);
-                            var val = BitConverter.ToUInt16(memory, (int)loc);
+                            var val = ReadMemoryUInt16(loc);
                             StackPush(val);
                         }
                         else if (operand == Register.AH || operand == Register.AL
@@ -836,7 +1131,7 @@ namespace picovm.VM
                             || operand == Register.DH || operand == Register.DL)
                         {
                             var loc = ReadHalfRegister(operand);
-                            var val = memory[(int)loc];
+                            var val = ReadMemoryByte(loc);
                             StackPush(val);
                         }
                         else
@@ -850,8 +1145,8 @@ namespace picovm.VM
                 case Bytecode.PUSH_CON:
                     {
                         // Push is ALWAYS a 32-bit operation
-                        var operand = (Register)memory[instructionPointer];
-                        var val = BitConverter.ToUInt32(memory, (int)instructionPointer);
+                        var _ = (Register)ReadMemoryByte(instructionPointer);
+                        var val = ReadMemoryUInt32(instructionPointer);
                         instructionPointer += 4;
                         StackPush(val);
 
@@ -859,48 +1154,207 @@ namespace picovm.VM
                     }
                 case Bytecode.JMP:
                     {
-                        var loc = BitConverter.ToUInt32(memory, (int)instructionPointer);
+                        var loc = ReadMemoryUInt32(instructionPointer);
                         instructionPointer = loc;
                         break;
                     }
-                case Bytecode.JZ:
-                    {
-                        var loc = BitConverter.ToUInt32(memory, (int)instructionPointer);
-                        if (flags[(int)Flag.ZERO_FLAG])
-                            instructionPointer = loc;
-                        else
-                            instructionPointer += 4;
-                        break;
-                    }
+                case Bytecode.JE: // Jump if equal (ZF=1)
+                case Bytecode.JZ: // Jump if zero (ZF=1); these two are functionally equivilent
+                    if (ReadStatusRegister(general_registers[R_FLAGS], Flag.ZERO_FLAG))
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
+                case Bytecode.JNE: // Jump if not equal (ZF=0)
+                case Bytecode.JNZ: // Jump if not zero (ZF=0); these two are functionally equivilent
+                    if (!ReadStatusRegister(general_registers[R_FLAGS], Flag.ZERO_FLAG))
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
+                case Bytecode.JO: // Jump if overflow (OF=1)
+                    if (ReadStatusRegister(general_registers[R_FLAGS], Flag.OVERFLOW_FLAG))
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
+                case Bytecode.JNO: // Jump if not overflow (OF=0)
+                    if (!ReadStatusRegister(general_registers[R_FLAGS], Flag.OVERFLOW_FLAG))
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
+                case Bytecode.JS: // Jump if sign (SF=1)
+                    if (ReadStatusRegister(general_registers[R_FLAGS], Flag.SIGN_FLAG))
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
+                case Bytecode.JNS: // Jump if not sign (SF=0)
+                    if (!ReadStatusRegister(general_registers[R_FLAGS], Flag.SIGN_FLAG))
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
+                case Bytecode.JB: // Jump if below (CF=1)
+                case Bytecode.JNAE: // Jump if not above or equal (CF=1)
+                case Bytecode.JC: // Jump if carry (CF=1)
+                    if (ReadStatusRegister(general_registers[R_FLAGS], Flag.CARRY_FLAG))
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
+                case Bytecode.JNB: // Jump if not below (CF=0)
+                case Bytecode.JAE: // Jump if above or equal (CF=0)
+                case Bytecode.JNC: // Jump if not carry (CF=0)
+                    if (!ReadStatusRegister(general_registers[R_FLAGS], Flag.CARRY_FLAG))
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
+                case Bytecode.JBE: // Jump if below or equal (CF=1 or ZF=1)
+                case Bytecode.JNA: // Jump if not above (CF=1 or ZF=1)
+                    if (ReadStatusRegister(general_registers[R_FLAGS], Flag.CARRY_FLAG)
+                        || ReadStatusRegister(general_registers[R_FLAGS], Flag.ZERO_FLAG))
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
+                case Bytecode.JA:   // Jump if above (CF=0 and ZF=0)
+                case Bytecode.JNBE: // Jump if not below or equal (CF=0 and ZF=0)
+                    if (!ReadStatusRegister(general_registers[R_FLAGS], Flag.CARRY_FLAG)
+                        && !ReadStatusRegister(general_registers[R_FLAGS], Flag.ZERO_FLAG))
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
+                case Bytecode.JL:   // Jump if less (SF <> OF)
+                case Bytecode.JNGE: // Jump if not greater or equal (SF <> OF)
+                    if (ReadStatusRegister(general_registers[R_FLAGS], Flag.SIGN_FLAG)
+                        != ReadStatusRegister(general_registers[R_FLAGS], Flag.OVERFLOW_FLAG))
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
+                case Bytecode.JGE: // Jump if greater or equal (SF = OF)
+                case Bytecode.JNL: // Jump if not less (SF = OF)
+                    if (ReadStatusRegister(general_registers[R_FLAGS], Flag.SIGN_FLAG)
+                        == ReadStatusRegister(general_registers[R_FLAGS], Flag.OVERFLOW_FLAG))
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
+                case Bytecode.JLE: // Jump if less or equal (ZF=1 or SF<>OF)
+                case Bytecode.JNG: // Jump if not greater (ZF=1 or SF<>OF)
+                    if (ReadStatusRegister(general_registers[R_FLAGS], Flag.ZERO_FLAG)
+                        || (
+                            ReadStatusRegister(general_registers[R_FLAGS], Flag.SIGN_FLAG)
+                            != ReadStatusRegister(general_registers[R_FLAGS], Flag.OVERFLOW_FLAG))
+                        )
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
+                case Bytecode.JG:   // Jump if greater (ZF=0 and SF=OF)
+                case Bytecode.JNLE: // Jump if not less or equal (ZF=0 and SF=OF)
+                    if (!ReadStatusRegister(general_registers[R_FLAGS], Flag.ZERO_FLAG)
+                        && (
+                            ReadStatusRegister(general_registers[R_FLAGS], Flag.SIGN_FLAG)
+                            == ReadStatusRegister(general_registers[R_FLAGS], Flag.OVERFLOW_FLAG))
+                        )
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
+                case Bytecode.JP:  // Jump if parity (PF=1)
+                case Bytecode.JPE: // Jump if parity even (PF=1)
+                    if (ReadStatusRegister(general_registers[R_FLAGS], Flag.PARITY_FLAG))
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
+                case Bytecode.JNP: // Jump if not parity (PF=0)
+                case Bytecode.JPO: // Jump if parity odd (PF=0)
+                    if (!ReadStatusRegister(general_registers[R_FLAGS], Flag.PARITY_FLAG))
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
+                case Bytecode.JCXZ: // Jump if %CX register is 0
+                    if (ReadRegister(Register.CX) == 0)
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
+                case Bytecode.JECXZ: // Jump if %ECX register is 0
+                    if (ReadExtendedRegister(Register.ECX) == 0)
+                        instructionPointer = ReadMemoryUInt32(instructionPointer);
+                    else
+                        instructionPointer += 4;
+                    break;
                 case Bytecode.XOR_REG_REG:
                     {
-                        var dst = (Register)memory[instructionPointer];
+                        var dst = (Register)ReadMemoryByte(instructionPointer);
                         instructionPointer++;
-                        var src = (Register)memory[instructionPointer];
+                        var src = (Register)ReadMemoryByte(instructionPointer);
                         instructionPointer++;
 
                         if (src == Register.EAX || src == Register.EBX || src == Register.ECX || src == Register.EDX)
                         {
-                            var srcVal = ReadExtendedRegister(src);
-                            if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX || dst == Register.EDI || dst == Register.ESI)
+                            var operand2value = ReadExtendedRegister(src);
+                            switch (dst)
                             {
-                                var dstVal = ReadExtendedRegister(dst);
-                                WriteExtendedRegister(dst, dstVal ^ srcVal);
+                                case Register.EAX:
+                                case Register.EBX:
+                                case Register.ECX:
+                                case Register.EDX:
+                                case Register.EDI:
+                                case Register.ESI:
+                                    {
+                                        var operand1value = ReadExtendedRegister(dst);
+                                        WriteExtendedRegister(dst, operand1value ^ operand2value);
+
+                                        var result = (long)operand1value ^ operand2value;
+                                        var operand1Signed = (int)operand1value; // Re-interpret as signed
+                                        var operand2Signed = (int)operand2value; // Re-interpret as signed
+                                        var resultSigned = operand1Signed ^ operand2Signed;
+
+                                        WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
+                                        WriteStatusRegister(Flag.CARRY_FLAG, false);
+                                        WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
+                                        WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
+                                        WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
+                                        WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                        break;
+                                    }
+
+                                case Register.AX:
+                                case Register.BX:
+                                case Register.CX:
+                                case Register.DX:
+                                case Register.DI:
+                                case Register.SI:
+                                case Register.BP:
+                                case Register.IP:
+                                case Register.CS:
+                                case Register.DS:
+                                case Register.SS:
+                                case Register.ES:
+                                case Register.FS:
+                                case Register.GS:
+                                    throw new InvalidOperationException("ERROR: XOR dst is a word but source is a dword");
+                                case Register.AH:
+                                case Register.AL:
+                                case Register.BH:
+                                case Register.BL:
+                                case Register.CH:
+                                case Register.CL:
+                                case Register.DH:
+                                case Register.DL:
+                                    throw new InvalidOperationException("ERROR: XOR dst is a byte but source is a dword");
+                                default:
+                                    throw new InvalidOperationException("ERROR: Unrecognized register for XOR dst");
                             }
-                            else if (
-                                dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX ||
-                                dst == Register.DI || dst == Register.SI || dst == Register.BP || dst == Register.IP ||
-                                dst == Register.CS || dst == Register.DS ||
-                                dst == Register.SS || dst == Register.ES ||
-                                dst == Register.FS || dst == Register.GS)
-                                throw new InvalidOperationException("ERROR: XOR dst is a word but source is a dword");
-                            else if (dst == Register.AH || dst == Register.AL
-                                || dst == Register.BH || dst == Register.BL
-                                || dst == Register.CH || dst == Register.CL
-                                || dst == Register.DH || dst == Register.DL)
-                                throw new InvalidOperationException("ERROR: XOR dst is a byte but source is a dword");
-                            else
-                                throw new InvalidOperationException("ERROR: Unrecognized register for XOR dst");
                         }
                         else if (
                                 src == Register.AX || src == Register.BX || src == Register.CX || src == Register.DX ||
@@ -909,11 +1363,20 @@ namespace picovm.VM
                                 src == Register.SS || src == Register.ES ||
                                 src == Register.FS || src == Register.GS)
                         {
-                            var srcVal = ReadRegister(src);
+                            var operand2value = ReadRegister(src);
                             if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX || dst == Register.EDI || dst == Register.ESI)
                             {
-                                var dstVal = ReadExtendedRegister(dst);
-                                WriteExtendedRegister(dst, dstVal ^ srcVal);
+                                var operand1value = ReadExtendedRegister(dst);
+                                WriteExtendedRegister(dst, operand1value ^ operand2value);
+
+                                var result = (int)operand1value ^ operand2value;
+
+                                WriteStatusRegister(Flag.ZERO_FLAG, result == 0);
+                                WriteStatusRegister(Flag.CARRY_FLAG, false);
+                                WriteStatusRegister(Flag.SIGN_FLAG, result < 0);
+                                WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
+                                WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
+                                WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
                             }
                             else if (
                                 dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX ||
@@ -922,8 +1385,17 @@ namespace picovm.VM
                                 dst == Register.SS || dst == Register.ES ||
                                 dst == Register.FS || dst == Register.GS)
                             {
-                                var dstVal = ReadRegister(dst);
-                                WriteRegister(dst, (ushort)(dstVal ^ srcVal));
+                                var operand1value = ReadRegister(dst);
+                                WriteRegister(dst, (ushort)(operand1value ^ operand2value));
+
+                                var result = operand1value ^ operand2value;
+
+                                WriteStatusRegister(Flag.ZERO_FLAG, result == 0);
+                                WriteStatusRegister(Flag.CARRY_FLAG, false);
+                                WriteStatusRegister(Flag.SIGN_FLAG, result < 0);
+                                WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
+                                WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
+                                WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
                             }
                             else if (dst == Register.AH || dst == Register.AL
                                 || dst == Register.BH || dst == Register.BL
@@ -938,32 +1410,85 @@ namespace picovm.VM
                             || src == Register.CH || src == Register.CL
                             || src == Register.DH || src == Register.DL)
                         {
-                            var srcVal = ReadHalfRegister(src);
-                            if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX || dst == Register.EDI || dst == Register.ESI)
+                            var operand2value = ReadHalfRegister(src);
+                            switch (dst)
                             {
-                                var dstVal = ReadExtendedRegister(dst);
-                                WriteExtendedRegister(dst, dstVal ^ srcVal);
+                                case Register.EAX:
+                                case Register.EBX:
+                                case Register.ECX:
+                                case Register.EDX:
+                                case Register.EDI:
+                                case Register.ESI:
+                                    {
+                                        var operand1value = ReadExtendedRegister(dst);
+                                        WriteExtendedRegister(dst, operand1value ^ operand2value);
+
+                                        var result = (int)operand1value ^ operand2value; // dst's full 32 bits preserved; src (byte) zero-extends
+
+                                        WriteStatusRegister(Flag.ZERO_FLAG, result == 0);
+                                        WriteStatusRegister(Flag.CARRY_FLAG, false);
+                                        WriteStatusRegister(Flag.SIGN_FLAG, result < 0);
+                                        WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
+                                        WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
+                                        WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                        break;
+                                    }
+
+                                case Register.AX:
+                                case Register.BX:
+                                case Register.CX:
+                                case Register.DX:
+                                case Register.DI:
+                                case Register.SI:
+                                case Register.BP:
+                                case Register.IP:
+                                case Register.CS:
+                                case Register.DS:
+                                case Register.SS:
+                                case Register.ES:
+                                case Register.FS:
+                                case Register.GS:
+                                    {
+                                        var operand1value = ReadRegister(dst);
+                                        WriteRegister(dst, (ushort)(operand1value ^ operand2value));
+
+                                        var result = (short)operand1value ^ operand2value; // dst's full 16 bits preserved; src (byte) zero-extends
+
+                                        WriteStatusRegister(Flag.ZERO_FLAG, result == 0);
+                                        WriteStatusRegister(Flag.CARRY_FLAG, false);
+                                        WriteStatusRegister(Flag.SIGN_FLAG, result < 0);
+                                        WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
+                                        WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
+                                        WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                        break;
+                                    }
+
+                                case Register.AH:
+                                case Register.AL:
+                                case Register.BH:
+                                case Register.BL:
+                                case Register.CH:
+                                case Register.CL:
+                                case Register.DH:
+                                case Register.DL:
+                                    {
+                                        var operand1value = ReadHalfRegister(dst);
+                                        WriteHalfRegister(dst, (byte)(operand1value ^ operand2value));
+
+                                        var result = (sbyte)operand1value ^ (sbyte)operand2value;
+
+                                        WriteStatusRegister(Flag.ZERO_FLAG, result == 0);
+                                        WriteStatusRegister(Flag.CARRY_FLAG, false);
+                                        WriteStatusRegister(Flag.SIGN_FLAG, result < 0);
+                                        WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
+                                        WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
+                                        WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                        break;
+                                    }
+
+                                default:
+                                    throw new InvalidOperationException("ERROR: Unrecognized register for XOR dst");
                             }
-                            else if (
-                                dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX ||
-                                dst == Register.DI || dst == Register.SI || dst == Register.BP || dst == Register.IP ||
-                                dst == Register.CS || dst == Register.DS ||
-                                dst == Register.SS || dst == Register.ES ||
-                                dst == Register.FS || dst == Register.GS)
-                            {
-                                var dstVal = ReadRegister(dst);
-                                WriteRegister(dst, (ushort)(dstVal ^ srcVal));
-                            }
-                            else if (dst == Register.AH || dst == Register.AL
-                                || dst == Register.BH || dst == Register.BL
-                                || dst == Register.CH || dst == Register.CL
-                                || dst == Register.DH || dst == Register.DL)
-                            {
-                                var dstVal = ReadHalfRegister(dst);
-                                WriteHalfRegister(dst, (byte)(dstVal ^ srcVal));
-                            }
-                            else
-                                throw new InvalidOperationException("ERROR: Unrecognized register for XOR dst");
                         }
                         else
                         {
@@ -975,13 +1500,60 @@ namespace picovm.VM
                     }
 
                 default:
-                    Console.Error.WriteLine($"ERROR: Unknown bytecode {instruction} EIP={instructionPointer - 1}!");
-                    Dump();
-                    ret = -666;
-                    break;
+                    return new TickResult(
+                        TickErrorCode.UnknownBytecode,
+                        true,
+                        new ExecutionError(
+                            $"Unknown bytecode {instruction} EIP={instructionPointer - 1}!",
+                            null,
+                            null,
+                            null));
             }
 
-            return ret;
+            return new TickResult(TickErrorCode.Ok, false);
+        }
+
+        /// <summary>
+        /// Reads <paramref name="width"/> bytes, 
+        /// faulting if the access leaves the address space.
+        /// </summary>
+        protected UInt64 ReadMemory(UInt64 address, int width)
+        {
+            if (address > (UInt64)(AddressSpaceSize - width))
+                throw new MemoryAccessViolationException(address, width, instructionPointer, isWrite: false);
+
+            return width switch
+            {
+                1 => memory[address],
+                2 => BitConverter.ToUInt16(memory, (int)address),
+                4 => BitConverter.ToUInt32(memory, (int)address),
+                8 => BitConverter.ToUInt64(memory, (int)address),
+                _ => throw new InvalidOperationException($"ERROR: Unsupported access width {width}")
+            };
+        }
+
+        protected UInt32 ReadMemoryUInt32(ulong address)
+        {
+            if (address > AddressSpaceSize - 4)
+                throw new MemoryAccessViolationException(address, 4, instructionPointer, isWrite: false);
+
+            return BitConverter.ToUInt32(memory, (int)address);
+        }
+
+        protected UInt16 ReadMemoryUInt16(ulong address)
+        {
+            if (address > AddressSpaceSize - 2)
+                throw new MemoryAccessViolationException(address, 2, instructionPointer, isWrite: false);
+
+            return BitConverter.ToUInt16(memory, (int)address);
+        }
+
+        protected byte ReadMemoryByte(ulong address)
+        {
+            if (address > AddressSpaceSize - 1)
+                throw new MemoryAccessViolationException(address, 1, instructionPointer, isWrite: false);
+
+            return memory[address];
         }
     }
 }

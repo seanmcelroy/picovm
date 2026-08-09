@@ -5,9 +5,16 @@ using Xunit;
 
 namespace picovm.Tests
 {
+    /// <summary>
+    /// Multi-instruction integration tests for the 64-bit agent.
+    /// </summary>
+    /// <remarks>
+    /// Focused MOV coverage lives in the <c>Mov*Tests</c> suites; what remains here exercises
+    /// MOV together with the logic instructions, which those suites do not cover.
+    /// </remarks>
     public class Agent64Test
     {
-        private static Linux64Kernel kernel = new Linux64Kernel();
+        private static readonly Linux64Kernel kernel = new();
 
         [Fact]
         public void MOV_Bonanza64()
@@ -30,28 +37,29 @@ namespace picovm.Tests
 
             var agent = new Agent64(kernel, compiled.TextSegment, 0);
             var ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((ulong)0x1111222233334444, agent.ReadR64Register(Register.RAX));
+            Assert.False(ret.Done);
+            Assert.Equal(0x1111222233334444UL, agent.ReadR64Register(Register.RAX));
 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((ulong)0x0000000055556666, agent.ReadR64Register(Register.RAX));
+            Assert.False(ret.Done);
+            Assert.Equal(0x0000000055556666UL, agent.ReadR64Register(Register.RAX));
 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((ulong)0x1111222233334444, agent.ReadR64Register(Register.RAX));
+            Assert.False(ret.Done);
+            Assert.Equal(0x1111222233334444UL, agent.ReadR64Register(Register.RAX));
 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((ulong)0x1111222233337777, agent.ReadR64Register(Register.RAX));
+            Assert.False(ret.Done);
+            Assert.Equal(0x1111222233337777UL, agent.ReadR64Register(Register.RAX));
 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((ulong)0x1111222233334444, agent.ReadR64Register(Register.RAX));
+            Assert.False(ret.Done);
+            Assert.Equal(0x1111222233334444UL, agent.ReadR64Register(Register.RAX));
 
             ret = agent.Tick();
-            Xunit.Assert.Null(ret);
-            Xunit.Assert.Equal((ulong)0x0000000000000000, agent.ReadR64Register(Register.RAX));
+            Assert.False(ret.Done);
+            Assert.Equal(0x0000000000000000UL, agent.ReadR64Register(Register.RAX));
         }
+
     }
 }

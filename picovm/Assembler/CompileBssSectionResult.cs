@@ -4,12 +4,9 @@ using System.Collections.Immutable;
 
 namespace picovm.Assembler
 {
-    public sealed class CompileBssSectionResult
+    public sealed class CompileBssSectionResult(IEnumerable<BytecodeBssSymbol> symbols)
     {
-        public ImmutableList<BytecodeBssSymbol> Symbols { get; private set; }
-
-        public CompileBssSectionResult(IEnumerable<BytecodeBssSymbol> symbols) =>
-            this.Symbols = symbols.ToImmutableList();
+        public ImmutableList<BytecodeBssSymbol> Symbols { get; private set; } = [.. symbols];
 
         public static CompileBssSectionResult CompileBssSectionLines(IEnumerable<string> dataLines)
         {

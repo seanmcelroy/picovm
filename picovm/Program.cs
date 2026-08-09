@@ -18,7 +18,7 @@ namespace picovm
         static int Main(string[] args)
         {
             Console.WriteLine("PicoVM - A tiny toy virtual machine");
-            Console.WriteLine(" (c) 2020 Sean McElroy");
+            Console.WriteLine(" (c) 2026 Sean McElroy");
             Console.WriteLine(" Released under the MIT License; all rights reserved.\r\n");
 
             if (args.Length == 0)
@@ -146,7 +146,7 @@ namespace picovm
             ICompilationResult compilation;
             {
                 Console.Out.WriteLine($"Compiling source file: {input}");
-                IBytecodeCompiler? compiler = null;
+                IBytecodeCompiler? compiler;
                 switch (outputType)
                 {
                     case AssemblerPackageOutputType.Elf32:
@@ -159,7 +159,7 @@ namespace picovm
                         break;
                     default:
                         Console.Error.WriteLine($"Unsupported assembler output type {outputType}.");
-                        System.Environment.Exit(-5);
+                        Environment.Exit(-5);
                         return null;
                 }
 
@@ -180,15 +180,15 @@ namespace picovm
                 switch (outputType)
                 {
                     case AssemblerPackageOutputType.AOut32:
-                        packager = new PackagerAOut32((CompilationResult32)compilation);
+                        packager = new PackagerAOut32((CompilationResult<UInt32>)compilation);
                         packager.Write(fs);
                         break;
                     case AssemblerPackageOutputType.Elf32:
-                        packager = new PackagerElf32((CompilationResult32)compilation);
+                        packager = new PackagerElf32((CompilationResult<UInt32>)compilation);
                         packager.Write(fs);
                         break;
                     case AssemblerPackageOutputType.Elf64:
-                        packager = new PackagerElf64((CompilationResult64)compilation);
+                        packager = new PackagerElf64((CompilationResult<UInt64>)compilation);
                         packager.Write(fs);
                         break;
                     default:
@@ -255,23 +255,27 @@ namespace picovm
             else
                 throw new InvalidOperationException();
 
-            int? ret;
+            TickResult ret;
             do
             {
                 ret = agent.Tick();
-                //agent.Dump();
-            } while (ret == null);
-            switch (ret)
+            } while (!ret.Done);
+
+            foreach (var error in ret.Errors ?? [])
             {
-                case -666:
-                    throw new Exception($"ERROR: Unknown bytecode!");
-                case 0:
-                    Console.WriteLine("\r\n\r\nProgram terminated.");
-                    return new ExecutionResult(0);
-                default:
-                    Console.WriteLine("\r\n\r\nProgram errored out.");
-                    return new ExecutionResult(ret ?? int.MinValue);
+                Console.Error.WriteLine($"ERROR: {error}");
             }
+    
+            if (ret.ErrorCode == TickErrorCode.Ok)
+            {
+                Console.WriteLine("\r\n\r\nProgram terminated normally.");
+            } else
+            {
+                agent.Dump();
+                Console.WriteLine($"\r\n\r\nProgram aborted with error code {ret.ErrorCode}.");
+            }
+
+            return new ExecutionResult((int)ret.ErrorCode, ret.Errors ?? []);
         }
 
         static void PrintInspection(string target)
@@ -542,7 +546,7 @@ namespace picovm
                     foreach (var sh in sht)
                     {
                         var name = Encoding.ASCII.GetString(BitConverter.GetBytes(sh.Name).TakeWhile(b => b != 0x00).ToArray());
-                        Console.Out.WriteLine($"  [{i.ToString().PadLeft(2)}] {name.LeftAlignToSize(8)}  {sh.VirtualAddress.RightAlignHexToSize().LeftAlignToSize(14)}  {sh.VirtualSize.RightAlignHexToSize()}");
+                        Console.Out.WriteLine($"  [{i,2}] {name.LeftAlignToSize(8)}  {sh.VirtualAddress.RightAlignHexToSize().LeftAlignToSize(14)}  {sh.VirtualSize.RightAlignHexToSize()}");
                         var flagString = PackagerUtility.GetEnumFlagsShortName<SectionHeaderCharacteristics>(sh.Characteristics, ", ");
                         Console.Out.WriteLine($"       {flagString}");
 

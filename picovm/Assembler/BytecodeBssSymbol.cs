@@ -2,7 +2,7 @@ using System;
 
 namespace picovm.Assembler
 {
-    public readonly struct BytecodeBssSymbol
+    public readonly struct BytecodeBssSymbol(string? name, BytecodeBssSymbol.BssType type, ushort length)
     {
         public enum BssType : byte
         {
@@ -13,32 +13,20 @@ namespace picovm.Assembler
             QuadWord = 4
         }
 
-        public readonly string? name;
-        public readonly BssType type;
-        public readonly ushort length;
-
-        public BytecodeBssSymbol(string? name, BssType type, ushort length)
-        {
-            this.name = name;
-            this.type = type;
-            this.length = length;
-        }
+        public readonly string? name = name;
+        public readonly BssType type = type;
+        public readonly ushort length = length;
 
         public int Size()
         {
-            switch (type)
+            return type switch
             {
-                case BssType.Byte:
-                    return length;
-                case BssType.Word:
-                    return length * 2;
-                case BssType.DoubleWord:
-                    return length * 4;
-                case BssType.QuadWord:
-                    return length * 8;
-            }
-
-            throw new InvalidOperationException($"Unsupported BSS type: {type}");
+                BssType.Byte => length,
+                BssType.Word => length * 2,
+                BssType.DoubleWord => length * 4,
+                BssType.QuadWord => length * 8,
+                _ => throw new InvalidOperationException($"Unsupported BSS type: {type}"),
+            };
         }
     }
 }

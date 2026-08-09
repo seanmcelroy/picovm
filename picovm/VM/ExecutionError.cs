@@ -9,10 +9,10 @@ namespace picovm.VM
 
         public ExecutionError(string message, string? sourceFile = null, ushort? lineNumber = null, ushort? column = null)
         {
-            this.Message = message;
-            this.SourceFile = sourceFile;
-            this.LineNumber = lineNumber;
-            this.Column = column;
+            Message = message;
+            SourceFile = sourceFile;
+            LineNumber = lineNumber;
+            Column = column;
 
             System.Console.Error.WriteLine(ToString());
         }

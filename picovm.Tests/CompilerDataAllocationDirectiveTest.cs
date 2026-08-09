@@ -17,6 +17,34 @@ namespace picovm.Tests
             Assert.Equal("0xa", dad.Operands[1]);
         }
 
+        /// <summary>
+        /// A trailing operand only one character wide must survive parsing.  It used to be
+        /// discarded, because the final-character branch of the operand scanner shared its
+        /// "skip a delimiter that follows an already-yielded element" guard: a one-character
+        /// operand starts at exactly the index the previous element ended on, so it looked like
+        /// a delimiter.  Every data directive ending in a single digit silently lost its last
+        /// byte, shifting every symbol declared after it.
+        /// </summary>
+        [Fact]
+        public void Parse_Data_DB_SingleCharacterTrailingOperand()
+        {
+            var dad = CompilerDataAllocationDirective.ParseLine("counter db 0, 0, 0, 0");
+            Assert.Equal("counter", dad.Label);
+            Assert.Equal("db", dad.Mnemonic);
+            Assert.Equal(4, dad.Operands.Length);
+            Assert.All(dad.Operands, o => Assert.Equal("0", o));
+        }
+
+        [Fact]
+        public void Parse_Data_DB_SingleCharacterTrailingOperandAfterString()
+        {
+            var dad = CompilerDataAllocationDirective.ParseLine("msg db 'Hi', 0");
+            Assert.Equal("msg", dad.Label);
+            Assert.Equal(2, dad.Operands.Length);
+            Assert.Equal("'Hi'", dad.Operands[0]);
+            Assert.Equal("0", dad.Operands[1]);
+        }
+
         [Fact]
         public void Parse_Data_EQU()
         {

@@ -10,17 +10,16 @@ namespace picovm.VM
             // Linux-y interrupt syscalls
             // See https://syscalls.kernelgrok.com/
             var syscall = Agent.ReadExtendedRegister(registers, Register.EAX);
-            switch (syscall)
+            return syscall switch
             {
-                case 1: // sys_exit
-                    return true;
-                case 3: // sys_read
-                    return sys_read(ref registers, ref memory);
-                case 4: // sys_write
-                    return sys_write(ref registers, ref memory);
-                default:
-                    throw new InvalidOperationException($"Unknown syscall number during kernel interrupt: {syscall}");
-            }
+                // sys_exit
+                1 => true,
+                // sys_read
+                3 => sys_read(ref registers, ref memory),
+                // sys_write
+                4 => sys_write(ref registers, ref memory),
+                _ => throw new InvalidOperationException($"Unknown syscall number during kernel interrupt: {syscall}"),
+            };
         }
 
         private static bool sys_read(ref ulong[] registers, ref byte[] memory)
@@ -33,26 +32,24 @@ namespace picovm.VM
             {
                 case (uint)FileDescriptors.STDIN: // STDIN
                     var inputBuffer = new byte[inputLength];
-                    using (var stdin = System.Console.OpenStandardInput())
+                    using (var stdin = Console.OpenStandardInput())
                     {
-                        using (var ms = new MemoryStream(inputBuffer))
-                        using (var bw = new BinaryWriter(ms))
+                        using var ms = new MemoryStream(inputBuffer);
+                        using var bw = new BinaryWriter(ms);
+                        byte[] stdinBuffer = new byte[2048];
+                        int totalRead = 0;
+                        int read;
+                        while (totalRead < inputLength && (read = stdin.Read(stdinBuffer, 0, stdinBuffer.Length)) > 0)
                         {
-                            byte[] stdinBuffer = new byte[2048];
-                            int totalRead = 0;
-                            int read;
-                            while (totalRead < inputLength && (read = stdin.Read(stdinBuffer, 0, stdinBuffer.Length)) > 0)
-                            {
-                                var bytesToShare = Math.Min((int)inputLength - totalRead, read);
-                                totalRead += read;
-                                if (bytesToShare <= 0)
-                                    break;
-                                bw.Write(stdinBuffer, 0, bytesToShare);
-                                if (stdinBuffer[bytesToShare - 1] == 0x0a) // If ends with a newline, we can stop now.
-                                    break;
-                            }
-                            bw.Flush();
+                            var bytesToShare = Math.Min((int)inputLength - totalRead, read);
+                            totalRead += read;
+                            if (bytesToShare <= 0)
+                                break;
+                            bw.Write(stdinBuffer, 0, bytesToShare);
+                            if (stdinBuffer[bytesToShare - 1] == 0x0a) // If ends with a newline, we can stop now.
+                                break;
                         }
+                        bw.Flush();
                     }
 
                     // We received the input; now provide it back.

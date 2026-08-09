@@ -7,9 +7,9 @@ namespace picovm.Assembler
 {
     public sealed class CompilerBssAllocationDirective
     {
-        public static readonly string[] SYMBOLS = new string[] {
+        public static readonly string[] SYMBOLS = [
             "RESB", "RESW", "RESD", "RESQ"
-        };
+        ];
 
         public string? Label { get; private set; }
 
@@ -19,21 +19,21 @@ namespace picovm.Assembler
 
         private CompilerBssAllocationDirective(string? label, string mnemonic, ushort size)
         {
-            this.Label = label;
-            this.Mnemonic = mnemonic;
-            this.Size = size;
+            Label = label;
+            Mnemonic = mnemonic;
+            Size = size;
         }
 
         public static CompilerBssAllocationDirective ParseLine(string directiveLine)
         {
-            var lineParts = directiveLine.Split(new char[] { ' ', '\t', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            var lineParts = directiveLine.Split([' ', '\t', ','], StringSplitOptions.RemoveEmptyEntries);
 
             // Ignore whitespace between the first token and the second if the second is a colon.  Poorly formatted label.
             if (lineParts.Length > 2 && lineParts[1].Length == 1 && lineParts[1][0] == ':')
             {
-                var respin = new List<string>(new string[] { lineParts.Take(2).Aggregate((c, n) => c + n) });
+                var respin = new List<string>([lineParts.Take(2).Aggregate((c, n) => c + n)]);
                 respin.AddRange(lineParts.Skip(2));
-                lineParts = respin.ToArray();
+                lineParts = [.. respin];
             }
 
             string? label = null;

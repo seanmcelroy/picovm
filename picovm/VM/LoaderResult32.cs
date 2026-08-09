@@ -18,17 +18,17 @@ namespace picovm.VM
             IEnumerable<LoaderError>? errors = null,
             IEnumerable<object>? metadata = null)
         {
-            this.EntryPoint = entryPoint;
-            this.Image = image == null ? ImmutableArray<byte>.Empty : image.ToImmutableArray();
-            this.Errors = errors == null ? ImmutableList<LoaderError>.Empty : errors.ToImmutableList();
-            this.Metadata = metadata == null ? ImmutableList<object>.Empty : metadata.ToImmutableList();
+            EntryPoint = entryPoint;
+            Image = image == null ? [] : [.. image];
+            Errors = errors == null ? [] : [.. errors];
+            Metadata = metadata == null ? [] : [.. metadata];
         }
 
         public LoaderResult32(IEnumerable<LoaderError> errors)
         {
-            this.Image = ImmutableArray<byte>.Empty;
-            this.Errors = errors.ToImmutableList();
-            this.Metadata = ImmutableList<object>.Empty;
+            Image = [];
+            Errors = [.. errors];
+            Metadata = [];
         }
 
         public static LoaderResult32 Error(string message, string? sourceFile = null, ushort? lineNumber = null, ushort? column = null) => new LoaderResult32(new[] { new LoaderError(message, sourceFile, lineNumber, column) });

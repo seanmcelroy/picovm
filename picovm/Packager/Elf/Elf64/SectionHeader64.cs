@@ -46,7 +46,7 @@ namespace picovm.Packager.Elf.Elf64
             SH_ENTSIZE = stream.ReadXWord();
         }
 
-        public UInt16 Write(Stream stream, HeaderIdentityClass EI_CLASS)
+        public readonly UInt16 Write(Stream stream, HeaderIdentityClass EI_CLASS)
         {
             UInt16 headerLength = 0;
 

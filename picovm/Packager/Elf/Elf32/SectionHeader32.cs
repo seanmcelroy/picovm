@@ -32,7 +32,7 @@ namespace picovm.Packager.Elf.Elf32
         public UInt32 SH_ADDRALIGN;
         public UInt32 SH_ENTSIZE;
 
-        public UInt16 Write(Stream stream, HeaderIdentityClass EI_CLASS)
+        public readonly UInt16 Write(Stream stream, HeaderIdentityClass EI_CLASS)
         {
             UInt16 headerLength = 0;
 

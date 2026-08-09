@@ -2,6 +2,13 @@
 
 This is a toy assembly compiler and virutal machine that can build and run 32-bit executables.
 
+# Features
+
+All functionality is provided by a single `picovm` binary.  It has core functions:
+
+1. `asm` - Assembler: Translates assembler lanuage source files into `picovm` byte code.
+2. `run` - Interpreter: Creates an in-memory virtual machine and interprets the picovm byte code.
+
 # Usage
 
 ## asm

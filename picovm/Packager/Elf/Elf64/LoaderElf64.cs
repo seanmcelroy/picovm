@@ -12,8 +12,7 @@ namespace picovm.Packager.Elf.Elf64
 
         public LoaderElf64(Stream stream)
         {
-            if (stream == null)
-                throw new ArgumentNullException(nameof(stream));
+            ArgumentNullException.ThrowIfNull(stream);
 
             this.stream = stream;
         }
@@ -32,16 +31,20 @@ namespace picovm.Packager.Elf.Elf64
             var programHeader = new ProgramHeader64();
             programHeader.Read(stream);
 
-            var image = new byte[(int)programHeader.P_FILESZ - elfFileHeader.E_EHSIZE - (elfFileHeader.E_PHNUM * elfFileHeader.E_PHENTSIZE)];
+            // The headers are written 16-byte aligned, so the image begins past their
+            // padded sizes -- not past E_EHSIZE/E_PHENTSIZE, which report the unpadded
+            // lengths.  Sizing the image off the unpadded values over-reads the segment
+            // by the padding and drags in bytes belonging to the section name table.
             UInt64 imageOffset =
                 elfFileHeader.E_EHSIZE
                 + (UInt64)elfFileHeader.E_EHSIZE.CalculateRoundUpTo16Pad()
                 + (UInt64)(elfFileHeader.E_PHNUM * (elfFileHeader.E_PHENTSIZE + elfFileHeader.E_PHENTSIZE.CalculateRoundUpTo16Pad()));
+            var image = new byte[programHeader.P_FILESZ - imageOffset];
             stream.Seek((long)imageOffset, SeekOrigin.Begin);
             stream.ReadExactly(image);
 
-            return new LoaderResult64(elfFileHeader.E_ENTRY - (ulong)imageOffset, image,
-                metadata: new object[] { elfFileHeader, programHeader });
+            return new LoaderResult64(elfFileHeader.E_ENTRY - imageOffset, image,
+                metadata: [elfFileHeader, programHeader]);
         }
 
         public ImmutableList<object> LoadMetadata()
@@ -84,6 +87,6 @@ namespace picovm.Packager.Elf.Elf64
             return metadata.ToImmutableList();
         }
 
-        ILoaderResult ILoader.LoadImage() => this.LoadImage();
+        ILoaderResult ILoader.LoadImage() => LoadImage();
     }
 }

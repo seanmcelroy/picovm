@@ -77,7 +77,7 @@ namespace picovm.Packager
         }
         public static UInt16 WriteAddress32(this Stream stream, UInt32 value)
         {
-            stream.Write(BitConverter.GetBytes((UInt32)value));
+            stream.Write(BitConverter.GetBytes(value));
             return sizeof(UInt32);
         }
 
@@ -89,7 +89,7 @@ namespace picovm.Packager
 
         public static UInt16 WriteHalfWord(this Stream stream, UInt16 value)
         {
-            stream.Write(BitConverter.GetBytes((UInt16)value));
+            stream.Write(BitConverter.GetBytes(value));
             return sizeof(UInt16);
         }
         public static UInt16 WriteOffset32(this Stream stream, UInt32 value) => stream.WriteAddress32(value);

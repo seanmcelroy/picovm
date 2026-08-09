@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Text;
 
@@ -8,9 +7,9 @@ namespace picovm.Assembler
 {
     public sealed class CompilerDataAllocationDirective
     {
-        public static readonly string[] SYMBOLS = new string[] {
+        public static readonly string[] SYMBOLS = [
             "DB", "DW", "DD", "DQ", "DUP", "EQU"
-        };
+        ];
 
         public string? Label { get; private set; }
 
@@ -20,19 +19,19 @@ namespace picovm.Assembler
 
         private CompilerDataAllocationDirective(string? label, string mnemonic, string[] operands)
         {
-            this.Label = label;
-            this.Mnemonic = mnemonic;
-            this.Operands = operands;
+            Label = label;
+            Mnemonic = mnemonic;
+            Operands = operands;
         }
 
         public static CompilerDataAllocationDirective ParseLine(string directiveLine)
         {
-            var lineParts = directiveLine.Split(new char[] { ' ', '\t', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            var lineParts = directiveLine.Split([' ', '\t', ','], StringSplitOptions.RemoveEmptyEntries);
 
             // Ignore whitespace between the first token and the second if the second is a colon.  Poorly formatted label.
             if (lineParts.Length > 2 && lineParts[1].Length == 1 && lineParts[1][0] == ':')
             {
-                var respin = new List<string>(new string[] { lineParts.Take(2).Aggregate((c, n) => c + n) });
+                var respin = new List<string>([lineParts.Take(2).Aggregate((c, n) => c + n)]);
                 respin.AddRange(lineParts.Skip(2));
                 lineParts = respin.ToArray();
             }
@@ -73,7 +72,7 @@ namespace picovm.Assembler
             var respinList = new List<string>();
             foreach (var token in tokens)
             {
-                if (operators.Any(o => token.Contains(o)))
+                if (operators.Any(token.Contains))
                 {
                     var sb = new StringBuilder();
                     var j = 0;

@@ -31,11 +31,15 @@ namespace picovm.Packager.Elf.Elf32
             var programHeader = new ProgramHeader32();
             programHeader.Read(stream);
 
-            var image = new byte[(int)programHeader.P_FILESZ - elfFileHeader.E_EHSIZE - (elfFileHeader.E_PHNUM * elfFileHeader.E_PHENTSIZE)];
+            // The headers are written 16-byte aligned, so the image begins past their
+            // padded sizes -- not past E_EHSIZE/E_PHENTSIZE, which report the unpadded
+            // lengths.  Sizing the image off the unpadded values over-reads the segment
+            // by the padding and drags in bytes belonging to the section name table.
             UInt32 imageOffset =
                 elfFileHeader.E_EHSIZE
                 + (UInt32)elfFileHeader.E_EHSIZE.CalculateRoundUpTo16Pad()
                 + (UInt32)(elfFileHeader.E_PHNUM * (elfFileHeader.E_PHENTSIZE + elfFileHeader.E_PHENTSIZE.CalculateRoundUpTo16Pad()));
+            var image = new byte[programHeader.P_FILESZ - imageOffset];
             stream.Seek(imageOffset, SeekOrigin.Begin);
             stream.ReadExactly(image);
 

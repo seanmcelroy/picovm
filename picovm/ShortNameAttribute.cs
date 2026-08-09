@@ -3,17 +3,8 @@ using System;
 namespace picovm
 {
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Property | AttributeTargets.Field)]
-    public class ShortNameAttribute : Attribute
+    public class ShortNameAttribute(string displayName) : Attribute()
     {
-        //
-        // Summary:
-        //     Initializes a new instance of the System.ComponentModel.DisplayNameAttribute
-        //     class using the display name.
-        //
-        // Parameters:
-        //   displayName:
-        //     The display name.
-        public ShortNameAttribute(string displayName) : base() => this.DisplayName = displayName;
 
         //
         // Summary:
@@ -22,6 +13,6 @@ namespace picovm
         //
         // Returns:
         //     The display name.
-        public string DisplayName { get; }
+        public string DisplayName { get; } = displayName;
     }
 }

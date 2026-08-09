@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 
 namespace picovm.Assembler
 {
@@ -27,24 +26,24 @@ namespace picovm.Assembler
             IEnumerable<BytecodeBssSymbol> bssSymbols,
             IEnumerable<CompilationError> errors)
         {
-            this.TextSegmentSize = textSegmentSize;
-            this.DataSegmentSize = dataSegmentSize;
-            this.BssSegmentSize = bssSegmentSize;
-            this.TextSegment = textSegment.ToImmutableArray();
-            this.DataSegment = dataSegment;
-            this.BssSymbols = bssSymbols == null ? ImmutableList<BytecodeBssSymbol>.Empty : bssSymbols.ToImmutableList();
-            this.Errors = errors.ToImmutableList();
+            TextSegmentSize = textSegmentSize;
+            DataSegmentSize = dataSegmentSize;
+            BssSegmentSize = bssSegmentSize;
+            TextSegment = textSegment.ToImmutableArray();
+            DataSegment = dataSegment;
+            BssSymbols = [.. bssSymbols];
+            Errors = [.. errors];
         }
 
         public CompilationResultBase(IEnumerable<CompilationError> errors)
         {
-            this.BssSymbols = ImmutableList<BytecodeBssSymbol>.Empty;
-            this.Errors = errors.ToImmutableList();
+            BssSymbols = [];
+            Errors = [.. errors];
         }
 
         public static CompilationResultBase Error(string message, string? sourceFile = null, ushort? lineNumber = null, ushort? column = null)
         {
-            return new CompilationResultBase(new[] { new CompilationError(message, sourceFile, lineNumber, column) });
+            return new CompilationResultBase([new CompilationError(message, sourceFile, lineNumber, column)]);
         }
     }
 }

@@ -3,17 +3,16 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using picovm.Assembler;
-using picovm.Packager.Elf;
 
 namespace picovm.Packager.Elf.Elf32
 {
     public sealed class PackagerElf32 : IPackager
     {
-        private readonly CompilationResult32 compilationResult;
+        private readonly CompilationResult<UInt32> compilationResult;
 
         private bool generateSectionHeaderTable { get; set; }
 
-        public PackagerElf32(CompilationResult32 compilationResult, bool generateSectionHeaderTable = true)
+        public PackagerElf32(CompilationResult<UInt32> compilationResult, bool generateSectionHeaderTable = true)
         {
             if (compilationResult.EntryPoint == null)
                 throw new ArgumentException("Compilation result is missing an entry point", nameof(compilationResult));
@@ -25,7 +24,7 @@ namespace picovm.Packager.Elf.Elf32
             this.generateSectionHeaderTable = generateSectionHeaderTable;
         }
 
-        public Header32 GenerateElfFileHeader() => new Header32
+        public Header32 GenerateElfFileHeader() => new()
         {
             EI_CLASS = HeaderIdentityClass.ELFCLASS32,
             EI_DATA = HeaderIdentityData.ELFDATA2LSB,
@@ -37,13 +36,13 @@ namespace picovm.Packager.Elf.Elf32
             E_PHOFF = 0x40, // We always start the program header at 64 bytes, b/c the header will vary 52 vs 64 bytes in length if it's 32-bit or 64-bit.
             E_SHOFF = 0,
             E_FLAGS = 0,
-            E_EHSIZE = 64,
+            E_EHSIZE = 52,
             E_PHENTSIZE = 32,
             E_SHENTSIZE = 40,
             E_SHSTRNDX = SpecialSectionIndexes.SHN_UNDEF
         };
 
-        public ProgramHeader32 GenerateProgramHeader32() => new ProgramHeader32
+        public static ProgramHeader32 GenerateProgramHeader32() => new()
         {
             P_TYPE = ProgramHeaderType.PT_LOAD, // TODO: always?
             P_OFFSET = 0, // TODO: always 0?
@@ -72,8 +71,13 @@ namespace picovm.Packager.Elf.Elf32
             // .text
             uint textOffset = programHeaderOffset + programHeaderSize;
             uint textSizeReal = (uint)(compilationResult.TextSegment?.Length ?? 0);
-            int textSizePad = textSizeReal.CalculateRoundUpTo16Pad();
-            uint textSize = textSizeReal + (uint)textSizePad;
+            // No alignment padding between .text and .rodata.  The compiler has already
+            // baked data symbol addresses into the text segment using
+            // dataSegmentBase = textSegmentBase + textSegmentSize (see BytecodeCompiler.Compile),
+            // so padding here would move the data without moving the relocations that
+            // point at it, leaving every data symbol aimed at the padding instead.
+            int textSizePad = 0;
+            uint textSize = textSizeReal;
 
             // .rodata
             uint rodataOffset = textOffset + textSize;

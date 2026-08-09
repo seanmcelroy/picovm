@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using picovm.VM;
 
 namespace picovm.VM
 {

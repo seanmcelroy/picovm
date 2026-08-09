@@ -6,8 +6,8 @@ namespace picovm.Assembler
 {
     public sealed class PackagerAOut32 : IPackager
     {
-        private readonly CompilationResult32 compilationResult;
-        public PackagerAOut32(CompilationResult32 compilationResult)
+        private readonly CompilationResult<UInt32> compilationResult;
+        public PackagerAOut32(CompilationResult<UInt32> compilationResult)
         {
             if (compilationResult.EntryPoint == null)
                 throw new ArgumentException("Compilation result is missing an entry point", nameof(compilationResult));
@@ -17,8 +17,6 @@ namespace picovm.Assembler
                 throw new ArgumentException("Compilation result is missing a data segment size", nameof(compilationResult));
             if (compilationResult.BssSegmentSize == null)
                 throw new ArgumentException("Compilation result is missing a BSS segment size", nameof(compilationResult));
-            if (compilationResult.EntryPoint == null)
-                throw new ArgumentException("Compilation result is missing an entry point", nameof(compilationResult));
 
             this.compilationResult = compilationResult;
         }

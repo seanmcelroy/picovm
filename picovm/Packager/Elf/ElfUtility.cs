@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Text;
 
 namespace picovm.Packager.Elf
 {
@@ -38,7 +37,7 @@ namespace picovm.Packager.Elf
 
         public static UInt16 WriteHalfWord(this Stream stream, UInt16 value)
         {
-            stream.Write(BitConverter.GetBytes((UInt16)value));
+            stream.Write(BitConverter.GetBytes(value));
             return sizeof(UInt16);
         }
         public static UInt16 WriteWord(this Stream stream, UInt32 value)
@@ -58,17 +57,15 @@ namespace picovm.Packager.Elf
             return (UInt16)buffer.Length;
         }
 
-        public static int CalculateRoundUpTo16Pad(this uint? realSize, uint roundUp = 16) => 0;// realSize == 0 ? 0 : realSize!.Value % roundUp == 0 ? 0 : (int)(roundUp - (realSize.Value % roundUp));
-        public static int CalculateRoundUpTo16Pad(this uint realSize, uint roundUp = 16) => 0;// realSize == 0 ? 0 : realSize % roundUp == 0 ? 0 : (int)(roundUp - (realSize % roundUp));
-        public static int CalculateRoundUpTo16Pad(this ushort? realSize, uint roundUp = 16) => 0; //realSize == 0 ? 0 : realSize!.Value % roundUp == 0 ? 0 : (int)(roundUp - (realSize.Value % roundUp));
-        public static int CalculateRoundUpTo16Pad(this ushort realSize, uint roundUp = 16) => 0; // realSize == 0 ? 0 : realSize % roundUp == 0 ? 0 : (int)(roundUp - (realSize % roundUp));
+        public static int CalculateRoundUpTo16Pad(this uint realSize, uint roundUp = 16) => realSize % roundUp == 0 ? 0 : (int)(roundUp - (realSize % roundUp));
+        public static int CalculateRoundUpTo16Pad(this ushort realSize, uint roundUp = 16) => realSize % roundUp == 0 ? 0 : (int)(roundUp - (realSize % roundUp));
 
         public static UInt32 GnuHash(Span<byte> bytes)
         {
             UInt32 hash = 5381;
             foreach (var b in bytes)
             {
-                hash = ((hash << 5) + hash) + b;
+                hash = (hash << 5) + hash + b;
             }
             return hash;
         }

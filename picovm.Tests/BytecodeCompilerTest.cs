@@ -1,5 +1,4 @@
 using picovm.Assembler;
-using picovm.VM;
 using System;
 using System.IO;
 using Xunit;
