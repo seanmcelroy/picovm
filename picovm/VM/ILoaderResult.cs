@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Immutable;
 
 namespace picovm.VM
@@ -10,6 +11,7 @@ namespace picovm.VM
     }
 
     public interface ILoaderResult<TAddrSize> : ILoaderResult
+         where TAddrSize : struct, IComparable, IComparable<TAddrSize>, IConvertible, IEquatable<TAddrSize>, IFormattable
     {
         TAddrSize EntryPoint { get; }
     }

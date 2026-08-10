@@ -35,7 +35,7 @@ namespace picovm.Packager.Elf.Elf64
         public void Read(Stream stream)
         {
             SH_NAME = stream.ReadUInt32();
-            SH_TYPE = stream.ReadWord<SectionHeaderType>(SectionHeaderType.SHT_NULL);
+            SH_TYPE = stream.ReadWord(SectionHeaderType.SHT_NULL);
             SH_FLAGS = stream.ReadXWord();
             SH_ADDR = stream.ReadAddress64();
             SH_OFFSET = stream.ReadOffset64();

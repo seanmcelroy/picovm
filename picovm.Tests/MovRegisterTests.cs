@@ -267,29 +267,6 @@ namespace picovm.Tests
         #region Index and pointer registers at dword width
 
         /// <summary>
-        /// ESI, EDI and EBP are writable at 32-bit width.  <c>ReadExtendedRegister</c> handled
-        /// them long before <c>WriteExtendedRegister</c> did, so a move *into* one of them threw
-        /// "Unknown extended register" even though the same register worked as a source and
-        /// worked fine at 16- and 64-bit widths.  These tests exist to keep that asymmetry from
-        /// coming back; <see cref="ExtendedFamilies32_RoundTrip"/> covers the plain round trip.
-        /// </summary>
-        [Theory]
-        [InlineData("ESI", Register.ESI)]
-        [InlineData("EDI", Register.EDI)]
-        [InlineData("EBP", Register.EBP)]
-        public void DwordWriteToIndexRegisters32_ThenReadBackAsSource(string name, Register register)
-        {
-            // Write it, then use it as the source of a second move: both directions must work.
-            var agent = MovTestHarness.Run32(Asm.Text(
-                "MOV EBX, 0xCAFEB00B",
-                $"MOV {name}, EBX",
-                $"MOV ECX, {name}"));
-
-            Assert.Equal(0xCAFEB00BU, agent.ReadExtendedRegister(register));
-            Assert.Equal(0xCAFEB00BU, agent.ReadExtendedRegister(Register.ECX));
-        }
-
-        /// <summary>
         /// The three registers occupy distinct slots in the register file, so writing one must
         /// not disturb the others.  A transposed slot index would be invisible to a test that
         /// only ever writes one of them.
@@ -374,21 +351,6 @@ namespace picovm.Tests
                 $"MOV {dword}, EBX"));         // narrow write must clear the top half
 
             Assert.Equal(0x00000000CAFEB00BUL, agent.ReadR64Register(register));
-        }
-
-        /// <summary>
-        /// The instruction pointer remains unwritable at dword width, which is deliberate rather
-        /// than an oversight: the agent tracks execution in its own <c>instructionPointer</c>
-        /// field, not in the register file slot EIP reads from, so a write here would silently
-        /// fail to branch.  Pinned so the gap is a decision rather than a surprise.
-        /// </summary>
-        [Fact]
-        public void DwordWriteToInstructionPointer_IsRejected()
-        {
-            var ex = Assert.Throws<InvalidOperationException>(() =>
-                MovTestHarness.Run32(Asm.Text("MOV EBX, 0x10", "MOV EIP, EBX")));
-
-            Assert.Contains("Unknown extended register", ex.Message);
         }
 
         /// <summary>

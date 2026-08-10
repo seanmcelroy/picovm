@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.ComponentModel;
@@ -235,10 +236,10 @@ namespace picovm.Assembler
             foreach (var tsr in textSymbolReferenceOffsets.Where(tsr => textLabelsOffsets.ContainsKey(tsr.Name)))
             {
                 ValueType labelOffsetAddress = textLabelsOffsets[tsr.Name];
-                byte[] labelOffsetAddressBytes = typeof(TAddrSize) == typeof(UInt32) ? BitConverter.GetBytes((UInt32)labelOffsetAddress) : BitConverter.GetBytes((UInt64)labelOffsetAddress);
-                if (labelOffsetAddressBytes.Length != tsr.ReferenceLength)
+                var addrSize = typeof(TAddrSize) == typeof(UInt32) ? 4 : 8;
+                if (addrSize != tsr.ReferenceLength)
                     throw new InvalidOperationException(
-                        $"Symbol {tsr.Name} reserved a {tsr.ReferenceLength}-byte destination, but its address needs {labelOffsetAddressBytes.Length} bytes; " +
+                        $"Symbol {tsr.Name} reserved a {tsr.ReferenceLength}-byte destination, but its address needs {addrSize} bytes; " +
                         $"loading an address into a register narrower than the machine's address width is not supported.");
 
                 if (textSegment == null)
@@ -258,12 +259,16 @@ namespace picovm.Assembler
                     }
                 }
 
+                var refOffset = typeof(TAddrSize) == typeof(UInt32)
+                    ? (int)Convert.ToUInt32(tsr.TextSegmentReferenceOffset)
+                    : (int)Convert.ToUInt64(tsr.TextSegmentReferenceOffset);
+                var dest = textSegment.AsSpan(refOffset, tsr.ReferenceLength);
                 if (typeof(TAddrSize) == typeof(UInt32))
-                    Array.Copy(labelOffsetAddressBytes, (long)0, textSegment, (long)Convert.ToUInt32(tsr.TextSegmentReferenceOffset), tsr.ReferenceLength);
+                    BinaryPrimitives.WriteUInt32LittleEndian(dest, (UInt32)labelOffsetAddress);
                 else
-                    Array.Copy(labelOffsetAddressBytes, (long)0, textSegment, (long)Convert.ToUInt64(tsr.TextSegmentReferenceOffset), tsr.ReferenceLength);
+                    BinaryPrimitives.WriteUInt64LittleEndian(dest, (UInt64)labelOffsetAddress);
 
-                Console.Out.WriteLine($"\tLBL {tsr.Name}->{labelOffsetAddress}");
+                //Console.Out.WriteLine($"\tLBL {tsr.Name}->{labelOffsetAddress}");
             }
 
             // Perform data replacements
@@ -304,10 +309,16 @@ namespace picovm.Assembler
                                             throw new InvalidOperationException("Unable to inline constant size of 2 bytes into reserved text section of 1 byte");
                                         case 2:
                                             // 2 to 2, straight array copy.
+                                            ReadOnlySpan<byte> dataSpan = dataSegment.AsSpan(); // zero copy
+                                            int srcOffset = (int)Convert.ToInt64(dataSymbolAddress.Sub(dataSegmentBase));
+                                            int dstOffset;
+
                                             if (typeof(TAddrSize) == typeof(UInt32))
-                                                Array.Copy(dataSegment.ToArray(), Convert.ToInt64(ValueTypeUtility.Sub(dataSymbolAddress, dataSegmentBase)), textSegment, (UInt32)(ValueType)tsr.TextSegmentReferenceOffset, 2);
+                                                dstOffset = (int)(UInt32)(ValueType)tsr.TextSegmentReferenceOffset;
                                             else
-                                                Array.Copy(dataSegment.ToArray(), Convert.ToInt64(ValueTypeUtility.Sub(dataSymbolAddress, dataSegmentBase)), textSegment, (long)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset, 2);
+                                                dstOffset = (int)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset;
+
+                                            dataSpan.Slice(srcOffset, 2).CopyTo(textSegment.AsSpan(dstOffset, 2));
 
                                             for (var i = 0; i < 2; i++)
                                             {
@@ -326,7 +337,7 @@ namespace picovm.Assembler
                                             break;
                                         case 4:
                                             // 2 to 4 upsize
-                                            var dataSymbolValue = BitConverter.ToUInt16([.. dataSegment], Convert.ToInt32(ValueTypeUtility.Sub(dataSymbolAddress, dataSegmentBase)));
+                                            var dataSymbolValue = BinaryPrimitives.ReadUInt16LittleEndian(dataSegment.AsSpan(Convert.ToInt32(dataSymbolAddress.Sub(dataSegmentBase)), 2));
                                             var tsrValue = Convert.ToUInt32(dataSymbolValue);
                                             // Validate we're overwriting the right place
                                             for (var i = 0; i < 4; i++)
@@ -343,9 +354,9 @@ namespace picovm.Assembler
                                                 }
                                             }
                                             if (typeof(TAddrSize) == typeof(UInt32))
-                                                Array.Copy(BitConverter.GetBytes(tsrValue), (long)0, textSegment, (UInt32)(ValueType)tsr.TextSegmentReferenceOffset, 4);
+                                                BinaryPrimitives.WriteUInt32LittleEndian(textSegment.AsSpan((int)(UInt32)(ValueType)tsr.TextSegmentReferenceOffset, 4), tsrValue);
                                             else
-                                                Array.Copy(BitConverter.GetBytes(tsrValue), (long)0, textSegment, (long)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset, 4);
+                                                BinaryPrimitives.WriteUInt32LittleEndian(textSegment.AsSpan((int)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset, 4), tsrValue);
 
                                             break;
                                         default:
@@ -362,10 +373,11 @@ namespace picovm.Assembler
                                             throw new InvalidOperationException($"Unable to inline constant size of 4 bytes into reserved text section of {tsr.ReferenceLength} bytes");
                                         case 4:
                                             // 4 to 4, straight array copy.
-                                            if (typeof(TAddrSize) == typeof(UInt32))
-                                                Array.Copy(dataSegment.ToArray(), Convert.ToInt64(ValueTypeUtility.Sub(dataSymbolAddress, dataSegmentBase)), textSegment, (UInt32)(ValueType)tsr.TextSegmentReferenceOffset, 4);
-                                            else
-                                                Array.Copy(dataSegment.ToArray(), Convert.ToInt64(ValueTypeUtility.Sub(dataSymbolAddress, dataSegmentBase)), textSegment, (long)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset, 4);
+                                            var srcOffset = Convert.ToInt32(dataSymbolAddress.Sub(dataSegmentBase));
+                                            var dstOffset = typeof(TAddrSize) == typeof(UInt32)
+                                                ? (int)(UInt32)(ValueType)tsr.TextSegmentReferenceOffset
+                                                : (int)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset;
+                                            dataSegment.AsSpan(srcOffset, 4).CopyTo(textSegment.AsSpan(dstOffset, 4));
                                             break;
                                         default:
                                             throw new NotImplementedException();
@@ -382,10 +394,11 @@ namespace picovm.Assembler
                                             throw new InvalidOperationException($"Unable to inline constant size of 8 bytes into reserved text section of {tsr.ReferenceLength} bytes");
                                         case 8:
                                             // 8 to 8, straight array copy.
-                                            if (typeof(TAddrSize) == typeof(UInt32))
-                                                Array.Copy(dataSegment.ToArray(), Convert.ToInt64(ValueTypeUtility.Sub(dataSymbolAddress, dataSegmentBase)), textSegment, (UInt32)(ValueType)tsr.TextSegmentReferenceOffset, 8L);
-                                            else
-                                                Array.Copy(dataSegment.ToArray(), Convert.ToInt64(ValueTypeUtility.Sub(dataSymbolAddress, dataSegmentBase)), textSegment, (long)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset, 8L);
+                                            var srcOffset = Convert.ToInt32(dataSymbolAddress.Sub(dataSegmentBase));
+                                            var dstOffset = typeof(TAddrSize) == typeof(UInt32)
+                                                ? (int)(UInt32)(ValueType)tsr.TextSegmentReferenceOffset
+                                                : (int)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset;
+                                            dataSegment.AsSpan(srcOffset, 8).CopyTo(textSegment.AsSpan(dstOffset, 8));
                                             break;
                                         default:
                                             throw new NotImplementedException();
@@ -399,18 +412,21 @@ namespace picovm.Assembler
                     else
                     {
                         // This is a reference, write it's address into the text.
-                        var dataSymbolAddressBytes = (typeof(TAddrSize) == typeof(UInt32))
-                            ? BitConverter.GetBytes((UInt32)(ValueType)dataSymbolAddress)
-                            : BitConverter.GetBytes((UInt64)(ValueType)dataSymbolAddress);
-                        if (dataSymbolAddressBytes.Length != tsr.ReferenceLength)
+                        var addrSize = typeof(TAddrSize) == typeof(UInt32) ? 4 : 8;
+                        if (addrSize != tsr.ReferenceLength)
                             throw new InvalidOperationException(
-                                $"Symbol {tsr.Name} reserved a {tsr.ReferenceLength}-byte destination, but its address needs {dataSymbolAddressBytes.Length} bytes; " +
+                                $"Symbol {tsr.Name} reserved a {tsr.ReferenceLength}-byte destination, but its address needs {addrSize} bytes; " +
                                 $"loading an address into a register narrower than the machine's address width is not supported.");
+
+                        var refOffset = typeof(TAddrSize) == typeof(UInt32)
+                            ? (int)(UInt32)(ValueType)tsr.TextSegmentReferenceOffset
+                            : (int)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset;
+                        var dest = textSegment.AsSpan(refOffset, tsr.ReferenceLength);
                         if (typeof(TAddrSize) == typeof(UInt32))
-                            Array.Copy(dataSymbolAddressBytes, 0L, textSegment, (UInt32)(ValueType)tsr.TextSegmentReferenceOffset, tsr.ReferenceLength);
+                            BinaryPrimitives.WriteUInt32LittleEndian(dest, (UInt32)(ValueType)dataSymbolAddress);
                         else
-                            Array.Copy(dataSymbolAddressBytes, 0L, textSegment, (long)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset, tsr.ReferenceLength);
-                        Console.Out.WriteLine($"\tDS {tsr.Name}->{dataSymbolAddress}");
+                            BinaryPrimitives.WriteUInt64LittleEndian(dest, (UInt64)(ValueType)dataSymbolAddress);
+                        //Console.Out.WriteLine($"\tDS {tsr.Name}->{dataSymbolAddress}");
                     }
                 }
             }
@@ -426,6 +442,7 @@ namespace picovm.Assembler
                     throw new InvalidOperationException("Data segment size is null when attempting to perform BSS replacements");
 
                 var tsrBss = textSymbolReferenceOffsets.Where(tsr => bssSymbols.Exists(bss => string.Compare(bss.name, tsr.Name, StringComparison.InvariantCultureIgnoreCase) == 0)).ToArray();
+                Span<byte> buf = stackalloc byte[10];
                 foreach (var tsr in tsrBss)
                 {
                     var bss = bssSymbols.Single(bss => string.Compare(bss.name, tsr.Name, StringComparison.InvariantCultureIgnoreCase) == 0);
@@ -437,7 +454,7 @@ namespace picovm.Assembler
                         for (var i = 0; i < 4; i++)
                             if (textSegment[(UInt32)(ValueType)tsr.TextSegmentReferenceOffset + i] != 0xFF)
                                 throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
-                        Array.Copy(BitConverter.GetBytes((UInt32)(ValueType)bssOffset), 0L, textSegment, (UInt32)(ValueType)tsr.TextSegmentReferenceOffset, 4);
+                        BinaryPrimitives.WriteUInt32LittleEndian(textSegment.AsSpan((int)(UInt32)(ValueType)tsr.TextSegmentReferenceOffset, 4), (UInt32)(ValueType)bssOffset);
                     }
                     else
                     {
@@ -448,7 +465,7 @@ namespace picovm.Assembler
                         for (var i = 0; i < 8; i++)
                             if (textSegment[(long)((UInt64)(ValueType)tsr.TextSegmentReferenceOffset + (UInt64)i)] != 0xFF)
                                 throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
-                        Array.Copy(BitConverter.GetBytes((UInt64)(ValueType)bssOffset), 0L, textSegment, (long)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset, 8);
+                        BinaryPrimitives.WriteUInt64LittleEndian(textSegment.AsSpan((int)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset, 8), (UInt64)(ValueType)bssOffset);
                     }
                     Console.Out.WriteLine($"\tBSS {bss.name}->{bssOffset}");
                 }
@@ -486,6 +503,8 @@ namespace picovm.Assembler
             var labelsOffsets = new Dictionary<string, TAddrSize>();
             var symbolReferenceOffsets = new List<BytecodeTextSymbol<TAddrSize>>();
 
+            Span<byte> buf = stackalloc byte[10]; // once, at top of the compile loop
+
             foreach (var programLine in programLines)
             {
                 // Knock off any comments
@@ -506,7 +525,7 @@ namespace picovm.Assembler
                 // Ignore whitespace between the first token and the second if the second is a colon.  Poorly formatted label.
                 if (lineParts.Count > 2 && lineParts[1].Length == 1 && lineParts[1][0] == ':')
                 {
-                    var respin = new List<string>(new string[] { lineParts.Take(2).Aggregate((c, n) => c + n) });
+                    var respin = new List<string>([lineParts.Take(2).Aggregate((c, n) => c + n)]);
                     respin.AddRange(lineParts.Skip(2));
                     lineParts = [.. respin];
                 }
@@ -667,17 +686,20 @@ namespace picovm.Assembler
 
                                             if (typeHintSize == 8 || (!typeHintSize.HasValue && dstReg.Size() == 8))
                                             {
-                                                bytecode.AddRange(BitConverter.GetBytes(src.ParseUInt64Constant()));
+                                                BinaryPrimitives.WriteUInt64LittleEndian(buf, src.ParseUInt64Constant());
+                                                bytecode.AddRange(buf[..8]);
                                                 offsetBytes = offsetBytes.Add(8);
                                             }
                                             else if (typeHintSize == 4 || (!typeHintSize.HasValue && dstReg.Size() == 4))
                                             {
-                                                bytecode.AddRange(BitConverter.GetBytes(src.ParseUInt32Constant()));
+                                                BinaryPrimitives.WriteUInt32LittleEndian(buf, src.ParseUInt32Constant());
+                                                bytecode.AddRange(buf[..4]);
                                                 offsetBytes = offsetBytes.Add(4);
                                             }
                                             else if (typeHintSize == 2 || (!typeHintSize.HasValue && dstReg.Size() == 2))
                                             {
-                                                bytecode.AddRange(BitConverter.GetBytes(src.ParseUInt16Constant()));
+                                                BinaryPrimitives.WriteUInt16LittleEndian(buf, src.ParseUInt16Constant());
+                                                bytecode.AddRange(buf[..2]);
                                                 offsetBytes = offsetBytes.Add(2);
                                             }
                                             else if (typeHintSize == 1 || (!typeHintSize.HasValue && dstReg.Size() == 1))
@@ -727,7 +749,7 @@ namespace picovm.Assembler
                                                 ));
 
                                             for (var i = 0; i < addressSize; i++)
-                                                bytecode.Add((byte)0xFF); // UNRESOLVED SYMBOL FOR VARIABLE
+                                                bytecode.Add(0xFF); // UNRESOLVED SYMBOL FOR VARIABLE
                                             offsetBytes = offsetBytes.Add(addressSize);
 
                                             // Operand size, specified explicitly
@@ -738,13 +760,16 @@ namespace picovm.Assembler
                                             switch (variableSize)
                                             {
                                                 case 8:
-                                                    bytecode.AddRange(BitConverter.GetBytes(src.ParseUInt64Constant()));
+                                                    BinaryPrimitives.WriteUInt64LittleEndian(buf, src.ParseUInt64Constant());
+                                                    bytecode.AddRange(buf[..8]);
                                                     break;
                                                 case 4:
-                                                    bytecode.AddRange(BitConverter.GetBytes(src.ParseUInt32Constant()));
+                                                    BinaryPrimitives.WriteUInt32LittleEndian(buf, src.ParseUInt32Constant());
+                                                    bytecode.AddRange(buf[..4]);
                                                     break;
                                                 case 2:
-                                                    bytecode.AddRange(BitConverter.GetBytes(src.ParseUInt16Constant()));
+                                                    BinaryPrimitives.WriteUInt16LittleEndian(buf, src.ParseUInt16Constant());
+                                                    bytecode.AddRange(buf[..2]);
                                                     break;
                                                 case 1:
                                                     bytecode.Add(src.ParseByteConstant());
@@ -769,9 +794,9 @@ namespace picovm.Assembler
                 }
                 else if (string.Compare("POP", instruction, StringComparison.InvariantCulture) == 0)
                 {
-                    var pbc = Pop(lineParts[^1]);
-                    bytecode.AddRange(pbc);
-                    offsetBytes = offsetBytes.Add(pbc.Length);
+                    var written = Pop(buf, lineParts[^1]);
+                    bytecode.AddRange(buf[..written]);
+                    offsetBytes = offsetBytes.Add(written);
                 }
                 else if (string.Compare("PUSH", instruction, StringComparison.InvariantCulture) == 0)
                 {
@@ -800,7 +825,8 @@ namespace picovm.Assembler
                             {
                                 bytecode.Add((byte)Bytecode.PUSH_CON);
                                 offsetBytes = offsetBytes.Add(1);
-                                bytecode.AddRange(BitConverter.GetBytes(operand.ParseUInt32Constant()));
+                                BinaryPrimitives.WriteUInt32LittleEndian(buf, operand.ParseUInt32Constant());
+                                bytecode.AddRange(buf[..4]);
                                 offsetBytes = offsetBytes.Add(4);
                                 continue;
                             }
@@ -812,27 +838,27 @@ namespace picovm.Assembler
                 }
                 else if (string.Compare("ADD", instruction, StringComparison.InvariantCulture) == 0)
                 {
-                    var abc = Add(typeHintSize, lineParts[^2], lineParts[^1]);
-                    bytecode.AddRange(abc);
-                    offsetBytes = offsetBytes.Add(abc.Length);
+                    var written = Add(buf, typeHintSize, lineParts[^2], lineParts[^1]);
+                    bytecode.AddRange(buf[..written]);
+                    offsetBytes = offsetBytes.Add(written);
                 }
                 else if (string.Compare("AND", instruction, StringComparison.InvariantCulture) == 0)
                 {
-                    var abc = And(typeHintSize, lineParts[^2], lineParts[^1]);
-                    bytecode.AddRange(abc);
-                    offsetBytes = offsetBytes.Add(abc.Length);
+                    var written = And(buf, typeHintSize, lineParts[^2], lineParts[^1]);
+                    bytecode.AddRange(buf[..written]);
+                    offsetBytes = offsetBytes.Add(written);
                 }
                 else if (string.Compare("CMP", instruction, StringComparison.InvariantCulture) == 0)
                 {
-                    var abc = Cmp(typeHintSize, lineParts[^2], lineParts[^1]);
-                    bytecode.AddRange(abc);
-                    offsetBytes = offsetBytes.Add(abc.Length);
+                    var written = Cmp(buf, typeHintSize, lineParts[^2], lineParts[^1]);
+                    bytecode.AddRange(buf[..written]);
+                    offsetBytes = offsetBytes.Add(written);
                 }
                 else if (string.Compare("XOR", instruction, StringComparison.InvariantCulture) == 0)
                 {
-                    var abc = XOr(lineParts[^2], lineParts[^1]);
-                    bytecode.AddRange(abc);
-                    offsetBytes = offsetBytes.Add(abc.Length);
+                    var written = XOr(buf, lineParts[^2], lineParts[^1]);
+                    bytecode.AddRange(buf[..written]);
+                    offsetBytes = offsetBytes.Add(written);
                 }
                 else if (
                     string.Compare("JZ", instruction, StringComparison.InvariantCulture) == 0 ||
@@ -961,6 +987,7 @@ namespace picovm.Assembler
 
             var bytecode = new List<byte>();
             var symbolOffsets = new Dictionary<string, BytecodeDataSymbol<TAddrSize>>();
+            Span<byte> buf = stackalloc byte[8]; // once, at top of the compile loop
 
             foreach (var dataLine in dataLines)
             {
@@ -975,9 +1002,9 @@ namespace picovm.Assembler
                     {
                         var ov = (operand is string && string.Compare((string)operand, "$", StringComparison.InvariantCulture) == 0) ? (byte)0x00 : operand;
 
-                        if (ov.GetType() == typeof(string))
+                        if (ov is string ovs)
                         {
-                            var stringBytes = System.Text.Encoding.ASCII.GetBytes((string)ov);
+                            var stringBytes = System.Text.Encoding.ASCII.GetBytes(ovs);
                             bytecode.AddRange(stringBytes);
 
                             if (dataAllocationDirective.Label != null && !symbolOffsets.ContainsKey(dataAllocationDirective.Label.ToUpperInvariant()))
@@ -990,9 +1017,9 @@ namespace picovm.Assembler
                             continue;
                         }
 
-                        if (ov.GetType() == typeof(byte))
+                        if (ov is byte ovb)
                         {
-                            bytecode.Add((byte)ov);
+                            bytecode.Add(ovb);
 
                             if (dataAllocationDirective.Label != null && !symbolOffsets.ContainsKey(dataAllocationDirective.Label.ToUpperInvariant()))
                                 symbolOffsets.Add(
@@ -1013,36 +1040,33 @@ namespace picovm.Assembler
                     {
                         var ov = operand;
 
-                        if (ov.GetType() == typeof(string))
+                        if (ov is string ovstr)
                         {
-                            if (double.TryParse((string)ov, out double ovDouble))
+                            if (double.TryParse(ovstr, out double ovDouble))
                                 ov = ovDouble;
-                            else if (float.TryParse((string)ov, out float ovFloat))
+                            else if (float.TryParse(ovstr, out float ovFloat))
                                 ov = ovFloat;
                             else
                                 throw new InvalidOperationException($"Unable to parse string as numeric value: {ov}");
                         }
 
-                        if (ov.GetType() == typeof(double))
+                        switch (ov)
                         {
-                            var longBytes = BitConverter.GetBytes((double)ov); // This is an array of 8 bytes
-                            bytecode.AddRange(longBytes);
-                            offsetBytes = offsetBytes.Add(8);
-                            continue;
-                        }
-                        else if (ov.GetType() == typeof(float))
-                        {
-                            var longBytes = BitConverter.GetBytes(Convert.ToDouble((float)ov)); // This is an array of 8 bytes
-                            bytecode.AddRange(longBytes);
-                            offsetBytes = offsetBytes.Add(8);
-                            continue;
-                        }
-                        else if (ov.GetType() == typeof(byte))
-                        {
-                            var longBytes = BitConverter.GetBytes(Convert.ToUInt64((byte)ov)); // This is an array of 8 bytes
-                            bytecode.AddRange(longBytes);
-                            offsetBytes = offsetBytes.Add(8);
-                            continue;
+                            case double ovdbl:
+                                BinaryPrimitives.WriteDoubleLittleEndian(buf, ovdbl); // This is 8 bytes
+                                bytecode.AddRange(buf[..8]);
+                                offsetBytes = offsetBytes.Add(8);
+                                continue;
+                            case float ovf:
+                                BinaryPrimitives.WriteDoubleLittleEndian(buf, Convert.ToDouble(ovf)); // This is 8 bytes
+                                bytecode.AddRange(buf[..8]);
+                                offsetBytes = offsetBytes.Add(8);
+                                continue;
+                            case byte ovb:
+                                BinaryPrimitives.WriteUInt64LittleEndian(buf, Convert.ToUInt64(ovb)); // This is 8 bytes
+                                bytecode.AddRange(buf[..8]);
+                                offsetBytes = offsetBytes.Add(8);
+                                continue;
                         }
 
                         throw new InvalidOperationException($"Unable to encode operand to data bytes: {operand}");
@@ -1128,13 +1152,11 @@ namespace picovm.Assembler
                         throw new InvalidOperationException("At the end of the EQU calculation, exactly one result should be on internal stack");
 
                     var ov = computeStack.Pop();
-                    var ovType = ov.GetType();
-                    if (ovType == typeof(ValueType))
-                        ovType = typeof(TAddrSize);
 
-                    if (ovType == typeof(ulong))
+                    if (ov is ulong ovu64)
                     {
-                        bytecode.AddRange(BitConverter.GetBytes((ulong)ov));
+                        BinaryPrimitives.WriteUInt64LittleEndian(buf, ovu64);
+                        bytecode.AddRange(buf[..8]);
 
                         if (dataAllocationDirective.Label != null && !symbolOffsets.ContainsKey(dataAllocationDirective.Label.ToUpperInvariant()))
                             symbolOffsets.Add(dataAllocationDirective.Label.ToUpperInvariant(),
@@ -1143,9 +1165,10 @@ namespace picovm.Assembler
                         offsetBytes = offsetBytes.Add(8);
                         continue;
                     }
-                    else if (ovType == typeof(uint))
+                    else if (ov is uint ovu32)
                     {
-                        bytecode.AddRange(BitConverter.GetBytes((uint)ov));
+                        BinaryPrimitives.WriteUInt32LittleEndian(buf, ovu32);
+                        bytecode.AddRange(buf[..4]);
 
                         if (dataAllocationDirective.Label != null && !symbolOffsets.ContainsKey(dataAllocationDirective.Label.ToUpperInvariant()))
                             symbolOffsets.Add(
@@ -1155,9 +1178,10 @@ namespace picovm.Assembler
                         offsetBytes = offsetBytes.Add(4);
                         continue;
                     }
-                    else if (ovType == typeof(ushort))
+                    else if (ov is ushort ovu16)
                     {
-                        bytecode.AddRange(BitConverter.GetBytes((ushort)ov));
+                        BinaryPrimitives.WriteUInt16LittleEndian(buf, ovu16);
+                        bytecode.AddRange(buf[..2]);
 
                         if (dataAllocationDirective.Label != null && !symbolOffsets.ContainsKey(dataAllocationDirective.Label.ToUpperInvariant()))
                             symbolOffsets.Add(
@@ -1167,9 +1191,9 @@ namespace picovm.Assembler
                         offsetBytes = offsetBytes.Add(2);
                         continue;
                     }
-                    else if (ovType == typeof(byte))
+                    else if (ov is byte ovu8)
                     {
-                        bytecode.Add((byte)ov);
+                        bytecode.Add(ovu8);
 
                         if (dataAllocationDirective.Label != null && !symbolOffsets.ContainsKey(dataAllocationDirective.Label.ToUpperInvariant()))
                             symbolOffsets.Add(
@@ -1189,7 +1213,17 @@ namespace picovm.Assembler
             return new CompileDataSectionResult<TAddrSize>([.. bytecode], symbolOffsets);
         }
 
-        private byte[] Add(byte? typeHintSize, string operand1, string operand2)
+        /// <summary>
+        /// Emits ADD-related machine codes
+        /// </summary>
+        /// <param name="dest">A span of at least 10 bytes to write to.  The actual amount of bytes written is the return value.</param>
+        /// <param name="typeHintSize"></param>
+        /// <param name="operand1"></param>
+        /// <param name="operand2"></param>
+        /// <returns>The number of bytes written to the <paramref name="dest"/> span.</returns>
+        /// <exception cref="NotImplementedException"></exception>
+        /// <exception cref="Exception"></exception>
+        private int Add(Span<byte> dest, byte? typeHintSize, string operand1, string operand2)
         {
             var o1Type = AssemblerUtility.GetOperandType(operand1);
             var o2Type = AssemblerUtility.GetOperandType(operand2);
@@ -1205,35 +1239,31 @@ namespace picovm.Assembler
                                 {
                                     if (typeHintSize == 8 || (!typeHintSize.HasValue && o1Reg.Size() == 8))
                                     {
-                                        var ret = new byte[10];
-                                        ret[0] = (byte)Bytecode.ADD_REG_CON;
-                                        ret[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                        Array.Copy(BitConverter.GetBytes(operand2.ParseUInt64Constant()), 0, ret, 2, 8);
-                                        return ret;
+                                        dest[0] = (byte)Bytecode.ADD_REG_CON;
+                                        dest[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                        BinaryPrimitives.WriteUInt64LittleEndian(dest[2..], operand2.ParseUInt64Constant());
+                                        return 10;
                                     }
                                     else if (typeHintSize == 4 || (!typeHintSize.HasValue && o1Reg.Size() == 4))
                                     {
-                                        var ret = new byte[6];
-                                        ret[0] = (byte)Bytecode.ADD_REG_CON;
-                                        ret[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                        Array.Copy(BitConverter.GetBytes(operand2.ParseUInt32Constant()), 0, ret, 2, 4);
-                                        return ret;
+                                        dest[0] = (byte)Bytecode.ADD_REG_CON;
+                                        dest[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                        BinaryPrimitives.WriteUInt32LittleEndian(dest[2..], operand2.ParseUInt32Constant());
+                                        return 6;
                                     }
                                     else if (typeHintSize == 2 || (!typeHintSize.HasValue && o1Reg.Size() == 2))
                                     {
-                                        var ret = new byte[4];
-                                        ret[0] = (byte)Bytecode.ADD_REG_CON;
-                                        ret[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                        Array.Copy(BitConverter.GetBytes(operand2.ParseUInt16Constant()), 0, ret, 2, 2);
-                                        return ret;
+                                        dest[0] = (byte)Bytecode.ADD_REG_CON;
+                                        dest[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                        BinaryPrimitives.WriteUInt16LittleEndian(dest[2..], operand2.ParseUInt16Constant());
+                                        return 4;
                                     }
                                     else if (typeHintSize == 1 || (!typeHintSize.HasValue && o1Reg.Size() == 1))
                                     {
-                                        var ret = new byte[3];
-                                        ret[0] = (byte)Bytecode.ADD_REG_CON;
-                                        ret[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                        ret[2] = operand2.ParseByteConstant();
-                                        return ret;
+                                        dest[0] = (byte)Bytecode.ADD_REG_CON;
+                                        dest[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                        dest[2] = operand2.ParseByteConstant();
+                                        return 3;
                                     }
 
                                     throw new NotImplementedException();
@@ -1247,11 +1277,10 @@ namespace picovm.Assembler
                         {
                             case ParameterType.Constant:
                                 {
-                                    var ret = new byte[6];
-                                    ret[0] = (byte)Bytecode.ADD_MEM_CON;
-                                    ret[1] = (byte)registers[operand1.TrimStart('[').TrimEnd(']').ToUpperInvariant()];
-                                    Array.Copy(BitConverter.GetBytes(operand2.ParseUInt32Constant()), 0, ret, 2, 4);
-                                    return ret;
+                                    dest[0] = (byte)Bytecode.ADD_MEM_CON;
+                                    dest[1] = (byte)registers[operand1.TrimStart('[').TrimEnd(']').ToUpperInvariant()];
+                                    BinaryPrimitives.WriteUInt32LittleEndian(dest[2..], operand2.ParseUInt32Constant());
+                                    return 6;
                                 }
                         }
                     }
@@ -1263,7 +1292,7 @@ namespace picovm.Assembler
             throw new Exception($"ERROR: Unable to parse ADD into an opcode");
         }
 
-        private byte[] And(byte? typeHintSize, string operand1, string operand2)
+        private int And(Span<byte> dest, byte? typeHintSize, string operand1, string operand2)
         {
             var o1Type = AssemblerUtility.GetOperandType(operand1);
             var o2Type = AssemblerUtility.GetOperandType(operand2);
@@ -1279,35 +1308,31 @@ namespace picovm.Assembler
                                 {
                                     if (typeHintSize == 8 || (!typeHintSize.HasValue && o1Reg.Size() == 8))
                                     {
-                                        var ret = new byte[10];
-                                        ret[0] = (byte)Bytecode.AND_REG_CON;
-                                        ret[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                        Array.Copy(BitConverter.GetBytes(operand2.ParseUInt32Constant()), 0, ret, 2, 8);
-                                        return ret;
+                                        dest[0] = (byte)Bytecode.AND_REG_CON;
+                                        dest[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                        BinaryPrimitives.WriteUInt64LittleEndian(dest[2..], operand2.ParseUInt64Constant());
+                                        return 10;
                                     }
                                     else if (typeHintSize == 4 || (!typeHintSize.HasValue && o1Reg.Size() == 4))
                                     {
-                                        var ret = new byte[6];
-                                        ret[0] = (byte)Bytecode.AND_REG_CON;
-                                        ret[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                        Array.Copy(BitConverter.GetBytes(operand2.ParseUInt32Constant()), 0, ret, 2, 4);
-                                        return ret;
+                                        dest[0] = (byte)Bytecode.AND_REG_CON;
+                                        dest[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                        BinaryPrimitives.WriteUInt32LittleEndian(dest[2..], operand2.ParseUInt32Constant());
+                                        return 6;
                                     }
                                     else if (typeHintSize == 2 || (!typeHintSize.HasValue && o1Reg.Size() == 2))
                                     {
-                                        var ret = new byte[4];
-                                        ret[0] = (byte)Bytecode.AND_REG_CON;
-                                        ret[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                        Array.Copy(BitConverter.GetBytes(operand2.ParseUInt16Constant()), 0, ret, 2, 2);
-                                        return ret;
+                                        dest[0] = (byte)Bytecode.AND_REG_CON;
+                                        dest[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                        BinaryPrimitives.WriteUInt16LittleEndian(dest[2..], operand2.ParseUInt16Constant());
+                                        return 4;
                                     }
                                     else if (typeHintSize == 1 || (!typeHintSize.HasValue && o1Reg.Size() == 1))
                                     {
-                                        var ret = new byte[3];
-                                        ret[0] = (byte)Bytecode.AND_REG_CON;
-                                        ret[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                        ret[2] = operand2.ParseByteConstant();
-                                        return ret;
+                                        dest[0] = (byte)Bytecode.AND_REG_CON;
+                                        dest[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                        dest[2] = operand2.ParseByteConstant();
+                                        return 3;
                                     }
 
                                     throw new NotImplementedException();
@@ -1323,7 +1348,7 @@ namespace picovm.Assembler
             throw new Exception($"ERROR: Unable to parse AND into an opcode");
         }
 
-        private byte[] Cmp(byte? typeHintSize, string operand1, string operand2)
+        private int Cmp(Span<byte> dest, byte? typeHintSize, string operand1, string operand2)
         {
             var o1Type = AssemblerUtility.GetOperandType(operand1);
             var o2Type = AssemblerUtility.GetOperandType(operand2);
@@ -1339,35 +1364,31 @@ namespace picovm.Assembler
                                 {
                                     if (typeHintSize == 8 || (!typeHintSize.HasValue && o1Reg.Size() == 8))
                                     {
-                                        var ret = new byte[10];
-                                        ret[0] = (byte)Bytecode.CMP_REG_CON;
-                                        ret[1] = (byte)o1Reg;
-                                        Array.Copy(BitConverter.GetBytes(operand2.ParseUInt64Constant()), 0, ret, 2, 8);
-                                        return ret;
+                                        dest[0] = (byte)Bytecode.CMP_REG_CON;
+                                        dest[1] = (byte)o1Reg;
+                                        BinaryPrimitives.WriteUInt64LittleEndian(dest[2..], operand2.ParseUInt64Constant());
+                                        return 10;
                                     }
                                     else if (typeHintSize == 4 || (!typeHintSize.HasValue && o1Reg.Size() == 4))
                                     {
-                                        var ret = new byte[6];
-                                        ret[0] = (byte)Bytecode.CMP_REG_CON;
-                                        ret[1] = (byte)o1Reg;
-                                        Array.Copy(BitConverter.GetBytes(operand2.ParseUInt32Constant()), 0, ret, 2, 4);
-                                        return ret;
+                                        dest[0] = (byte)Bytecode.CMP_REG_CON;
+                                        dest[1] = (byte)o1Reg;
+                                        BinaryPrimitives.WriteUInt32LittleEndian(dest[2..], operand2.ParseUInt32Constant());
+                                        return 6;
                                     }
                                     else if (typeHintSize == 2 || (!typeHintSize.HasValue && o1Reg.Size() == 2))
                                     {
-                                        var ret = new byte[4];
-                                        ret[0] = (byte)Bytecode.CMP_REG_CON;
-                                        ret[1] = (byte)o1Reg;
-                                        Array.Copy(BitConverter.GetBytes(operand2.ParseUInt16Constant()), 0, ret, 2, 2);
-                                        return ret;
+                                        dest[0] = (byte)Bytecode.CMP_REG_CON;
+                                        dest[1] = (byte)o1Reg;
+                                        BinaryPrimitives.WriteUInt16LittleEndian(dest[2..], operand2.ParseUInt16Constant());
+                                        return 4;
                                     }
                                     else if (typeHintSize == 1 || (!typeHintSize.HasValue && o1Reg.Size() == 1))
                                     {
-                                        var ret = new byte[3];
-                                        ret[0] = (byte)Bytecode.CMP_REG_CON;
-                                        ret[1] = (byte)o1Reg;
-                                        ret[2] = operand2.ParseByteConstant();
-                                        return ret;
+                                        dest[0] = (byte)Bytecode.CMP_REG_CON;
+                                        dest[1] = (byte)o1Reg;
+                                        dest[2] = operand2.ParseByteConstant();
+                                        return 3;
                                     }
 
                                     throw new NotImplementedException();
@@ -1382,7 +1403,7 @@ namespace picovm.Assembler
             throw new Exception($"ERROR: Unable to parse CMP into an opcode");
         }
 
-        private byte[] XOr(string operand1, string operand2)
+        private int XOr(Span<byte> dest, string operand1, string operand2)
         {
             var o1Type = AssemblerUtility.GetOperandType(operand1);
             var o2Type = AssemblerUtility.GetOperandType(operand2);
@@ -1391,17 +1412,14 @@ namespace picovm.Assembler
             {
                 case ParameterType.RegisterReference:
                     {
-                        var o1Reg = registers[operand1.ToUpperInvariant()];
                         switch (o2Type)
                         {
                             case ParameterType.RegisterReference:
                                 {
-                                    var o2Reg = registers[operand2.ToUpperInvariant()];
-                                    var ret = new byte[3];
-                                    ret[0] = (byte)Bytecode.XOR_REG_REG;
-                                    ret[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                    ret[2] = (byte)registers[operand2.ToUpperInvariant()];
-                                    return ret;
+                                    dest[0] = (byte)Bytecode.XOR_REG_REG;
+                                    dest[1] = (byte)registers[operand1.ToUpperInvariant()];
+                                    dest[2] = (byte)registers[operand2.ToUpperInvariant()];
+                                    return 3;
                                 }
                             default:
                                 throw new NotImplementedException();
@@ -1414,30 +1432,29 @@ namespace picovm.Assembler
             throw new Exception($"ERROR: Unable to parse XOR into an opcode");
         }
 
-        private byte[] Pop(string operand)
+        private int Pop(Span<byte> dest, string operand)
         {
-            var ret = new byte[2];
             var operandType = AssemblerUtility.GetOperandType(operand);
 
             switch (operandType)
             {
                 case ParameterType.RegisterReference:
                     {
-                        ret[0] = (byte)Bytecode.POP_REG;
-                        ret[1] = (byte)registers[operand.ToUpperInvariant()];
+                        dest[0] = (byte)Bytecode.POP_REG;
+                        dest[1] = (byte)registers[operand.ToUpperInvariant()];
                         break;
                     }
                 case ParameterType.RegisterIndirect:
                     {
-                        ret[0] = (byte)Bytecode.POP_MEM;
-                        ret[1] = (byte)registers[operand.TrimStart('[').TrimEnd(']').ToUpperInvariant()];
+                        dest[0] = (byte)Bytecode.POP_MEM;
+                        dest[1] = (byte)registers[operand.TrimStart('[').TrimEnd(']').ToUpperInvariant()];
                         break;
                     }
                 default:
                     throw new Exception($"ERROR: Unable to parse POP parameters into an opcode, unhandled operand: {operand}");
             }
 
-            return ret;
+            return 2;
         }
 
         public static string GetEnumDescription(Enum value)

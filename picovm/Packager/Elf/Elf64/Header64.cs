@@ -2,9 +2,11 @@ using System;
 using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace picovm.Packager.Elf.Elf64
 {
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct Header64
     {
         // Magic number, always 0x7f E L F
@@ -49,17 +51,16 @@ namespace picovm.Packager.Elf.Elf64
             if (stream.Position != 0)
                 stream.Seek(0, SeekOrigin.Begin);
 
-            var magicBuffer = new byte[MAGIC.Length];
-            var bytesRead = stream.Read(magicBuffer, 0, MAGIC.Length);
+            Span<byte> magicBuffer = stackalloc byte[MAGIC.Length];
+            var bytesRead = stream.Read(magicBuffer);
             if (bytesRead != MAGIC.Length)
                 return false;
-            var magicMatch = bytesRead == MAGIC.Length && Enumerable.SequenceEqual(MAGIC, magicBuffer);
+            var magicMatch = bytesRead == MAGIC.Length && magicBuffer.SequenceEqual(MAGIC.AsSpan());
             if (!magicMatch)
                 return false;
 
             stream.Seek(0, SeekOrigin.Begin);
-            Header64 potentialHeader;
-            if (!Header64.TryRead(stream, out potentialHeader))
+            if (!TryRead(stream, out Header64 potentialHeader))
                 return false;
             return potentialHeader.EI_CLASS == HeaderIdentityClass.ELFCLASS64;
         }
@@ -74,17 +75,17 @@ namespace picovm.Packager.Elf.Elf64
             }
             catch (Exception ex)
             {
-                header = default;
                 Console.Error.WriteLine(ex);
+                header = default;
                 return false;
             }
         }
 
         public void Read(Stream stream)
         {
-            var magic = new byte[MAGIC.Length];
+            Span<byte> magic = stackalloc byte[MAGIC.Length];
             stream.ReadExactly(magic);
-            if (!MAGIC.SequenceEqual(magic))
+            if (!MAGIC.AsSpan().SequenceEqual(magic))
                 throw new BadImageFormatException("Magic value is not present for an ELF file");
 
             EI_CLASS = stream.ReadByteAndParse(HeaderIdentityClass.ELFCLASSNONE);
@@ -108,10 +109,11 @@ namespace picovm.Packager.Elf.Elf64
             E_SHNUM = stream.ReadUInt16();
             E_SHSTRNDX = stream.ReadUInt16();
 
+            if (EI_DATA != HeaderIdentityData.ELFDATA2LSB)
+                throw new BadImageFormatException("Only little-endian ELF (ELFDATA2LSB) is supported.");
+
             if (E_EHSIZE != stream.Position)
-            {
                 throw new InvalidOperationException("E_EHSIZE does not equal the current reader position");
-            }
         }
 
         public void Write(Stream stream, UInt16 programHeaderCount, UInt16 sectionHeaderCount)
@@ -128,8 +130,10 @@ namespace picovm.Packager.Elf.Elf64
             headerLength += stream.WriteOneByte((byte)EI_DATA);
             headerLength += stream.WriteOneByte((byte)EI_VERSION);
             // Index 7-15 are padding
-            headerLength += stream.WriteAndCount(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
-            headerLength += stream.WriteOneByte((byte)16); // Size of this header, always 16 bytes
+            headerLength += stream.WriteOneByte((byte)EI_OSABI);       // pos 7
+            headerLength += stream.WriteOneByte(EI_ABIVERSION);        // pos 8
+            headerLength += stream.WriteAndCount(new byte[7]);         // pos 9-15
+            // E_IDENT is now complete at 16 bytes.
 
             headerLength += stream.WriteHalfWord((UInt16)E_TYPE);
             headerLength += stream.WriteHalfWord((UInt16)E_MACHINE);
@@ -149,7 +153,7 @@ namespace picovm.Packager.Elf.Elf64
                 throw new InvalidOperationException("Miscalculation of E_EHSIZE");
 
             // Pad out to program header start.
-            while (E_PHOFF - headerLength > 0)
+            while (headerLength < E_PHOFF)
             {
                 headerLength += stream.WriteOneByte(0);
             }

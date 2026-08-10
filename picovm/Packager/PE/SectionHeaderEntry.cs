@@ -4,50 +4,35 @@ using System.Linq;
 
 namespace picovm.Packager.PE
 {
-    public readonly struct SectionHeaderEntry
+    public readonly struct SectionHeaderEntry(Stream stream)
     {
-        public readonly UInt64 Name;
-        public readonly UInt32 VirtualSize;
-        public readonly UInt32 VirtualAddress;
-        public readonly UInt32 SizeOfRawData;
-        public readonly UInt32 PointerToRawData;
-        public readonly UInt32 PointerToRelocations;
-        public readonly UInt32 PointerToLineNumbers;
-        public readonly UInt16 NumberOfRelocations;
-        public readonly UInt16 NumberOfLineNumbers;
-        public readonly UInt32 Characteristics;
+        public readonly UInt64 Name = stream.ReadUInt64();
+        public readonly UInt32 VirtualSize = stream.ReadUInt32();
+        public readonly UInt32 VirtualAddress = stream.ReadUInt32();
+        public readonly UInt32 SizeOfRawData = stream.ReadUInt32();
+        public readonly UInt32 PointerToRawData = stream.ReadUInt32();
+        public readonly UInt32 PointerToRelocations = stream.ReadUInt32();
+        public readonly UInt32 PointerToLineNumbers = stream.ReadUInt32();
+        public readonly UInt16 NumberOfRelocations = stream.ReadUInt16();
+        public readonly UInt16 NumberOfLineNumbers = stream.ReadUInt16();
+        public readonly UInt32 Characteristics = stream.ReadUInt32();
 
-        public SectionHeaderEntry(Stream stream)
-        {
-            this.Name = stream.ReadUInt64();
-            this.VirtualSize = stream.ReadUInt32();
-            this.VirtualAddress = stream.ReadUInt32();
-            this.SizeOfRawData = stream.ReadUInt32();
-            this.PointerToRawData = stream.ReadUInt32();
-            this.PointerToRelocations = stream.ReadUInt32();
-            this.PointerToLineNumbers = stream.ReadUInt32();
-            this.NumberOfRelocations = stream.ReadUInt16();
-            this.NumberOfLineNumbers = stream.ReadUInt16();
-            this.Characteristics = stream.ReadUInt32();
-        }
-
-        public string NameAsString() => System.Text.Encoding.ASCII.GetString(BitConverter.GetBytes(this.Name).TakeWhile(b => b != 0x00).ToArray());
+        public string NameAsString() => System.Text.Encoding.ASCII.GetString(BitConverter.GetBytes(Name).TakeWhile(b => b != 0x00).ToArray());
 
         public override bool Equals(object? obj)
         {
-            if (!(obj is SectionHeaderEntry))
+            if (obj is not SectionHeaderEntry mys)
                 return false;
 
-            var mys = (SectionHeaderEntry)obj;
             return
-                mys.Name == this.Name &&
-                mys.VirtualSize == this.VirtualSize &&
-                mys.VirtualAddress == this.VirtualAddress &&
-                mys.SizeOfRawData == this.SizeOfRawData &&
-                mys.PointerToRawData == this.PointerToRawData;
+                mys.Name == Name &&
+                mys.VirtualSize == VirtualSize &&
+                mys.VirtualAddress == VirtualAddress &&
+                mys.SizeOfRawData == SizeOfRawData &&
+                mys.PointerToRawData == PointerToRawData;
         }
 
         public override int GetHashCode() => HashCode.Combine(Name, VirtualSize, VirtualAddress, SizeOfRawData, PointerToRawData);
-        public override string ToString() => $"Name={NameAsString()}, Addr=0x{this.VirtualAddress:x}";
+        public override string ToString() => $"Name={NameAsString()}, Addr=0x{VirtualAddress:x}";
     }
 }

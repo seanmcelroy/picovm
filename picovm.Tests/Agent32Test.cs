@@ -52,8 +52,9 @@ namespace picovm.Tests
 
             var compiler = new BytecodeCompiler<UInt32>();
             var compiled = compiler.Compile(programText, "UNIT_TEST");
+            Assert.NotEmpty(compiled.TextSegment);
 
-            var agent = new Agent(kernel, compiled.TextSegment, 0);
+            var agent = new Agent(kernel, [.. compiled.TextSegment.Value], 0);
             var ret = agent.Tick();
             Assert.Equal(4294967295U, agent.ReadExtendedRegister(Register.EAX));
 
@@ -112,8 +113,9 @@ namespace picovm.Tests
 
             var compiler = new BytecodeCompiler<UInt32>();
             var compiled = compiler.Compile(programText, "UNIT_TEST");
+            Assert.NotEmpty(compiled.TextSegment);
 
-            var agent = new Agent(kernel, compiled.TextSegment, 0);
+            var agent = new Agent(kernel, [.. compiled.TextSegment.Value], 0);
             var ret = agent.Tick();
             Assert.False(ret.Done);
             Assert.Equal((uint)0x11112222, agent.ReadExtendedRegister(Register.EAX));
@@ -167,8 +169,9 @@ namespace picovm.Tests
 
             var compiler = new BytecodeCompiler<UInt32>();
             var compiled = compiler.Compile(programText, "UNIT_TEST");
+            Assert.NotEmpty(compiled.TextSegment);
 
-            var agent = new Agent(kernel, compiled.TextSegment, 0);
+            var agent = new Agent(kernel, [.. compiled.TextSegment.Value], 0);
             Assert.Equal((uint)65535, agent.StackPointer);
             var ret = agent.Tick();
 

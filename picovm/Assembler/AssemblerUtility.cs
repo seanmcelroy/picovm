@@ -246,7 +246,7 @@ namespace picovm.Assembler
                 result = vt;
                 return true;
             }
-            else if (unboxAttempt.GetType() == typeof(string) && symbolOffsets.ContainsKey(operandPart.ToUpperInvariant()))
+            else if (unboxAttempt is string && symbolOffsets.ContainsKey(operandPart.ToUpperInvariant()))
             {
                 result = symbolOffsets[operandPart.ToUpperInvariant()].DataSegmentOffset;
                 return true;

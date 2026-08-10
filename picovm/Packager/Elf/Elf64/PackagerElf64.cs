@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using picovm.Assembler;
 
 namespace picovm.Packager.Elf.Elf64
@@ -10,9 +9,7 @@ namespace picovm.Packager.Elf.Elf64
     {
         private readonly CompilationResult<UInt64> compilationResult;
 
-        private bool generateSectionHeaderTable { get; set; }
-
-        public PackagerElf64(CompilationResult<UInt64> compilationResult, bool generateSectionHeaderTable = true)
+        public PackagerElf64(CompilationResult<UInt64> compilationResult)
         {
             if (compilationResult.EntryPoint == null)
                 throw new ArgumentException("Compilation result is missing an entry point", nameof(compilationResult));
@@ -21,7 +18,6 @@ namespace picovm.Packager.Elf.Elf64
             if (compilationResult.DataSegmentSize == null)
                 throw new ArgumentException("Compilation result is missing a data segment size", nameof(compilationResult));
             this.compilationResult = compilationResult;
-            this.generateSectionHeaderTable = generateSectionHeaderTable;
         }
 
         public Header64 GenerateElfFileHeader() => new()
@@ -32,7 +28,7 @@ namespace picovm.Packager.Elf.Elf64
             E_TYPE = HeaderType.ET_EXEC,
             E_MACHINE = HeaderMachine.EM_ARM, // EM_ARM = 0x28 TODO: What should this be?
             E_VERSION = HeaderVersion.EV_CURRENT,
-            E_ENTRY = (ushort)(this.compilationResult.EntryPoint!.Value + 0x60), // ELF header + Program Table Header = 0x60
+            // Don't set E_ENTRY, it is set later on.
             E_PHOFF = 0x40, // We always start the program header at 64 bytes, b/c the header will vary 52 vs 64 bytes in length if it's 32-bit or 64-bit.
             E_SHOFF = 0,
             E_FLAGS = 0,
@@ -45,11 +41,11 @@ namespace picovm.Packager.Elf.Elf64
         public static ProgramHeader64 GenerateProgramHeader64() => new()
         {
             P_TYPE = ProgramHeaderType.PT_LOAD, // TODO: always?
-            P_OFFSET = 0, // TODO: always 0?
             //P_VADDR = 0x8000000, // TODO: always?
             //P_PADDR = 0x8000000, // TODO: always?
             P_FLAGS = (uint)(SegmentPermissionFlags.PF_R | SegmentPermissionFlags.PF_X),
-            P_ALIGN = 0, // TODO: always?
+            P_ALIGN = 16, // matches the 16-byte padding used throughout the packager
+            // P_OFFSET, P_FILESZ, P_MEMSZ are assigned in Write() once the layout is known.
         };
 
         public void Write(Stream stream)
@@ -93,7 +89,7 @@ namespace picovm.Packager.Elf.Elf64
                 // Write out section header string table, align to 16 bytes
                 bwData.Write(compilationResult.DataSegment.Value.AsSpan());
                 bwData.Flush();
-                bwData.Write(Enumerable.Repeat((byte)0x00, rodataSizePad).ToArray());
+                bwData.BaseStream.WriteZeros(rodataSizePad);
                 bwData.Flush();
             }
 
@@ -108,7 +104,7 @@ namespace picovm.Packager.Elf.Elf64
             {
                 var bwSectionNames = new BinaryWriter(msSectionNames);
                 bwSectionNames.Write('\0');
-                bwSectionNames.Write(System.Text.Encoding.ASCII.GetBytes(".shrtrtab\0"));
+                bwSectionNames.Write(System.Text.Encoding.ASCII.GetBytes(".shstrtab\0"));
 
                 // Required Index 0
                 sections.Add(new SectionHeader64
@@ -163,7 +159,7 @@ namespace picovm.Packager.Elf.Elf64
 
                 // Write out section header string table, align to 16 bytes
                 sectionNamesSizePad = sectionNamesSizeReal.CalculateRoundUpTo16Pad();
-                bwSectionNames.Write(Enumerable.Repeat((byte)0x00, sectionNamesSizePad).ToArray());
+                bwSectionNames.BaseStream.WriteZeros(sectionNamesSizePad);
                 bwSectionNames.Flush();
             }
             uint sectionNamesSize = sectionNamesSizeReal + (uint)sectionNamesSizePad;
@@ -172,21 +168,25 @@ namespace picovm.Packager.Elf.Elf64
             // Section header table
             uint sectionHeaderTableOffset = sectionNamesOffset + sectionNamesSize;
 
-            elfFileHeader.E_ENTRY = programHeader.P_VADDR + textOffset;
+            // E_ENTRY is a virtual address, not a file offset.
+            // EntryPoint is text-segment-relative (see BytecodeCompiler.cs).
+            elfFileHeader.E_ENTRY = programHeader.P_VADDR + (compilationResult.EntryPoint ?? 0);
             elfFileHeader.E_PHOFF = programHeaderOffset;
             elfFileHeader.E_SHOFF = sectionHeaderTableOffset;
             elfFileHeader.E_SHSTRNDX = sections.Count == 0 ? SpecialSectionIndexes.SHN_UNDEF : (ushort)(sections.Count - 1);
             elfFileHeader.Write(stream, 1, (ushort)sections.Count);
 
-            programHeader.P_FILESZ = sectionNamesOffset;
-            programHeader.P_MEMSZ = sectionNamesOffset;
+            // PT_LOAD covers just the payload (.text + .rodata), starting at its true file offset.
+            programHeader.P_OFFSET = textOffset;
+            programHeader.P_FILESZ = textSize + rodataSize;
+            programHeader.P_MEMSZ = programHeader.P_FILESZ;
             (msProgramHeader, programHeaderSizeReal, programHeaderSizePad) = programHeader.ToMemoryStream();
 
             stream.Write(msProgramHeader.ToArray());
             if (compilationResult.TextSegment != null)
             {
                 stream.Write(compilationResult.TextSegment.Value.AsSpan());
-                stream.Write(Enumerable.Repeat((byte)0x00, textSizePad).ToArray());
+                stream.WriteZeros(textSizePad);
             }
             if (compilationResult.DataSegment != null)
                 stream.Write(msData.ToArray());
@@ -195,6 +195,8 @@ namespace picovm.Packager.Elf.Elf64
             // Write out section header table
             foreach (var section in sections)
                 section.Write(stream, elfFileHeader.EI_CLASS);
+
+            stream.Flush();
         }
     }
 }

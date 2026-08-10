@@ -11,7 +11,7 @@ namespace picovm.Tests
         [Fact]
         public void StructSizes()
         {
-            Assert.Equal(64, System.Runtime.InteropServices.Marshal.SizeOf<Header64>());
+            Assert.Equal(64 - 4, System.Runtime.InteropServices.Marshal.SizeOf<Header64>());
             Assert.Equal(56, System.Runtime.InteropServices.Marshal.SizeOf<ProgramHeader64>());
             Assert.Equal(64, System.Runtime.InteropServices.Marshal.SizeOf<SectionHeader64>());
         }

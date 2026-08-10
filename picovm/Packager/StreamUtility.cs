@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -14,7 +15,7 @@ namespace picovm.Packager
                 throw new ArgumentException("T must be an enumerated type");
 
             var value = (byte)stream.ReadByte();
-            if (Enum.GetName(typeof(T), value) == null)
+            if (!Enum.IsDefined(typeof(T), value))
                 return defaultNoMatch;
             return (T)(object)value;
         }
@@ -39,23 +40,24 @@ namespace picovm.Packager
 
         public static UInt16 ReadUInt16(this Stream stream)
         {
-            var twoBytes = new byte[2];
-            stream.ReadExactly(twoBytes);
-            return BitConverter.ToUInt16(twoBytes);
+            Span<byte> buf = stackalloc byte[2];
+            stream.ReadExactly(buf);
+            return BinaryPrimitives.ReadUInt16LittleEndian(buf);
+
         }
 
         public static UInt32 ReadUInt32(this Stream stream)
         {
-            var fourBytes = new byte[4];
-            stream.ReadExactly(fourBytes);
-            return BitConverter.ToUInt32(fourBytes);
+            Span<byte> buf = stackalloc byte[4];
+            stream.ReadExactly(buf);
+            return BinaryPrimitives.ReadUInt32LittleEndian(buf);
         }
 
         public static UInt64 ReadUInt64(this Stream stream)
         {
-            var eightBytes = new byte[8];
-            stream.ReadExactly(eightBytes);
-            return BitConverter.ToUInt64(eightBytes);
+            Span<byte> buf = stackalloc byte[8];
+            stream.ReadExactly(buf);
+            return BinaryPrimitives.ReadUInt64LittleEndian(buf);
         }
 
         public static string ReadNulTerminatedString(this Stream stream)
@@ -94,6 +96,22 @@ namespace picovm.Packager
         }
         public static UInt16 WriteOffset32(this Stream stream, UInt32 value) => stream.WriteAddress32(value);
         public static UInt16 WriteOffset64(this Stream stream, UInt64 value) => stream.WriteAddress64(value);
+
+
+        public static void WriteZeros(this Stream stream, int count)
+        {
+            if (count <= 0)
+                return;
+            
+            Span<byte> zeros = stackalloc byte[count <= 64 ? count : 64];
+            zeros.Clear();
+            while (count > 0)
+            {
+                int chunk = Math.Min(count, zeros.Length);
+                stream.Write(zeros[..chunk]);
+                count -= chunk;
+            }
+        }
 
         public static void SeekToRVA(this Stream stream, IEnumerable<PE.SectionHeaderEntry> sectionHeaders, UInt32 rva)
         {

@@ -6,7 +6,7 @@ using picovm.VM;
 
 namespace picovm.Packager.PE
 {
-    public sealed class LoaderPE(Stream stream) : ILoader
+    public sealed class LoaderPE(Stream stream) : ILoader<UInt64>
     {
         private readonly Stream stream = stream ?? throw new ArgumentNullException(nameof(stream));
 
@@ -101,7 +101,7 @@ namespace picovm.Packager.PE
                     metadata.Add(sectionHeaders);
 
                     // PE Import table (2nd entry)
-                    if (rvaAndSizes.Count + 1 >= (int)PEDataDictionaryIndex.IMPORT_TABLE)
+                    if (rvaAndSizes.Count > (int)PEDataDictionaryIndex.IMPORT_TABLE)
                     {
                         var rva = rvaAndSizes[(int)PEDataDictionaryIndex.IMPORT_TABLE];
                         stream.SeekToRVA(sectionHeaders, rva.RelativeVirtualAddress);
@@ -139,7 +139,7 @@ namespace picovm.Packager.PE
                     }
 
                     // PE Resources table (3rd entry)
-                    if (rvaAndSizes.Count + 1 >= (int)PEDataDictionaryIndex.RESOURCE_TABLE)
+                    if (rvaAndSizes.Count > (int)PEDataDictionaryIndex.RESOURCE_TABLE)
                     {
                         var rva = rvaAndSizes[(int)PEDataDictionaryIndex.RESOURCE_TABLE];
                         stream.SeekToRVA(sectionHeaders, rva.RelativeVirtualAddress);
@@ -155,6 +155,6 @@ namespace picovm.Packager.PE
             return metadata.ToImmutableList();
         }
 
-        ILoaderResult ILoader.LoadImage() => this.LoadImage();
+        ILoaderResult<UInt64> ILoader<UInt64>.LoadImage() => LoadImage();
     }
 }

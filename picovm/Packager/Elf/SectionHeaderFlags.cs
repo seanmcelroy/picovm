@@ -4,7 +4,7 @@ using System.ComponentModel;
 namespace picovm.Packager.Elf
 {
     [Flags]
-    public enum SectionHeaderFlags : UInt32
+    public enum SectionHeaderFlags : UInt64
     {
         [ShortName("W")]
         [Description("The section contains data that should be writable during process execution.")]

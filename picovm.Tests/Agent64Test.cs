@@ -34,8 +34,9 @@ namespace picovm.Tests
 
             var compiler = new BytecodeCompiler<UInt64>();
             var compiled = compiler.Compile(programText, "UNIT_TEST");
+            Assert.NotEmpty(compiled.TextSegment);
 
-            var agent = new Agent64(kernel, compiled.TextSegment, 0);
+            var agent = new Agent64(kernel, [.. compiled.TextSegment.Value], 0);
             var ret = agent.Tick();
             Assert.False(ret.Done);
             Assert.Equal(0x1111222233334444UL, agent.ReadR64Register(Register.RAX));

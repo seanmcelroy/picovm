@@ -1,7 +1,6 @@
 using System;
 using System.ComponentModel;
 using System.IO;
-using System.Linq;
 
 namespace picovm.Packager.Elf.Elf64
 {
@@ -26,7 +25,7 @@ namespace picovm.Packager.Elf.Elf64
 
         public void Read(Stream stream)
         {
-            P_TYPE = stream.ReadWord<ProgramHeaderType>(ProgramHeaderType.PT_NULL);
+            P_TYPE = stream.ReadWord(ProgramHeaderType.PT_NULL);
             P_FLAGS = stream.ReadUInt32();
             P_OFFSET = stream.ReadOffset64();
             P_VADDR = stream.ReadAddress64();
@@ -43,7 +42,7 @@ namespace picovm.Packager.Elf.Elf64
             var bwProgramHeader = new BinaryWriter(msProgramHeader);
             uint programHeaderSizeReal = (uint)msProgramHeader.Position;
             int programHeaderSizePad = programHeaderSizeReal.CalculateRoundUpTo16Pad();
-            bwProgramHeader.Write(Enumerable.Repeat((byte)0x00, programHeaderSizePad).ToArray());
+            bwProgramHeader.BaseStream.WriteZeros(programHeaderSizePad);
             bwProgramHeader.Flush();
             return (msProgramHeader, programHeaderSizeReal, programHeaderSizePad);
         }

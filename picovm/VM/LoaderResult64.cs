@@ -4,9 +4,9 @@ using System.Collections.Immutable;
 
 namespace picovm.VM
 {
-    public sealed class LoaderResult64 : ILoaderResult
+    public sealed class LoaderResult64 : ILoaderResult<UInt64>
     {
-        public UInt64 EntryPoint;
+        public UInt64 EntryPoint { get; private set; }
         public ImmutableArray<byte> Image { get; private set; }
         public ImmutableList<LoaderError> Errors { get; private set; }
         public ImmutableList<object> Metadata { get; private set; }

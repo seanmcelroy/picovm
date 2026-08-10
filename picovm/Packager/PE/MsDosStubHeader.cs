@@ -22,12 +22,16 @@ namespace picovm.Packager.PE
                 stream.Seek(0, SeekOrigin.Begin);
 
             {
-                var magicBuffer = new byte[MAGIC.Length];
-                var bytesRead = stream.Read(magicBuffer, 0, MAGIC.Length);
-                if (bytesRead != MAGIC.Length)
+                Span<byte> magic = stackalloc byte[MAGIC.Length];
+                try
+                {
+                    stream.ReadExactly(magic);
+                }
+                catch (EndOfStreamException)
+                {
                     return false;
-                var magicMatch = bytesRead == MAGIC.Length && Enumerable.SequenceEqual(MAGIC, magicBuffer);
-                if (!magicMatch)
+                }
+                if (!MAGIC.AsSpan().SequenceEqual(magic))
                     return false;
             }
 
@@ -58,7 +62,7 @@ namespace picovm.Packager.PE
             }
             catch (Exception ex)
             {
-                header = default(MsDosStubHeader);
+                header = default;
                 Console.Error.WriteLine(ex);
                 return false;
             }
@@ -66,7 +70,7 @@ namespace picovm.Packager.PE
 
         public void Read(Stream stream)
         {
-            var magic = new byte[MAGIC.Length];
+            Span<byte> magic = stackalloc byte[MAGIC.Length];
             stream.ReadExactly(magic);
             if (!MAGIC.SequenceEqual(magic))
                 throw new BadImageFormatException("Magic value (MZ) is not present for a PE file.");

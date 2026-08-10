@@ -209,7 +209,8 @@ namespace picovm.Tests
             var address = MovTestHarness.DataSymbolAddress(compilation, "counter");
 
             // Nothing before the symbol was touched: the text segment is still intact.
-            Assert.Equal(compilation.TextSegment!.Value, agent.PeekMemory(0, (int)compilation.TextSegmentSize!.Value));
+            var peek = agent.PeekMemory(0, (int)compilation.TextSegmentSize!.Value).ToArray();
+            Assert.Equal(compilation.TextSegment!.Value, peek);
             Assert.Equal(new byte[] { 0xEF, 0xBE, 0xAD, 0xDE }, agent.PeekMemory(address, 4));
         }
 

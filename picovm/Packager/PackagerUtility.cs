@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Text;
@@ -44,13 +43,6 @@ namespace picovm.Packager
                 }
             }
             return flagString.ToString();
-        }
-
-        public static string ToByteString(this IEnumerable<byte>? bytes, string? separator = "")
-        {
-            if (bytes == null)
-                return string.Empty;
-            return bytes.Select(b => $"{b:x}").Aggregate((c, n) => $"{c}{separator}{n}");
         }
     }
 }

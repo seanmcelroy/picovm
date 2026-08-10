@@ -131,16 +131,11 @@ namespace picovm
 
         static ICompilationResult Assemble(string output, AssemblerPackageOutputType outputType, string format, string input)
         {
-            if (!System.IO.File.Exists(input))
+            if (!File.Exists(input))
                 return CompilationResultBase.Error($"Source input file {input} not found.");
 
-            if (System.IO.File.Exists(output))
-            {
-                Console.Error.WriteLine($"Executable output file {output} already exists.");
-                // DEBUG
-                System.IO.File.Delete(output);
-                //return -4;
-            }
+            if (File.Exists(output))
+                return CompilationResultBase.Error($"Executable output file {output} already exists.");
 
             // Compile.
             ICompilationResult compilation;
@@ -150,11 +145,11 @@ namespace picovm
                 switch (outputType)
                 {
                     case AssemblerPackageOutputType.Elf32:
-                        Console.Out.WriteLine($"Packaging bytecode as: {Enum.GetName(typeof(AssemblerPackageOutputType), outputType)}");
+                        Console.Out.WriteLine($"Packaging bytecode as: {Enum.GetName(outputType)}");
                         compiler = new BytecodeCompiler<UInt32>();
                         break;
                     case AssemblerPackageOutputType.Elf64:
-                        Console.Out.WriteLine($"Packaging bytecode as: {Enum.GetName(typeof(AssemblerPackageOutputType), outputType)}");
+                        Console.Out.WriteLine($"Packaging bytecode as: {Enum.GetName(outputType)}");
                         compiler = new BytecodeCompiler<UInt64>();
                         break;
                     default:
@@ -194,9 +189,6 @@ namespace picovm
                     default:
                         throw new InvalidOperationException($"Unknown packaging format: {outputType}");
                 }
-
-                fs.Flush();
-                fs.Close();
             }
 
             return compilation;
@@ -210,7 +202,7 @@ namespace picovm
 
         static ILoaderResult Load(string input, AssemblerPackageOutputType inputType)
         {
-            if (!System.IO.File.Exists(input))
+            if (!File.Exists(input))
                 throw new FileNotFoundException($"Source input file {input} not found.", input);
 
             // Loader Stage 1 - read file
@@ -240,17 +232,17 @@ namespace picovm
             IKernel kernel;
             Agent agent;
 
-            if (loaded.GetType() == typeof(LoaderResult32))
+            if (loaded is LoaderResult32 loader32)
             {
                 Console.Out.WriteLine("Emulating Linux 32-bit kernel syscall interface");
                 kernel = new Linux32Kernel();
-                agent = new Agent(kernel, image, ((LoaderResult32)loaded).EntryPoint);
+                agent = new Agent(kernel, image, loader32.EntryPoint);
             }
-            else if (loaded.GetType() == typeof(LoaderResult64))
+            else if (loaded is LoaderResult64 loader64)
             {
                 Console.Out.WriteLine("Emulating Linux 64-bit kernel syscall interface");
                 kernel = new Linux64Kernel();
-                agent = new Agent64(kernel, image, ((LoaderResult64)loaded).EntryPoint);
+                agent = new Agent64(kernel, image, loader64.EntryPoint);
             }
             else
                 throw new InvalidOperationException();
@@ -280,12 +272,15 @@ namespace picovm
 
         static void PrintInspection(string target)
         {
-            if (!System.IO.File.Exists(target))
+            if (!File.Exists(target))
                 throw new FileNotFoundException($"Source input file {target} not found.", target);
 
             var type = Inspector.DetectPackageOutputType(target);
             switch (type)
             {
+                case AssemblerPackageOutputType.Elf32:
+                    PrintInspectionElf32(target);
+                    break;
                 case AssemblerPackageOutputType.Elf64:
                     PrintInspectionElf64(target);
                     break;
@@ -298,28 +293,32 @@ namespace picovm
             }
         }
 
-        static void PrintInspectionElf64(string filePath)
+        static void PrintInspectionElf32(string filePath)
         {
-            using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-            {
-                PrintInspectionElf64(fs);
-            }
+            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            PrintInspectionElf32(fs);
         }
 
-        static void PrintInspectionElf64(Stream stream)
+        static void PrintInspectionElf64(string filePath)
         {
-            var metadata = Inspector.InspectAsElf64(stream).Metadata;
-            var header = metadata.OfType<Packager.Elf.Elf64.Header64>().FirstOrDefault();
+            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            PrintInspectionElf64(fs);
+        }
 
-            if (header.Equals(default(Packager.Elf.Elf64.Header64)))
-                Console.Out.WriteLine("No Elf64 header found.");
+         static void PrintInspectionElf32(Stream stream)
+        {
+            var metadata = Inspector.InspectAsElf32(stream).Metadata;
+            var header = metadata.OfType<Header32>().FirstOrDefault();
+
+            if (header.Equals(default(Header32)))
+                Console.Out.WriteLine("No Elf32 header found.");
 
             Console.Out.WriteLine("ELF Header:");
             stream.Seek(0, SeekOrigin.Begin);
-            var first16 = new byte[16];
-            stream.ReadExactly(first16, 0, 16);
-            var first16String = first16.Select(b => $"{b:x2}").Aggregate((c, n) => $"{c} {n}");
-            Console.Out.WriteLine($"  Magic:   {first16String}");
+            Span<byte> first16 = stackalloc byte[16];
+            stream.ReadExactly(first16);
+            var first16String = Convert.ToHexStringLower(first16);
+            Console.Out.WriteLine($"  Magic:                             {first16String}");
             Console.Out.WriteLine($"  Class:                             {PackagerUtility.GetEnumDescription(header.EI_CLASS)}");
             Console.Out.WriteLine($"  Data:                              {PackagerUtility.GetEnumDescription(header.EI_DATA)}");
             Console.Out.WriteLine($"  Version:                           {PackagerUtility.GetEnumDescription(header.EI_VERSION)}");
@@ -342,7 +341,101 @@ namespace picovm
             Console.Out.WriteLine($"\r\nSection Headers:");
             Console.Out.WriteLine($"  [Nr] Name              Type             Address           Offset");
             Console.Out.WriteLine($"       Size              EntSize          Flags  Link  Info  Align");
-            var sectionHeaders = metadata.OfType<Packager.Elf.Elf64.SectionHeader64>().ToArray();
+            var sectionHeaders = metadata.OfType<SectionHeader32>().ToArray();
+            var sectionHeaderNames = new Dictionary<UInt32, string>();
+            long? sectionHeaderNameTableOffset = header.E_SHSTRNDX == SpecialSectionIndexes.SHN_UNDEF ? default(long?) : (long)sectionHeaders[header.E_SHSTRNDX].SH_OFFSET;
+            var i = 0;
+            foreach (var sh in sectionHeaders)
+            {
+                string name = "<MISSING TABLE>";
+                if (sectionHeaderNameTableOffset != null)
+                {
+                    stream.Seek((long)sectionHeaderNameTableOffset + sh.SH_NAME, SeekOrigin.Begin);
+                    name = stream.ReadNulTerminatedString();
+                    sectionHeaderNames.Add(sh.SH_NAME, name);
+                }
+
+                var flagString = PackagerUtility.GetEnumFlagsShortName<SectionHeaderFlags>((ulong)sh.SH_FLAGS); // Widen to ulong to prevent unboxing errors downstream
+
+                Console.Out.WriteLine($"  [{i,2}] {name.LeftAlignToSize(17)} {PackagerUtility.GetEnumAttributeValue<SectionHeaderType, ShortNameAttribute>(sh.SH_TYPE, sn => sn.DisplayName).LeftAlignToSize(16)} {sh.SH_ADDR.RightAlignHexToSize()}  {sh.SH_OFFSET.RightAlignHexToSize()}");
+                Console.Out.WriteLine($"       {sh.SH_SIZE.RightAlignHexToSize()}  {sh.SH_ENTSIZE.RightAlignHexToSize()}  {flagString.LeftAlignToSize(4)}  {sh.SH_LINK.RightAlignDecToSize(4, ' ')}  {sh.SH_INFO.RightAlignDecToSize(4, ' ')}  {sh.SH_ADDRALIGN.RightAlignDecToSize(4, ' ')}");
+                i++;
+            }
+            Console.Out.WriteLine("Key to Flags:");
+            Console.Out.WriteLine("  W (write), A (alloc), X (execute), M (merge), S (strings), I (info),");
+            Console.Out.WriteLine("  L (link order), O (extra OS processing required), G (group), T (TLS),");
+            Console.Out.WriteLine("  C (compressed), o (OS specific), E (exclude), p (processor specific)");
+
+            Console.Out.WriteLine("\r\nProgram Headers:");
+            Console.Out.WriteLine("  Type           Offset             VirtAddr           PhysAddr");
+            Console.Out.WriteLine("                 FileSiz            MemSiz              Flags  Align");
+            var programHeaders = metadata.OfType<ProgramHeader64>().ToArray();
+            foreach (var ph in programHeaders)
+            {
+                var flagString = new StringBuilder();
+                flagString.Append(((SegmentPermissionFlags)ph.P_FLAGS).HasFlag(SegmentPermissionFlags.PF_R) ? 'R' : ' ');
+                flagString.Append(((SegmentPermissionFlags)ph.P_FLAGS).HasFlag(SegmentPermissionFlags.PF_W) ? 'W' : ' ');
+                flagString.Append(((SegmentPermissionFlags)ph.P_FLAGS).HasFlag(SegmentPermissionFlags.PF_X) ? 'E' : ' ');
+
+                Console.Out.WriteLine($"  {PackagerUtility.GetEnumAttributeValue<ProgramHeaderType, ShortNameAttribute>(ph.P_TYPE, s => s.DisplayName).LeftAlignToSize(13)}  0x{ph.P_OFFSET.RightAlignHexToSize()} 0x{ph.P_VADDR.RightAlignHexToSize()} 0x{ph.P_PADDR.RightAlignHexToSize()}");
+                Console.Out.WriteLine($"                 0x{ph.P_FILESZ.RightAlignHexToSize()} 0x{ph.P_MEMSZ.RightAlignHexToSize()}  {flagString.LeftAlignToSize(6)} 0x{ph.P_ALIGN:x}");
+            }
+
+            Console.Out.WriteLine("\r\nSection to Segment mapping:");
+            Console.Out.WriteLine(" Segment Sections...");
+            i = 0;
+            foreach (var ph in programHeaders)
+            {
+                var shdrs = sectionHeaders
+                    .Where(sh =>
+                        (sh.SH_ADDR > 0 || sh.SH_ENTSIZE > 0) &&
+                        sh.SH_ADDR >= ph.P_VADDR &&
+                        sh.SH_ADDR + sh.SH_SIZE <= ph.P_VADDR + ph.P_MEMSZ)
+                    .Select(sh => sectionHeaderNames[sh.SH_NAME]).ToArray();
+                var shdrNames = shdrs.Length == 0 ? string.Empty : shdrs.Aggregate((c, n) => $"{c} {n}");
+                Console.Out.WriteLine($"  {i:00}     {shdrNames}");
+                i++;
+            }
+
+        }
+
+        static void PrintInspectionElf64(Stream stream)
+        {
+            var metadata = Inspector.InspectAsElf64(stream).Metadata;
+            var header = metadata.OfType<Header64>().FirstOrDefault();
+
+            if (header.Equals(default(Header64)))
+                Console.Out.WriteLine("No Elf64 header found.");
+
+            Console.Out.WriteLine("ELF Header:");
+            stream.Seek(0, SeekOrigin.Begin);
+            Span<byte> first16 = stackalloc byte[16];
+            stream.ReadExactly(first16);
+            var first16String = Convert.ToHexStringLower(first16);
+            Console.Out.WriteLine($"  Magic:                             {first16String}");
+            Console.Out.WriteLine($"  Class:                             {PackagerUtility.GetEnumDescription(header.EI_CLASS)}");
+            Console.Out.WriteLine($"  Data:                              {PackagerUtility.GetEnumDescription(header.EI_DATA)}");
+            Console.Out.WriteLine($"  Version:                           {PackagerUtility.GetEnumDescription(header.EI_VERSION)}");
+            Console.Out.WriteLine($"  OS/ABI:                            {PackagerUtility.GetEnumDescription(header.EI_OSABI)}");
+            Console.Out.WriteLine($"  ABI Version:                       {header.EI_ABIVERSION}");
+            Console.Out.WriteLine($"  Type:                              {PackagerUtility.GetEnumDescription(header.E_TYPE)}");
+            Console.Out.WriteLine($"  Machine:                           {PackagerUtility.GetEnumDescription(header.E_MACHINE)}");
+            Console.Out.WriteLine($"  Version:                           {PackagerUtility.GetEnumDescription(header.E_VERSION)}");
+            Console.Out.WriteLine($"  Entry point address:               0x{header.E_ENTRY:x}");
+            Console.Out.WriteLine($"  Start of program headers:          {header.E_PHOFF} (bytes into file)");
+            Console.Out.WriteLine($"  Start of section headers:          {header.E_SHOFF} (bytes into file)");
+            Console.Out.WriteLine($"  Flags:                             0x{header.E_FLAGS:x}");
+            Console.Out.WriteLine($"  Size of this header:               {header.E_EHSIZE} (bytes)");
+            Console.Out.WriteLine($"  Size of program headers:           {header.E_PHENTSIZE} (bytes)");
+            Console.Out.WriteLine($"  Number of program headers:         {header.E_PHNUM}");
+            Console.Out.WriteLine($"  Size of section headers:           {header.E_SHENTSIZE} (bytes)");
+            Console.Out.WriteLine($"  Number of section headers:         {header.E_SHNUM}");
+            Console.Out.WriteLine($"  Section header string table index: {header.E_SHSTRNDX}");
+
+            Console.Out.WriteLine($"\r\nSection Headers:");
+            Console.Out.WriteLine($"  [Nr] Name              Type             Address           Offset");
+            Console.Out.WriteLine($"       Size              EntSize          Flags  Link  Info  Align");
+            var sectionHeaders = metadata.OfType<SectionHeader64>().ToArray();
             var sectionHeaderNames = new Dictionary<UInt32, string>();
             long? sectionHeaderNameTableOffset = header.E_SHSTRNDX == SpecialSectionIndexes.SHN_UNDEF ? default(long?) : (long)sectionHeaders[header.E_SHSTRNDX].SH_OFFSET;
             var i = 0;
@@ -370,7 +463,7 @@ namespace picovm
             Console.Out.WriteLine("\r\nProgram Headers:");
             Console.Out.WriteLine("  Type           Offset             VirtAddr           PhysAddr");
             Console.Out.WriteLine("                 FileSiz            MemSiz              Flags  Align");
-            var programHeaders = metadata.OfType<Packager.Elf.Elf64.ProgramHeader64>().ToArray();
+            var programHeaders = metadata.OfType<ProgramHeader64>().ToArray();
             foreach (var ph in programHeaders)
             {
                 var flagString = new StringBuilder();
@@ -411,30 +504,30 @@ namespace picovm
         static void PrintInspectionPE(Stream stream)
         {
             var metadata = Inspector.InspectAsPE(stream).Metadata;
-            var msDosStubHeader = metadata.OfType<Packager.PE.MsDosStubHeader>().FirstOrDefault();
+            var msDosStubHeader = metadata.OfType<MsDosStubHeader>().FirstOrDefault();
 
-            if (msDosStubHeader.Equals(default(Packager.PE.MsDosStubHeader)))
+            if (msDosStubHeader.Equals(default(MsDosStubHeader)))
                 Console.Out.WriteLine("No MSDOS stub header found.");
 
             Console.Out.WriteLine("MSDOS Header:");
             stream.Seek(0, SeekOrigin.Begin);
-            var first2 = new byte[2];
-            stream.ReadExactly(first2, 0, 2);
-            Console.Out.WriteLine($"  Magic:   {first2.Select(b => $"{b:x2}").Aggregate((c, n) => $"{c} {n}")}");
+            Span<byte> first2 = stackalloc byte[2];
+            stream.ReadExactly(first2);
+            Console.Out.WriteLine($"  Magic:                             {Convert.ToHexStringLower(first2)}");
             Console.Out.WriteLine($"  PE Header Offset:                  0x{msDosStubHeader.e_lfanew:x}");
             if (msDosStubHeader.e_lfanew % 8 != 0)
                 Console.Error.WriteLine("WARN: PE header should be aligned to an 8-byte boundary.");
 
             {
-                var peHeader = metadata.OfType<Packager.PE.PEHeader>().FirstOrDefault();
-                if (peHeader.Equals(default(Packager.PE.PEHeader)))
+                var peHeader = metadata.OfType<PEHeader>().FirstOrDefault();
+                if (peHeader.Equals(default(PEHeader)))
                     Console.Out.WriteLine("No PE header found.");
                 else
                 {
                     stream.Seek(msDosStubHeader.e_lfanew, SeekOrigin.Begin);
-                    stream.ReadExactly(first2, 0, 2);
+                    stream.ReadExactly(first2);
                     Console.Out.WriteLine("\r\nPE Header:");
-                    Console.Out.WriteLine($"  Magic:   {first2.Select(b => $"{b:x2}").Aggregate((c, n) => $"{c} {n}")}");
+                    Console.Out.WriteLine($"  Magic:                             {Convert.ToHexStringLower(first2)}");
                     Console.Out.WriteLine($"  Machine:                           {PackagerUtility.GetEnumDescription<MachineType>(peHeader.mMachine)}");
                     Console.Out.WriteLine($"  Number of sections:                {peHeader.mNumberOfSections}");
                     var ts = DateTime.UnixEpoch.AddSeconds(peHeader.mTimeDateStamp).ToUniversalTime();
@@ -447,8 +540,8 @@ namespace picovm
             }
 
             {
-                var pe32 = metadata.OfType<Packager.PE.PEHeaderOption32>().FirstOrDefault();
-                if (!pe32.Equals(default(Packager.PE.PEHeaderOption32)))
+                var pe32 = metadata.OfType<PEHeaderOption32>().FirstOrDefault();
+                if (!pe32.Equals(default(PEHeaderOption32)))
                 {
                     Console.Out.WriteLine("\r\nPE Optional 32-bit Header:");
                     Console.Out.WriteLine($"  Linker version:                    {pe32.mMajorLinkerVersion}.{pe32.mMinorLinkerVersion}");
@@ -490,8 +583,8 @@ namespace picovm
             }
 
             {
-                var pe64 = metadata.OfType<Packager.PE.PEHeaderOption64>().FirstOrDefault();
-                if (!pe64.Equals(default(Packager.PE.PEHeaderOption64)))
+                var pe64 = metadata.OfType<PEHeaderOption64>().FirstOrDefault();
+                if (!pe64.Equals(default(PEHeaderOption64)))
                 {
                     Console.Out.WriteLine("\r\nPE Optional 64-bit Header:");
                     Console.Out.WriteLine($"  Linker major version:              {pe64.mMajorLinkerVersion}");

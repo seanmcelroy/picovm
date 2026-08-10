@@ -7,17 +7,18 @@ namespace picovm.Packager.PE
     {
         private Dictionary<PEImportLookupEntry, string> queuedNameUpdates = new Dictionary<PEImportLookupEntry, string>();
 
-        public void Add(PEImportLookupEntry entryWithoutName) => this.Add(new KeyValuePair<PEImportLookupEntry, string?>(entryWithoutName, null));
+        public void Add(PEImportLookupEntry entryWithoutName) => Add(new KeyValuePair<PEImportLookupEntry, string?>(entryWithoutName, null));
         public void QueueNameUpdate(PEImportLookupEntry entryWithoutName, string name)
         {
-            if (queuedNameUpdates.ContainsKey(entryWithoutName))
+            var added = queuedNameUpdates.TryAdd(entryWithoutName, name);
+            if (!added)
             {
-                if (!queuedNameUpdates[entryWithoutName].Equals(name))
-                    throw new InvalidOperationException();
+                var existing = queuedNameUpdates[entryWithoutName];
+                if (!existing.Equals(name))
+                    throw new InvalidOperationException($"Entry {entryWithoutName} already added to PE import lookup table with different name (existing={existing}, new={name})");
             }
-            else
-                queuedNameUpdates.Add(entryWithoutName, name);
         }
+
         public void ApplyNameUpdates()
         {
         again:
@@ -27,8 +28,8 @@ namespace picovm.Packager.PE
                 {
                     if (entry.Key.Equals(queued.Key) && entry.Value == null)
                     {
-                        this.Remove(entry);
-                        this.Add(new KeyValuePair<PEImportLookupEntry, string?>(entry.Key, queued.Value));
+                        Remove(entry);
+                        Add(new KeyValuePair<PEImportLookupEntry, string?>(entry.Key, queued.Value));
                         goto again;
                     }
                 }

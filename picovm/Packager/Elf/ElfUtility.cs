@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.IO;
 
 namespace picovm.Packager.Elf
@@ -10,11 +11,11 @@ namespace picovm.Packager.Elf
             if (!typeof(T).IsEnum)
                 throw new ArgumentException("T must be an enumerated type");
 
-            var twoBytes = new byte[2];
-            stream.ReadExactly(twoBytes);
-            var value = BitConverter.ToUInt16(twoBytes);
+            Span<byte> buf = stackalloc byte[2];
+            stream.ReadExactly(buf);
+            var value = BinaryPrimitives.ReadUInt16LittleEndian(buf);
 
-            if (Enum.GetName(typeof(T), value) == null)
+            if (!Enum.IsDefined(typeof(T), value))
                 return defaultNoMatch;
             return (T)(object)value;
         }
@@ -26,11 +27,11 @@ namespace picovm.Packager.Elf
             if (!typeof(T).IsEnum)
                 throw new ArgumentException("T must be an enumerated type");
 
-            var fourBytes = new byte[4];
-            stream.ReadExactly(fourBytes);
-            var value = BitConverter.ToUInt32(fourBytes);
+            Span<byte> buf = stackalloc byte[4];
+            stream.ReadExactly(buf);
+            var value = BinaryPrimitives.ReadUInt32LittleEndian(buf);
 
-            if (Enum.GetName(typeof(T), value) == null)
+            if (!Enum.IsDefined(typeof(T), value))
                 return defaultNoMatch;
             return (T)(object)value;
         }

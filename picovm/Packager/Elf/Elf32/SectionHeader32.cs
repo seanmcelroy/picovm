@@ -32,6 +32,20 @@ namespace picovm.Packager.Elf.Elf32
         public UInt32 SH_ADDRALIGN;
         public UInt32 SH_ENTSIZE;
 
+        public void Read(Stream stream)
+        {
+            SH_NAME = stream.ReadUInt32();
+            SH_TYPE = stream.ReadWord(SectionHeaderType.SHT_NULL);
+            SH_FLAGS = stream.ReadUInt32();
+            SH_ADDR = stream.ReadAddress32();
+            SH_OFFSET = stream.ReadOffset32();
+            SH_SIZE = stream.ReadUInt32();
+            SH_LINK = stream.ReadUInt32();
+            SH_INFO = stream.ReadUInt32();
+            SH_ADDRALIGN = stream.ReadUInt32();
+            SH_ENTSIZE = stream.ReadUInt32();
+        }
+
         public readonly UInt16 Write(Stream stream, HeaderIdentityClass EI_CLASS)
         {
             UInt16 headerLength = 0;

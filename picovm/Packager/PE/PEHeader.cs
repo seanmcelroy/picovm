@@ -36,9 +36,9 @@ namespace picovm.Packager.PE
 
         public void Read(Stream stream)
         {
-            var magic = new byte[MAGIC.Length];
+            Span<byte> magic = stackalloc byte[MAGIC.Length];
             stream.ReadExactly(magic);
-            if (!MAGIC.SequenceEqual(magic))
+            if (!MAGIC.AsSpan().SequenceEqual(magic))
                 throw new BadImageFormatException("Magic value is not present for a PE file");
 
             mMachine = stream.ReadUInt16();

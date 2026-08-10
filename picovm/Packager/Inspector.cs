@@ -33,6 +33,13 @@ namespace picovm.Packager
             return AssemblerPackageOutputType.Unknown;
         }
 
+        public static InspectionResult InspectAsElf32(Stream stream)
+        {
+            var loader = new Elf.Elf32.LoaderElf32(stream);
+            var metadata = loader.LoadMetadata();
+            return new InspectionResult(metadata);
+        }
+
         public static InspectionResult InspectAsElf64(Stream stream)
         {
             var loader = new Elf.Elf64.LoaderElf64(stream);

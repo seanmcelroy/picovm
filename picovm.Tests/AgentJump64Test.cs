@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using picovm.Assembler;
 using picovm.VM;
 using Xunit;
@@ -117,8 +118,9 @@ namespace picovm.Tests
             var compiler = new BytecodeCompiler<UInt64>();
             var compiled = compiler.Compile(ProgramText(mnemonic), "UNIT_TEST");
             Assert.Empty(compiled.Errors);
+            Assert.NotEmpty(compiled.TextSegment);
 
-            var agent = new Agent64(kernel, compiled.TextSegment, 0);
+            var agent = new Agent64(kernel, [.. compiled.TextSegment.Value], 0);
             setup(agent, taken);
 
             TickResult ret;
@@ -134,8 +136,9 @@ namespace picovm.Tests
             var compiler = new BytecodeCompiler<UInt64>();
             var compiled = compiler.Compile(ProgramText("JMP"), "UNIT_TEST");
             Assert.Empty(compiled.Errors);
+            Assert.NotEmpty(compiled.TextSegment);
 
-            var agent = new Agent64(kernel, compiled.TextSegment, 0);
+            var agent = new Agent64(kernel, [.. compiled.TextSegment.Value], 0);
 
             TickResult ret;
             do { ret = agent.Tick(); } while (!ret.Done);

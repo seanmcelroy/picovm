@@ -125,8 +125,9 @@ namespace picovm.Tests
             var compiler = new BytecodeCompiler<UInt32>();
             var compiled = compiler.Compile(ProgramText(mnemonic), "UNIT_TEST");
             Assert.Empty(compiled.Errors);
+            Assert.NotEmpty(compiled.TextSegment);
 
-            var agent = new Agent(kernel, compiled.TextSegment, 0);
+            var agent = new Agent(kernel, [.. compiled.TextSegment.Value], 0);
             setup(agent, taken);
 
             TickResult ret;
@@ -142,8 +143,9 @@ namespace picovm.Tests
             var compiler = new BytecodeCompiler<UInt32>();
             var compiled = compiler.Compile(ProgramText("JMP"), "UNIT_TEST");
             Assert.Empty(compiled.Errors);
+            Assert.NotEmpty(compiled.TextSegment);
 
-            var agent = new Agent(kernel, compiled.TextSegment, 0);
+            var agent = new Agent(kernel, [.. compiled.TextSegment.Value], 0);
 
             TickResult ret;
             do { ret = agent.Tick(); } while (!ret.Done);

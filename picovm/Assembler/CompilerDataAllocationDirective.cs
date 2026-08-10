@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 
 namespace picovm.Assembler
 {
@@ -33,7 +32,7 @@ namespace picovm.Assembler
             {
                 var respin = new List<string>([lineParts.Take(2).Aggregate((c, n) => c + n)]);
                 respin.AddRange(lineParts.Skip(2));
-                lineParts = respin.ToArray();
+                lineParts = [.. respin];
             }
 
             string? label = null;
@@ -74,7 +73,6 @@ namespace picovm.Assembler
             {
                 if (operators.Any(token.Contains))
                 {
-                    var sb = new StringBuilder();
                     var j = 0;
                     for (var i = 0; i < token.Length; i++)
                     {

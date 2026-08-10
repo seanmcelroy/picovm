@@ -1,7 +1,6 @@
 using System;
 using System.ComponentModel;
 using System.IO;
-using System.Linq;
 
 namespace picovm.Packager.Elf.Elf32
 {
@@ -22,6 +21,11 @@ namespace picovm.Packager.Elf.Elf32
 
         public UInt32 P_FLAGS;
 
+        /// <summary>
+        /// P_ALIGN is the alignment (in bytes, a power of 2) that both the
+        /// file offset and the virtual address must satisfy. Values 0 and 1
+        /// mean "no alignment required."
+        /// </summary>
         public UInt32 P_ALIGN;
 
         public void Read(Stream stream)
@@ -43,7 +47,7 @@ namespace picovm.Packager.Elf.Elf32
             var bwProgramHeader = new BinaryWriter(msProgramHeader);
             uint programHeaderSizeReal = (uint)msProgramHeader.Position;
             int programHeaderSizePad = programHeaderSizeReal.CalculateRoundUpTo16Pad();
-            bwProgramHeader.Write(Enumerable.Repeat((byte)0x00, programHeaderSizePad).ToArray());
+            bwProgramHeader.BaseStream.WriteZeros(programHeaderSizePad);
             bwProgramHeader.Flush();
             return (msProgramHeader, programHeaderSizeReal, programHeaderSizePad);
         }

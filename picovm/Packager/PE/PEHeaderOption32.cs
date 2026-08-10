@@ -110,10 +110,10 @@ namespace picovm.Packager.PE
 
         public void Read(Stream stream)
         {
-            var magic = new byte[MAGIC.Length];
+            Span<byte> magic = stackalloc byte[MAGIC.Length];
             stream.ReadExactly(magic);
-            if (!MAGIC.SequenceEqual(magic))
-                throw new BadImageFormatException($"Magic value ({magic.ToByteString()}) is not present for a PE32 header");
+            if (!MAGIC.AsSpan().SequenceEqual(magic))
+                throw new BadImageFormatException($"Magic value ({Convert.ToHexStringLower(magic)}) is not present for a PE32 header");
 
             mMajorLinkerVersion = (byte)stream.ReadByte();
             mMinorLinkerVersion = (byte)stream.ReadByte();
