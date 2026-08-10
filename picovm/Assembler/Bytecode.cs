@@ -278,5 +278,33 @@ namespace picovm.Assembler
 
         [Description("CMP_REG_CON")]
         CMP_REG_CON = 65,
+
+        /// <summary>
+        /// Call to an address provided by a register value.
+        /// </summary>
+        /// <example>
+        /// Source: CALL EAX
+        /// </example>
+        [Description("CALL_REGISTER")]
+        CALL_REGISTER = 66,
+
+        /// <summary>
+        /// Call to an address provided by a symbol or literal.
+        /// </summary>
+        /// <example>
+        /// Source: CALL 23434
+        /// Opcode: addr (1 + 4/8 bytes, based on machine address width)
+        /// </example>
+        [Description("CALL_IMMEDIATE")]
+        CALL_IMMEDIATE = 67,
+
+        /// <summary>
+        /// Returns by popping a return address into the instruction pointer.
+        /// </summary>
+        /// <example>
+        /// Source: RET
+        /// </example>
+        [Description("RET")]
+        RET = 68,
     }
 }

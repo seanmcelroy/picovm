@@ -21,6 +21,7 @@ namespace picovm.Assembler
             "RDI", "EDI", "DI",
             "RBP", "EBP", "BP",
             "RIP", "EIP", "IP",
+            "RSP", "ESP", "SP",
             "CS", "DS", "SS", "ES", "FS", "GS"
         ];
 

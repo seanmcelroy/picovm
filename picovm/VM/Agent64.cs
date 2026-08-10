@@ -1,6 +1,7 @@
 using System;
 using System.Buffers.Binary;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using picovm.Assembler;
 
 namespace picovm.VM
@@ -30,6 +31,7 @@ namespace picovm.VM
             InstructionPointer = entryPoint;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ulong ReadR64Register(ulong[] registers, Register reference)
         {
             return reference switch
@@ -72,6 +74,9 @@ namespace picovm.VM
                     break;
                 case Register.RDX:
                     registers[R_D] = value;
+                    break;
+                case Register.RSP:
+                    registers[R_SP] = value;
                     break;
                 case Register.SP:
                     registers[R_SP] = value;
@@ -128,7 +133,9 @@ namespace picovm.VM
 
         public void StackPush(ulong value)
         {
-            // Push is ALWAYS a 32-bit operation.  Callers convert.
+            if (StackPointer < 8)
+                throw new MemoryAccessViolationException(StackPointer, 8, InstructionPointer, isWrite: true);
+
             BinaryPrimitives.WriteUInt64LittleEndian(memory.AsSpan((int)(StackPointer - 8), 8), value);
             StackPointer -= 8;
         }
@@ -136,11 +143,17 @@ namespace picovm.VM
         public override void Dump()
         {
             Console.WriteLine();
-            Console.Error.Write($"EAX: 0x{ReadExtendedRegister(Register.EAX):X4} ({ReadExtendedRegister(Register.EAX).ToString().PadLeft(2)})\t");
-            Console.Write($"EBX: 0x{ReadExtendedRegister(Register.EBX):X4} ({ReadExtendedRegister(Register.EBX).ToString().PadLeft(2)})\t");
-            Console.Write($"ECX: 0x{ReadExtendedRegister(Register.ECX):X4} ({ReadExtendedRegister(Register.ECX).ToString().PadLeft(2)})\t");
-            Console.WriteLine($"EDX: 0x{ReadExtendedRegister(Register.EDX):X4} ({ReadExtendedRegister(Register.EDX).ToString().PadLeft(2)})");
-            Console.WriteLine($"EIP: 0x{InstructionPointer:X4} ({InstructionPointer})\tESP: 0x{StackPointer:X4} ({StackPointer})");
+            Console.Error.Write($"RAX: 0x{ReadR64Register(Register.RAX):X8} ({ReadR64Register(Register.RAX),2})\t");
+            Console.Write($"RBX: 0x{ReadR64Register(Register.RBX):X8} ({ReadR64Register(Register.RBX),2})\t");
+            Console.Write($"RCX: 0x{ReadR64Register(Register.RCX):X8} ({ReadR64Register(Register.RCX),2})\t");
+            Console.WriteLine($"RDX: 0x{ReadR64Register(Register.RDX):X8} ({ReadR64Register(Register.RDX),2})");
+            Console.WriteLine($"RIP: 0x{InstructionPointer:X8} ({InstructionPointer})\tRSP: 0x{StackPointer:X8} ({StackPointer,2})");
+            Console.WriteLine($"RSI: 0x{ReadR64Register(Register.RSI):X8} ({ReadR64Register(Register.RSI),2})\tRDI: 0x{ReadR64Register(Register.RDI):X8} ({ReadR64Register(Register.RDI),2})");
+            Console.WriteLine($"RBP: 0x{ReadR64Register(Register.RBP):X8} ({ReadR64Register(Register.RBP),2})");
+            Console.WriteLine($"R8 : 0x{ReadR64Register(Register.R8):X8} ({ReadR64Register(Register.R8),2})\tR9 : 0x{ReadR64Register(Register.R9):X8} ({ReadR64Register(Register.R9),2})");
+            Console.WriteLine($"R10: 0x{ReadR64Register(Register.R10):X8} ({ReadR64Register(Register.R10),2})\tR11: 0x{ReadR64Register(Register.R11):X8} ({ReadR64Register(Register.R11),2})");
+            Console.WriteLine($"R12: 0x{ReadR64Register(Register.R12):X8} ({ReadR64Register(Register.R12),2})\tR13: 0x{ReadR64Register(Register.R13):X8} ({ReadR64Register(Register.R13),2})");
+            Console.WriteLine($"R14: 0x{ReadR64Register(Register.R14):X8} ({ReadR64Register(Register.R14),2})\tR15: 0x{ReadR64Register(Register.R15):X8} ({ReadR64Register(Register.R15),2})");
             Console.WriteLine("(Stack)");
             var i = (ulong)memory.Length;
             var qword = new byte[8];
@@ -188,13 +201,14 @@ namespace picovm.VM
                                     var operand2Signed = (long)operand2value; // Re-interpret as signed
                                     var resultSigned = operand1Signed + operand2Signed;
 
-                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
-                                    WriteStatusRegister(Flag.CARRY_FLAG, result > ulong.MaxValue);
-                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
-                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0);
-                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) + (operand2value & 0xF) > 0xF);
-                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits((ulong)(result & 0xFF)) % 2 == 0);
-
+                                    WriteArithmeticFlags(
+                                        result > ulong.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits((ulong)(result & 0xFF)) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
                                     break;
                                 }
                             case 4:
@@ -209,13 +223,14 @@ namespace picovm.VM
                                     var operand2Signed = (int)operand2value; // Re-interpret as signed
                                     var resultSigned = operand1Signed + operand2Signed;
 
-                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
-                                    WriteStatusRegister(Flag.CARRY_FLAG, result > uint.MaxValue);
-                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
-                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0);
-                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) + (operand2value & 0xF) > 0xF);
-                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
-
+                                    WriteArithmeticFlags(
+                                        result > uint.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
                                     break;
                                 }
                             case 2:
@@ -230,13 +245,14 @@ namespace picovm.VM
                                     var operand2Signed = (short)operand2value; // Re-interpret as signed
                                     var resultSigned = (short)(operand1Signed + operand2Signed);
 
-                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
-                                    WriteStatusRegister(Flag.CARRY_FLAG, result > ushort.MaxValue);
-                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
-                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0);
-                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) + (operand2value & 0xF) > 0xF);
-                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
-
+                                    WriteArithmeticFlags(
+                                        result > ushort.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
                                     break;
                                 }
                             case 1:
@@ -251,13 +267,14 @@ namespace picovm.VM
                                     var operand2Signed = (sbyte)operand2value; // Re-interpret as signed
                                     var resultSigned = (sbyte)(operand1Signed + operand2Signed);
 
-                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
-                                    WriteStatusRegister(Flag.CARRY_FLAG, result > byte.MaxValue);
-                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
-                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0);
-                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) + (operand2value & 0xF) > 0xF);
-                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
-
+                                    WriteArithmeticFlags(
+                                        result > byte.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
                                     break;
                                 }
                             default:
@@ -285,12 +302,14 @@ namespace picovm.VM
                                     var operand2Signed = (long)operand2value; // Re-interpret as signed
                                     var resultSigned = operand1Signed + operand2Signed;
 
-                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
-                                    WriteStatusRegister(Flag.CARRY_FLAG, result > ulong.MaxValue);
-                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
-                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0);
-                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) + (operand2value & 0xF) > 0xF);
-                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits((ulong)(result & 0xFF)) % 2 == 0);
+                                    WriteArithmeticFlags(
+                                        result > ulong.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits((ulong)(result & 0xFF)) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
                                     break;
                                 }
                             case 4:
@@ -306,12 +325,14 @@ namespace picovm.VM
                                     var operand2Signed = (int)operand2value; // Re-interpret as signed
                                     var resultSigned = operand1Signed + operand2Signed;
 
-                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
-                                    WriteStatusRegister(Flag.CARRY_FLAG, result > uint.MaxValue);
-                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
-                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0);
-                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) + (operand2value & 0xF) > 0xF);
-                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                    WriteArithmeticFlags(
+                                        result > uint.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
                                     break;
                                 }
                             case 2:
@@ -327,12 +348,14 @@ namespace picovm.VM
                                     var operand2Signed = (short)operand2value; // Re-interpret as signed
                                     var resultSigned = (short)(operand1Signed + operand2Signed);
 
-                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
-                                    WriteStatusRegister(Flag.CARRY_FLAG, result > ushort.MaxValue);
-                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
-                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0);
-                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) + (operand2value & 0xF) > 0xF);
-                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                    WriteArithmeticFlags(
+                                        result > ushort.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
                                     break;
                                 }
                             case 1:
@@ -348,13 +371,14 @@ namespace picovm.VM
                                     var operand2Signed = (sbyte)operand2value; // Re-interpret as signed
                                     var resultSigned = (sbyte)(operand1Signed + operand2Signed);
 
-                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
-                                    WriteStatusRegister(Flag.CARRY_FLAG, result > byte.MaxValue);
-                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
-                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0);
-                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) + (operand2value & 0xF) > 0xF);
-                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
-
+                                    WriteArithmeticFlags(
+                                        result > byte.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
                                     break;
                                 }
                             default:
@@ -382,13 +406,11 @@ namespace picovm.VM
                                     var operand2Signed = (long)operand2value; // Re-interpret as signed
                                     var resultSigned = operand1Signed & operand2Signed;
 
-                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
-                                    WriteStatusRegister(Flag.CARRY_FLAG, false);
-                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
-                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
-                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
-                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
-
+                                    WriteLogicFlags(
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0 // SIGN_FLAG
+                                    );
                                     break;
                                 }
                             case 4:
@@ -404,12 +426,11 @@ namespace picovm.VM
                                     var operand2Signed = (int)operand2value; // Re-interpret as signed
                                     var resultSigned = operand1Signed & operand2Signed;
 
-                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
-                                    WriteStatusRegister(Flag.CARRY_FLAG, false);
-                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
-                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
-                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
-                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                    WriteLogicFlags(
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0 // SIGN_FLAG
+                                    );
                                     break;
                                 }
                             case 2:
@@ -425,12 +446,11 @@ namespace picovm.VM
                                     var operand2Signed = (short)operand2value; // Re-interpret as signed
                                     var resultSigned = (short)(operand1Signed & operand2Signed);
 
-                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
-                                    WriteStatusRegister(Flag.CARRY_FLAG, false);
-                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
-                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
-                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
-                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                    WriteLogicFlags(
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0 // SIGN_FLAG
+                                    );
                                     break;
                                 }
                             case 1:
@@ -446,12 +466,11 @@ namespace picovm.VM
                                     var operand2Signed = (sbyte)operand2value; // Re-interpret as signed
                                     var resultSigned = (sbyte)(operand1Signed & operand2Signed);
 
-                                    WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
-                                    WriteStatusRegister(Flag.CARRY_FLAG, false);
-                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
-                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
-                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
-                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                    WriteLogicFlags(
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0 // SIGN_FLAG
+                                    );
                                     break;
                                 }
                             default:
@@ -474,16 +493,18 @@ namespace picovm.VM
                                     InstructionPointer += 8;
 
                                     var result = operand1value - operand2value;
-                                    var operand1valueLong = (long)operand1value; // Re-interpret as signed
-                                    var operand2valueLong = (long)operand2value; // Re-interpret as signed
-                                    var resultSignedLong = operand1valueLong - operand2valueLong;
+                                    var operand1Signed = (long)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (long)operand2value; // Re-interpret as signed
+                                    var resultSigned = operand1Signed - operand2Signed;
 
-                                    WriteStatusRegister(Flag.ZERO_FLAG, result == 0);
-                                    WriteStatusRegister(Flag.CARRY_FLAG, operand1value < operand2value);
-                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSignedLong < 0);
-                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1valueLong ^ operand2valueLong) & (operand1valueLong ^ resultSignedLong)) < 0);
-                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) < (operand2value & 0xF));
-                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                    WriteArithmeticFlags(
+                                        operand1value < operand2value, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) < (operand2value & 0xF), // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
                                     break;
                                 }
                             case 4:
@@ -495,16 +516,18 @@ namespace picovm.VM
                                     InstructionPointer += 4;
 
                                     var result = (long)operand1value - operand2value;
-                                    var operand1valueInt = (int)operand1value; // Re-interpret as signed
-                                    var operand2valueInt = (int)operand2value; // Re-interpret as signed
-                                    var resultSignedInt = operand1valueInt - operand2valueInt;
+                                    var operand1Signed = (int)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (int)operand2value; // Re-interpret as signed
+                                    var resultSigned = operand1Signed - operand2Signed;
 
-                                    WriteStatusRegister(Flag.ZERO_FLAG, result == 0);
-                                    WriteStatusRegister(Flag.CARRY_FLAG, operand1value < operand2value);
-                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSignedInt < 0);
-                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1valueInt ^ operand2valueInt) & (operand1valueInt ^ resultSignedInt)) < 0);
-                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) < (operand2value & 0xF));
-                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                    WriteArithmeticFlags(
+                                        operand1value < operand2value, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) < (operand2value & 0xF), // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
                                     break;
                                 }
                             case 2:
@@ -516,16 +539,18 @@ namespace picovm.VM
                                     InstructionPointer += 2;
 
                                     var result = (int)operand1value - operand2value;
-                                    var operand1valueShort = (short)operand1value; // Re-interpret as signed
-                                    var operand2valueShort = (short)operand2value; // Re-interpret as signed
-                                    var resultSignedShort = (short)(operand1valueShort - operand2valueShort);
+                                    var operand1Signed = (short)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (short)operand2value; // Re-interpret as signed
+                                    var resultSigned = (short)(operand1Signed - operand2Signed);
 
-                                    WriteStatusRegister(Flag.ZERO_FLAG, result == 0);
-                                    WriteStatusRegister(Flag.CARRY_FLAG, operand1value < operand2value);
-                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSignedShort < 0);
-                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1valueShort ^ operand2valueShort) & (operand1valueShort ^ resultSignedShort)) < 0);
-                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) < (operand2value & 0xF));
-                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                    WriteArithmeticFlags(
+                                        operand1value < operand2value, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) < (operand2value & 0xF), // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
                                     break;
                                 }
                             case 1:
@@ -537,16 +562,18 @@ namespace picovm.VM
                                     InstructionPointer++;
 
                                     var result = (short)operand1value - operand2value;
-                                    var operand1valueSbyte = (sbyte)operand1value; // Re-interpret as signed
-                                    var operand2valueSbyte = (sbyte)operand2value; // Re-interpret as signed
-                                    var resultSignedSbyte = (sbyte)(operand1valueSbyte - operand2valueSbyte);
+                                    var operand1Signed = (sbyte)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (sbyte)operand2value; // Re-interpret as signed
+                                    var resultSigned = (sbyte)(operand1Signed - operand2Signed);
 
-                                    WriteStatusRegister(Flag.ZERO_FLAG, result == 0);
-                                    WriteStatusRegister(Flag.CARRY_FLAG, operand1value < operand2value);
-                                    WriteStatusRegister(Flag.SIGN_FLAG, resultSignedSbyte < 0);
-                                    WriteStatusRegister(Flag.OVERFLOW_FLAG, ((operand1valueSbyte ^ operand2valueSbyte) & (operand1valueSbyte ^ resultSignedSbyte)) < 0);
-                                    WriteStatusRegister(Flag.AUX_CARRY_FLAG, (operand1value & 0xF) < (operand2value & 0xF));
-                                    WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                    WriteArithmeticFlags(
+                                        operand1value < operand2value, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) < (operand2value & 0xF), // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
                                     break;
                                 }
                             default:
@@ -669,7 +696,6 @@ namespace picovm.VM
                                     break;
                                 }
                             default:
-                                Dump();
                                 throw new InvalidOperationException("ERROR: Unrecognized register for MOV src");
                         }
                         break;
@@ -710,7 +736,6 @@ namespace picovm.VM
                                     break;
                                 }
                             default:
-                                Dump();
                                 throw new InvalidOperationException($"ERROR: Unrecognized register for MOV dst: {dst}");
                         }
                         break;
@@ -736,29 +761,17 @@ namespace picovm.VM
                         switch (dst.Size())
                         {
                             case 8:
-                                {
-                                    var val = ReadMemoryUInt64(addr);
-                                    WriteR64Register(dst, val);
-                                    break;
-                                }
+                                WriteR64Register(dst, ReadMemoryUInt64(addr));
+                                break;
                             case 4:
-                                {
-                                    var val = ReadMemoryUInt32(addr);
-                                    WriteExtendedRegister(dst, val);
-                                    break;
-                                }
+                                WriteExtendedRegister(dst, ReadMemoryUInt32(addr));
+                                break;
                             case 2:
-                                {
-                                    var val = ReadMemoryUInt16(addr);
-                                    WriteRegister(dst, val);
-                                    break;
-                                }
+                                WriteRegister(dst, ReadMemoryUInt16(addr));
+                                break;
                             case 1:
-                                {
-                                    var val = ReadMemoryByte(addr);
-                                    WriteHalfRegister(dst, val);
-                                    break;
-                                }
+                                WriteHalfRegister(dst, ReadMemoryByte(addr));
+                                break;
                             default:
                                 Dump();
                                 throw new InvalidOperationException($"ERROR: Unrecognized register for MOV dst: {dst}");
@@ -788,29 +801,53 @@ namespace picovm.VM
                         InstructionPointer += size;
                         break;
                     }
+                case Bytecode.CALL_REGISTER:
+                    {
+                        var operand = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+
+                        if (operand.Size() != 8)
+                            throw new InvalidOperationException("ERROR: CALL needs a 64-bit register to read an 8-byte address");
+
+                        var loc = ReadR64Register(operand);
+
+                        // Push RIP onto the stack, which will be the offset of the instruction following the call.
+                        StackPush(InstructionPointer);
+                        InstructionPointer = loc;
+                        break;
+                    }
+                case Bytecode.CALL_IMMEDIATE:
+                    {
+                        var returnAddress = InstructionPointer + 8;
+                        var loc = ReadMemoryUInt64(InstructionPointer);
+                        StackPush(returnAddress);
+                        InstructionPointer = loc;
+                        break;
+                    }
+                case Bytecode.RET:
+                    InstructionPointer = StackPop64();
+                    break;
                 case Bytecode.POP_REG:
                     {
                         var operand = (Register)memory[InstructionPointer];
                         InstructionPointer++;
 
-                        if (operand == Register.EAX || operand == Register.EBX || operand == Register.ECX || operand == Register.EDX || operand == Register.EDI || operand == Register.ESI)
-                            WriteExtendedRegister(operand, StackPop32());
-                        else if (
-                            operand == Register.AX || operand == Register.BX || operand == Register.CX || operand == Register.DX ||
-                            operand == Register.DI || operand == Register.SI || operand == Register.BP || operand == Register.IP ||
-                            operand == Register.CS || operand == Register.DS ||
-                            operand == Register.SS || operand == Register.ES ||
-                            operand == Register.FS || operand == Register.GS)
-                            WriteRegister(operand, StackPop16());
-                        else if (operand == Register.AH || operand == Register.AL
-                            || operand == Register.BH || operand == Register.BL
-                            || operand == Register.CH || operand == Register.CL
-                            || operand == Register.DH || operand == Register.DL)
-                            WriteHalfRegister(operand, StackPop8());
-                        else
+                        switch (operand.Size())
                         {
-                            Dump();
-                            throw new InvalidOperationException("ERROR: Unrecognized register for POP");
+                            case 8:
+                                WriteR64Register(operand, StackPop64());
+                                break;
+                            case 4:
+                                WriteExtendedRegister(operand, StackPop32());
+                                break;
+                            case 2:
+                                WriteRegister(operand, StackPop16());
+                                break;
+                            case 1:
+                                WriteHalfRegister(operand, StackPop8());
+                                break;
+                            default:
+                                throw new InvalidOperationException("ERROR: Unrecognized register for POP");
                         }
 
                         break;
@@ -823,31 +860,18 @@ namespace picovm.VM
                         switch (operand.Size())
                         {
                             case 8:
-                                {
-                                    var loc = ReadR64Register(operand);
-                                    BinaryPrimitives.WriteUInt64LittleEndian(memory.AsSpan((int)loc, 8), StackPop64());
-                                    break;
-                                }
+                                BinaryPrimitives.WriteUInt64LittleEndian(memory.AsSpan((int)ReadR64Register(operand), 8), StackPop64());
+                                break;
                             case 4:
-                                {
-                                    var loc = ReadExtendedRegister(operand);
-                                    BinaryPrimitives.WriteUInt32LittleEndian(memory.AsSpan((int)loc, 4), StackPop32());
-                                    break;
-                                }
+                                BinaryPrimitives.WriteUInt32LittleEndian(memory.AsSpan((int)ReadExtendedRegister(operand), 4), StackPop32());
+                                break;
                             case 2:
-                                {
-                                    var loc = ReadRegister(operand);
-                                    BinaryPrimitives.WriteUInt16LittleEndian(memory.AsSpan(loc, 2), StackPop16());
-                                    break;
-                                }
+                                BinaryPrimitives.WriteUInt16LittleEndian(memory.AsSpan(ReadRegister(operand), 2), StackPop16());
+                                break;
                             case 1:
-                                {
-                                    var loc = ReadHalfRegister(operand);
-                                    memory[loc] = StackPop8();
-                                    break;
-                                }
+                                memory[ReadHalfRegister(operand)] = StackPop8();
+                                break;
                             default:
-                                Dump();
                                 throw new InvalidOperationException("ERROR: Unrecognized register for POP");
                         }
                         break;
@@ -881,53 +905,39 @@ namespace picovm.VM
                         var operand = (Register)memory[InstructionPointer];
                         InstructionPointer++;
 
-                        if (operand == Register.EAX || operand == Register.EBX || operand == Register.ECX || operand == Register.EDX || operand == Register.EDI || operand == Register.ESI)
+                        switch (operand.Size())
                         {
-                            var loc = ReadExtendedRegister(operand);
-                            var val = BinaryPrimitives.ReadUInt32LittleEndian(memory.AsSpan((int)loc, 4));
-                            StackPush(val);
-                        }
-                        else if (
-                            operand == Register.AX || operand == Register.BX || operand == Register.CX || operand == Register.DX ||
-                            operand == Register.DI || operand == Register.SI || operand == Register.BP || operand == Register.IP ||
-                            operand == Register.CS || operand == Register.DS ||
-                            operand == Register.SS || operand == Register.ES ||
-                            operand == Register.FS || operand == Register.GS)
-                        {
-                            var loc = ReadRegister(operand);
-                            var val = BinaryPrimitives.ReadUInt16LittleEndian(memory.AsSpan(loc, 2));
-                            StackPush(val);
-                        }
-                        else if (operand == Register.AH || operand == Register.AL
-                            || operand == Register.BH || operand == Register.BL
-                            || operand == Register.CH || operand == Register.CL
-                            || operand == Register.DH || operand == Register.DL)
-                        {
-                            var loc = ReadHalfRegister(operand);
-                            var val = memory[loc];
-                            StackPush(val);
-                        }
-                        else
-                        {
-                            Dump();
-                            throw new InvalidOperationException("ERROR: Unrecognized register for PUSH");
+                            case 8:
+                                StackPush(BinaryPrimitives.ReadUInt64LittleEndian(memory.AsSpan((int)ReadR64Register(operand), 8)));
+                                break;
+                            case 4:
+                                StackPush(BinaryPrimitives.ReadUInt32LittleEndian(memory.AsSpan((int)ReadExtendedRegister(operand), 4)));
+                                break;
+                            case 2:
+                                StackPush(BinaryPrimitives.ReadUInt16LittleEndian(memory.AsSpan(ReadRegister(operand), 2)));
+                                break;
+                            case 1:
+                                StackPush(memory[ReadHalfRegister(operand)]);
+                                break;
+                            default:
+                                Dump();
+                                throw new InvalidOperationException("ERROR: Unrecognized register for PUSH");
                         }
 
                         break;
                     }
                 case Bytecode.PUSH_CON:
                     {
-                        // Push is ALWAYS a 32-bit operation
                         var _ = (Register)memory[InstructionPointer];
-                        var val = BinaryPrimitives.ReadUInt32LittleEndian(memory.AsSpan((int)InstructionPointer, 4));
-                        InstructionPointer += 4;
+                        var val = BinaryPrimitives.ReadUInt64LittleEndian(memory.AsSpan((int)InstructionPointer, 8));
+                        InstructionPointer += 8;
                         StackPush(val);
 
                         break;
                     }
                 case Bytecode.JMP:
                     {
-                        var loc = BinaryPrimitives.ReadUInt32LittleEndian(memory.AsSpan((int)InstructionPointer, 4));
+                        var loc = BinaryPrimitives.ReadUInt64LittleEndian(memory.AsSpan((int)InstructionPointer, 8));
                         InstructionPointer = loc;
                         break;
                     }
@@ -1072,191 +1082,183 @@ namespace picovm.VM
                         var src = (Register)memory[InstructionPointer];
                         InstructionPointer++;
 
-                        switch (src)
+                        switch (src.Size())
                         {
-                            case Register.EAX:
-                            case Register.EBX:
-                            case Register.ECX:
-                            case Register.EDX:
+                            case 8:
+                                {
+                                    var operand2value = ReadR64Register(src);
+                                    switch (dst.Size())
+                                    {
+                                        case 8:
+                                            var operand1value = ReadR64Register(dst);
+                                            WriteR64Register(dst, operand1value ^ operand2value);
+
+                                            var result = operand1value ^ operand2value;
+                                            var operand1Signed = (long)operand1value; // Re-interpret as signed
+                                            var operand2Signed = (long)operand2value; // Re-interpret as signed
+                                            var resultSigned = operand1Signed ^ operand2Signed;
+
+                                            WriteLogicFlags(
+                                                ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                                resultSigned == 0, // ZERO_FLAG
+                                                resultSigned < 0 // SIGN_FLAG
+                                            );
+                                            break;
+                                        case 4:
+                                            throw new InvalidOperationException("ERROR: XOR dst is a dword but source is a qword");
+                                        case 2:
+                                            throw new InvalidOperationException("ERROR: XOR dst is a word but source is a qword");
+                                        case 1:
+                                            throw new InvalidOperationException("ERROR: XOR dst is a byte but source is a qword");
+                                        default:
+                                            throw new InvalidOperationException("ERROR: Unrecognized register for XOR dst");
+                                    }
+                                    break;
+                                }
+
+                            case 4:
                                 {
                                     var operand2value = ReadExtendedRegister(src);
-                                    if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX || dst == Register.EDI || dst == Register.ESI)
+                                    switch (dst.Size())
                                     {
-                                        var operand1value = ReadExtendedRegister(dst);
-                                        WriteExtendedRegister(dst, operand1value ^ operand2value);
+                                        case 8:
+                                            throw new InvalidOperationException("ERROR: XOR dst is a qword but source is a dword");
+                                        case 4:
+                                            var operand1value = ReadExtendedRegister(dst);
+                                            WriteExtendedRegister(dst, operand1value ^ operand2value);
 
-                                        var result = (long)operand1value ^ operand2value;
-                                        var operand1Signed = (int)operand1value; // Re-interpret as signed
-                                        var operand2Signed = (int)operand2value; // Re-interpret as signed
-                                        var resultSigned = operand1Signed ^ operand2Signed;
+                                            var result = (long)operand1value ^ operand2value;
+                                            var operand1Signed = (int)operand1value; // Re-interpret as signed
+                                            var operand2Signed = (int)operand2value; // Re-interpret as signed
+                                            var resultSigned = operand1Signed ^ operand2Signed;
 
-                                        WriteStatusRegister(Flag.ZERO_FLAG, resultSigned == 0);
-                                        WriteStatusRegister(Flag.CARRY_FLAG, false);
-                                        WriteStatusRegister(Flag.SIGN_FLAG, resultSigned < 0);
-                                        WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
-                                        WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
-                                        WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
-
+                                            WriteLogicFlags(
+                                                ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                                resultSigned == 0, // ZERO_FLAG
+                                                resultSigned < 0 // SIGN_FLAG
+                                            );
+                                            break;
+                                        case 2:
+                                            throw new InvalidOperationException("ERROR: XOR dst is a word but source is a dword");
+                                        case 1:
+                                            throw new InvalidOperationException("ERROR: XOR dst is a byte but source is a dword");
+                                        default:
+                                            throw new InvalidOperationException("ERROR: Unrecognized register for XOR dst");
                                     }
-                                    else if (
-                                        dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX ||
-                                        dst == Register.DI || dst == Register.SI || dst == Register.BP || dst == Register.IP ||
-                                        dst == Register.CS || dst == Register.DS ||
-                                        dst == Register.SS || dst == Register.ES ||
-                                        dst == Register.FS || dst == Register.GS)
-                                        throw new InvalidOperationException("ERROR: XOR dst is a word but source is a dword");
-                                    else if (dst == Register.AH || dst == Register.AL
-                                        || dst == Register.BH || dst == Register.BL
-                                        || dst == Register.CH || dst == Register.CL
-                                        || dst == Register.DH || dst == Register.DL)
-                                        throw new InvalidOperationException("ERROR: XOR dst is a byte but source is a dword");
-                                    else
-                                        throw new InvalidOperationException("ERROR: Unrecognized register for XOR dst");
                                     break;
                                 }
 
-                            case Register.AX:
-                            case Register.BX:
-                            case Register.CX:
-                            case Register.DX:
-                            case Register.DI:
-                            case Register.SI:
-                            case Register.BP:
-                            case Register.IP:
-                            case Register.CS:
-                            case Register.DS:
-                            case Register.SS:
-                            case Register.ES:
-                            case Register.FS:
-                            case Register.GS:
+                            case 2:
                                 {
                                     var operand2value = ReadRegister(src);
-                                    if (dst == Register.EAX || dst == Register.EBX || dst == Register.ECX || dst == Register.EDX || dst == Register.EDI || dst == Register.ESI)
+                                    switch (dst.Size())
                                     {
-                                        var operand1value = ReadExtendedRegister(dst);
-                                        WriteExtendedRegister(dst, operand1value ^ operand2value);
+                                        case 8:
+                                            {
+                                                var operand1value = ReadR64Register(dst);
+                                                WriteR64Register(dst, operand1value ^ operand2value);
 
-                                        var result = (int)operand1value ^ operand2value;
+                                                var result = operand1value ^ operand2value;
+                                                WriteLogicFlags(
+                                                    ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                                    result == 0, // ZERO_FLAG
+                                                    result < 0 // SIGN_FLAG
+                                                );
+                                                break;
+                                            }
+                                        case 4:
+                                            {
+                                                var operand1value = ReadExtendedRegister(dst);
+                                                WriteExtendedRegister(dst, operand1value ^ operand2value);
 
-                                        WriteStatusRegister(Flag.ZERO_FLAG, result == 0);
-                                        WriteStatusRegister(Flag.CARRY_FLAG, false);
-                                        WriteStatusRegister(Flag.SIGN_FLAG, result < 0);
-                                        WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
-                                        WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
-                                        WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                                var result = (int)operand1value ^ operand2value;
+                                                WriteLogicFlags(
+                                                    ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                                    result == 0, // ZERO_FLAG
+                                                    result < 0 // SIGN_FLAG
+                                                );
+                                                break;
+                                            }
+                                        case 2:
+                                            {
+                                                var operand1value = ReadRegister(dst);
+                                                WriteRegister(dst, (ushort)(operand1value ^ operand2value));
 
+                                                var result = operand1value ^ operand2value;
+                                                WriteLogicFlags(
+                                                    ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                                    result == 0, // ZERO_FLAG
+                                                    result < 0 // SIGN_FLAG
+                                                );
+                                                break;
+                                            }
+                                        case 1:
+                                            throw new InvalidOperationException("ERROR: XOR dst is a byte but source is a word");
+
+                                        default:
+                                            throw new InvalidOperationException("ERROR: Unrecognized register for XOR dst");
                                     }
-                                    else if (
-                                        dst == Register.AX || dst == Register.BX || dst == Register.CX || dst == Register.DX ||
-                                        dst == Register.DI || dst == Register.SI || dst == Register.BP || dst == Register.IP ||
-                                        dst == Register.CS || dst == Register.DS ||
-                                        dst == Register.SS || dst == Register.ES ||
-                                        dst == Register.FS || dst == Register.GS)
-                                    {
-                                        var operand1value = ReadRegister(dst);
-                                        WriteRegister(dst, (ushort)(operand1value ^ operand2value));
-
-                                        var result = operand1value ^ operand2value;
-
-                                        WriteStatusRegister(Flag.ZERO_FLAG, result == 0);
-                                        WriteStatusRegister(Flag.CARRY_FLAG, false);
-                                        WriteStatusRegister(Flag.SIGN_FLAG, result < 0);
-                                        WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
-                                        WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
-                                        WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
-                                    }
-                                    else if (dst == Register.AH || dst == Register.AL
-                                        || dst == Register.BH || dst == Register.BL
-                                        || dst == Register.CH || dst == Register.CL
-                                        || dst == Register.DH || dst == Register.DL)
-                                        throw new InvalidOperationException("ERROR: XOR dst is a byte but source is a word");
-                                    else
-                                        throw new InvalidOperationException("ERROR: Unrecognized register for XOR dst");
                                     break;
                                 }
-
-                            case Register.AH:
-                            case Register.AL:
-                            case Register.BH:
-                            case Register.BL:
-                            case Register.CH:
-                            case Register.CL:
-                            case Register.DH:
-                            case Register.DL:
+                            case 1:
                                 {
                                     var operand2value = ReadHalfRegister(src);
-                                    switch (dst)
+                                    switch (dst.Size())
                                     {
-                                        case Register.EAX:
-                                        case Register.EBX:
-                                        case Register.ECX:
-                                        case Register.EDX:
-                                        case Register.EDI:
-                                        case Register.ESI:
+                                        case 8:
+                                            {
+                                                var operand1value = ReadR64Register(dst);
+                                                WriteR64Register(dst, operand1value ^ operand2value);
+
+                                                var result = operand1value ^ operand2value; // dst's full 64 bits preserved; src (byte) zero-extends
+                                                WriteLogicFlags(
+                                                    ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                                    result == 0, // ZERO_FLAG
+                                                    result < 0 // SIGN_FLAG
+                                                );
+                                                break;
+                                            }
+                                        case 4:
                                             {
                                                 var operand1value = ReadExtendedRegister(dst);
                                                 WriteExtendedRegister(dst, operand1value ^ operand2value);
 
                                                 var result = (int)operand1value ^ operand2value; // dst's full 32 bits preserved; src (byte) zero-extends
-
-                                                WriteStatusRegister(Flag.ZERO_FLAG, result == 0);
-                                                WriteStatusRegister(Flag.CARRY_FLAG, false);
-                                                WriteStatusRegister(Flag.SIGN_FLAG, result < 0);
-                                                WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
-                                                WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
-                                                WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                                WriteLogicFlags(
+                                                    ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                                    result == 0, // ZERO_FLAG
+                                                    result < 0 // SIGN_FLAG
+                                                );
                                                 break;
                                             }
 
-                                        case Register.AX:
-                                        case Register.BX:
-                                        case Register.CX:
-                                        case Register.DX:
-                                        case Register.DI:
-                                        case Register.SI:
-                                        case Register.BP:
-                                        case Register.IP:
-                                        case Register.CS:
-                                        case Register.DS:
-                                        case Register.SS:
-                                        case Register.ES:
-                                        case Register.FS:
-                                        case Register.GS:
+                                        case 2:
                                             {
                                                 var operand1value = ReadRegister(dst);
                                                 WriteRegister(dst, (ushort)(operand1value ^ operand2value));
 
                                                 var result = (short)operand1value ^ operand2value; // dst's full 16 bits preserved; src (byte) zero-extends
 
-                                                WriteStatusRegister(Flag.ZERO_FLAG, result == 0);
-                                                WriteStatusRegister(Flag.CARRY_FLAG, false);
-                                                WriteStatusRegister(Flag.SIGN_FLAG, result < 0);
-                                                WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
-                                                WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
-                                                WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                                WriteLogicFlags(
+                                                    ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                                    result == 0, // ZERO_FLAG
+                                                    result < 0 // SIGN_FLAG
+                                                );
                                                 break;
                                             }
 
-                                        case Register.AH:
-                                        case Register.AL:
-                                        case Register.BH:
-                                        case Register.BL:
-                                        case Register.CH:
-                                        case Register.CL:
-                                        case Register.DH:
-                                        case Register.DL:
+                                        case 1:
                                             {
                                                 var operand1value = ReadHalfRegister(dst);
                                                 WriteHalfRegister(dst, (byte)(operand1value ^ operand2value));
 
                                                 var result = (sbyte)operand1value ^ (sbyte)operand2value;
 
-                                                WriteStatusRegister(Flag.ZERO_FLAG, result == 0);
-                                                WriteStatusRegister(Flag.CARRY_FLAG, false);
-                                                WriteStatusRegister(Flag.SIGN_FLAG, result < 0);
-                                                WriteStatusRegister(Flag.OVERFLOW_FLAG, false);
-                                                WriteStatusRegister(Flag.AUX_CARRY_FLAG, false);
-                                                WriteStatusRegister(Flag.PARITY_FLAG, ByteUtility.CountBits(result & 0xFF) % 2 == 0);
+                                                WriteLogicFlags(
+                                                    ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                                    result == 0, // ZERO_FLAG
+                                                    result < 0 // SIGN_FLAG
+                                                );
                                                 break;
                                             }
 

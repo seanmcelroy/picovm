@@ -8,7 +8,7 @@ namespace picovm.Assembler
         where TAddrSize : struct, IComparable, IComparable<TAddrSize>, IConvertible, IEquatable<TAddrSize>, IFormattable
     {
         public ImmutableArray<byte> Bytecode { get; private set; } = ImmutableArray.Create<byte>(bytecode);
-        public ImmutableDictionary<string, TAddrSize> LabelsOffsets { get; private set; } = labelOffsets.ToImmutableDictionary();
+        public ImmutableDictionary<string, TAddrSize> LabelsOffsets { get; private set; } = labelOffsets.ToImmutableDictionary(StringComparer.InvariantCultureIgnoreCase);
         public ImmutableList<BytecodeTextSymbol<TAddrSize>> SymbolReferenceOffsets { get; private set; } = [.. symbolReferenceOffsets];
     }
 }

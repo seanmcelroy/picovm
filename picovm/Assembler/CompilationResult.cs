@@ -30,9 +30,9 @@ namespace picovm.Assembler
         public readonly TAddrSize? EntryPoint = entryPoint;
         public readonly TAddrSize? TextSegmentBase = textSegmentBase;
         public readonly TAddrSize? DataSegmentBase = dataSegmentBase;
-        public readonly Dictionary<string, TAddrSize>? TextLabelsOffsets = textLabelsOffsets?.ToDictionary(k => k.Key, v => v.Value);
+        public readonly Dictionary<string, TAddrSize>? TextLabelsOffsets = textLabelsOffsets?.ToDictionary(k => k.Key, v => v.Value, StringComparer.InvariantCultureIgnoreCase);
         public readonly ImmutableList<BytecodeTextSymbol<TAddrSize>> TextSymbolReferenceOffsets = [.. textSymbolReferenceOffsets];
-        public readonly Dictionary<string, BytecodeDataSymbol<TAddrSize>>? DataSymbolOffsets = dataSymbolOffsets?.ToDictionary(k => k.Key, v => v.Value);
+        public readonly Dictionary<string, BytecodeDataSymbol<TAddrSize>>? DataSymbolOffsets = dataSymbolOffsets?.ToDictionary(k => k.Key, v => v.Value, StringComparer.InvariantCultureIgnoreCase);
 
         ValueType? ICompilationResult.EntryPoint => EntryPoint;
     }

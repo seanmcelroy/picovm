@@ -45,30 +45,22 @@ namespace picovm.VM
             switch (fd)
             {
                 case (uint)FileDescriptors.STDIN: // STDIN
-                    var inputBuffer = new byte[inputLength];
-                    using (var stdin = Console.OpenStandardInput())
                     {
-                        using var ms = new MemoryStream(inputBuffer);
-                        using var bw = new BinaryWriter(ms);
-                        byte[] stdinBuffer = new byte[2048];
+                        // Read directly into memory without array allocations or streams.
+                        using var stdin = Console.OpenStandardInput();
+                        var target = memory.AsSpan((int)inputIndex, (int)inputLength);
                         int totalRead = 0;
-                        int read;
-                        while (totalRead < inputLength && (read = stdin.Read(stdinBuffer, 0, stdinBuffer.Length)) > 0)
+                        while (totalRead < target.Length)
                         {
-                            var bytesToShare = Math.Min((int)inputLength - totalRead, read);
-                            totalRead += read;
-                            if (bytesToShare <= 0)
+                            int read = stdin.Read(target[totalRead..]);
+                            if (read <= 0)
                                 break;
-                            bw.Write(stdinBuffer, 0, bytesToShare);
-                            if (stdinBuffer[bytesToShare - 1] == 0x0a) // If ends with a newline, we can stop now.
+                            totalRead += read;
+                            if (target[totalRead - 1] == 0x0a) // If ends with a newline, we can stop now.
                                 break;
                         }
-                        bw.Flush();
+                        return false;
                     }
-
-                    // We received the input; now provide it back.
-                    Array.Copy(inputBuffer, 0, memory, inputIndex, inputLength);
-                    return false;
                 default:
                     // Error, no such file descriptor found
                     Agent.WriteExtendedRegister(registers, Register.EAX, -1);
@@ -87,9 +79,8 @@ namespace picovm.VM
                 throw new InvalidOperationException($"Invalid ECX register value for sys_write: {outputIndex}");
             var outputLength = Agent.ReadExtendedRegister(registers, Register.EDX);
 
-            var outputBytes = new byte[outputLength];
-            Array.Copy(memory, outputIndex, outputBytes, 0, outputLength);
-            var outputString = System.Text.Encoding.ASCII.GetString(outputBytes);
+            var outputString = System.Text.Encoding.ASCII.GetString(
+                memory.AsSpan((int)outputIndex, (int)outputLength));
 
             // On success, the number of bytes written is returned.
             // On error, -1 is returned, and errno is set to indicate the cause of the error.

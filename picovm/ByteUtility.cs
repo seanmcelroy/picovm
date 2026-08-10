@@ -2,65 +2,16 @@ namespace picovm
 {
     public static class ByteUtility
     {
-        public static int CountBits(long value)
-        {
-            int count = 0;
-            while (value != 0)
-            {
-                count++;
-                value &= value - 1;
-            }
-            return count;
-        }
-        public static int CountBits(ulong value)
-        {
-            int count = 0;
-            while (value != 0)
-            {
-                count++;
-                value &= value - 1;
-            }
-            return count;
-        }
-        public static int CountBits(int value)
-        {
-            int count = 0;
-            while (value != 0)
-            {
-                count++;
-                value &= value - 1;
-            }
-            return count;
-        }
-        public static int CountBits(uint value)
-        {
-            int count = 0;
-            while (value != 0)
-            {
-                count++;
-                value &= value - 1;
-            }
-            return count;
-        }
-        public static int CountBits(ushort value)
-        {
-            int count = 0;
-            while (value != 0)
-            {
-                count++;
-                value &= (ushort)(value - 1);
-            }
-            return count;
-        }
-        public static int CountBits(byte value)
-        {
-            int count = 0;
-            while (value != 0)
-            {
-                count++;
-                value &= (byte)(value - 1);
-            }
-            return count;
-        }
+        public static int CountBits(long value) => System.Numerics.BitOperations.PopCount((ulong)value);
+
+        public static int CountBits(ulong value) => System.Numerics.BitOperations.PopCount(value);
+
+        public static int CountBits(int value) => System.Numerics.BitOperations.PopCount((uint)value);
+
+        public static int CountBits(uint value) => System.Numerics.BitOperations.PopCount(value);
+
+        public static int CountBits(ushort value) => System.Numerics.BitOperations.PopCount(value);
+
+        public static int CountBits(byte value)=> System.Numerics.BitOperations.PopCount(value);
     }
 }

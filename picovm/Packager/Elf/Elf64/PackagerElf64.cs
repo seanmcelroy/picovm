@@ -26,7 +26,7 @@ namespace picovm.Packager.Elf.Elf64
             EI_DATA = HeaderIdentityData.ELFDATA2LSB,
             EI_VERSION = HeaderIdentityVersion.EI_CURRENT,
             E_TYPE = HeaderType.ET_EXEC,
-            E_MACHINE = HeaderMachine.EM_ARM, // EM_ARM = 0x28 TODO: What should this be?
+            E_MACHINE = HeaderMachine.EM_NONE, // picoVM byte code is not an established type
             E_VERSION = HeaderVersion.EV_CURRENT,
             // Don't set E_ENTRY, it is set later on.
             E_PHOFF = 0x40, // We always start the program header at 64 bytes, b/c the header will vary 52 vs 64 bytes in length if it's 32-bit or 64-bit.

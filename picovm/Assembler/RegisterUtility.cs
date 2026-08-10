@@ -1,70 +1,52 @@
 using System;
+using System.Runtime.CompilerServices;
 
 namespace picovm.Assembler
 {
     public static class RegisterUtility
     {
-        public static byte Size(this Register register)
+        // Register is a byte-valued enum; max value is 215 (R15).
+        // Zero entries mean "unknown register" and fall into the throw path.
+        private static readonly byte[] sizes = BuildSizeTable();
+
+        private static byte[] BuildSizeTable()
         {
-            switch (register)
-            {
-                case Register.RAX:
-                case Register.RBX:
-                case Register.RCX:
-                case Register.RDX:
-                case Register.RSP:
-                case Register.R8:
-                case Register.R9:
-                case Register.R10:
-                case Register.R11:
-                case Register.R12:
-                case Register.R13:
-                case Register.R14:
-                case Register.R15:
-                case Register.RSI:
-                case Register.RDI:
-                case Register.RBP:
-                case Register.RIP:
-                    return 8;
-                case Register.EAX:
-                case Register.EBX:
-                case Register.ECX:
-                case Register.EDX:
-                case Register.ESP:
-                case Register.ESI:
-                case Register.EDI:
-                case Register.EBP:
-                case Register.EIP:
-                    return 4;
-                case Register.AX:
-                case Register.BX:
-                case Register.CX:
-                case Register.DX:
-                case Register.SP:
-                case Register.SI:
-                case Register.DI:
-                case Register.BP:
-                case Register.IP:
-                case Register.CS:
-                case Register.DS:
-                case Register.SS:
-                case Register.ES:
-                case Register.FS:
-                case Register.GS:
-                    return 2;
-                case Register.AH:
-                case Register.AL:
-                case Register.BH:
-                case Register.BL:
-                case Register.CH:
-                case Register.CL:
-                case Register.DH:
-                case Register.DL:
-                    return 1;
-                default:
-                    throw new InvalidOperationException($"Unknown register size: {register}");
-            }
+            var t = new byte[256];
+            ReadOnlySpan<Register> r8 = [
+                Register.RAX, Register.RBX, Register.RCX, Register.RDX, Register.RSP,
+                Register.RSI, Register.RDI, Register.RBP, Register.RIP,
+                Register.R8,  Register.R9,  Register.R10, Register.R11,
+                Register.R12, Register.R13, Register.R14, Register.R15,
+            ];
+            ReadOnlySpan<Register> r4 = [
+                Register.EAX, Register.EBX, Register.ECX, Register.EDX,
+                Register.ESP, Register.ESI, Register.EDI, Register.EBP, Register.EIP,
+            ];
+            ReadOnlySpan<Register> r2 = [
+                Register.AX, Register.BX, Register.CX, Register.DX,
+                Register.SP, Register.SI, Register.DI, Register.BP, Register.IP,
+                Register.CS, Register.DS, Register.SS, Register.ES, Register.FS, Register.GS,
+            ];
+            ReadOnlySpan<Register> r1 = [
+                Register.AH, Register.AL, Register.BH, Register.BL,
+                Register.CH, Register.CL, Register.DH, Register.DL,
+            ];
+            foreach (var r in r8) t[(byte)r] = 8;
+            foreach (var r in r4) t[(byte)r] = 4;
+            foreach (var r in r2) t[(byte)r] = 2;
+            foreach (var r in r1) t[(byte)r] = 1;
+            return t;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static byte Size(this Register register)
+        {
+            var s = sizes[(byte)register];
+            if (s == 0) ThrowUnknown(register);
+            return s;
+        }
+
+        private static void ThrowUnknown(Register r) =>
+            throw new InvalidOperationException($"Unknown register size: {r}");
     }
 }

@@ -9,6 +9,6 @@ namespace picovm.Assembler
 
     {
         public ImmutableArray<byte> Bytecode { get; private set; } = ImmutableArray.Create<byte>(bytecode);
-        public ImmutableDictionary<string, BytecodeDataSymbol<TAddrSize>> SymbolOffsets { get; private set; } = symbolOffsets.ToImmutableDictionary();
+        public ImmutableDictionary<string, BytecodeDataSymbol<TAddrSize>> SymbolOffsets { get; private set; } = symbolOffsets.ToImmutableDictionary(StringComparer.InvariantCultureIgnoreCase);
     }
 }

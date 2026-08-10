@@ -40,6 +40,8 @@ namespace picovm.Assembler
 
         public ICompilationResult Compile(IEnumerable<string> programLines, string? sourceFilename = null)
         {
+            byte addressSize = (byte)(typeof(TAddrSize) == typeof(UInt32) ? 4 : 8);
+
             uint? textSegmentSize = null;
             uint? dataSegmentSize = null;
             uint? bssSegmentSize = null;
@@ -187,7 +189,7 @@ namespace picovm.Assembler
                         var constGeneration = CompileDataSectionLines(section.Value);
                         dataSegment = constGeneration.Bytecode;
                         dataSegmentSize = (uint)constGeneration.Bytecode.Length;
-                        dataSymbolOffsets = constGeneration.SymbolOffsets.ToDictionary();
+                        dataSymbolOffsets = constGeneration.SymbolOffsets.ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.InvariantCultureIgnoreCase);
                         break;
                     case SectionType.BSS:
                         var bssGeneration = CompileBssSectionResult.CompileBssSectionLines(section.Value);
@@ -220,7 +222,7 @@ namespace picovm.Assembler
             if (errors.Count > 0)
                 return new CompilationResultBase(errors);
 
-            foreach (var extra in dataSymbolOffsets.Where(dsr => !textSymbolReferenceOffsets.Any(tsr => string.Compare(tsr.Name, dsr.Key, StringComparison.InvariantCulture) == 0)))
+            foreach (var extra in dataSymbolOffsets.Where(dsr => !textSymbolReferenceOffsets.Any(tsr => string.Compare(tsr.Name, dsr.Key, StringComparison.InvariantCultureIgnoreCase) == 0)))
                 errors.Add(new CompilationError($"Data symbol {extra.Key} is not referenced in program code", sourceFilename));
 
             // Rebase data symbol offsets
@@ -324,12 +326,12 @@ namespace picovm.Assembler
                                             {
                                                 if (typeof(TAddrSize) == typeof(UInt32))
                                                 {
-                                                    if (textSegment[Convert.ToInt64(ValueTypeUtility.Add(tsr.TextSegmentReferenceOffset, i))] != 0xFF)
+                                                    if (textSegment[Convert.ToInt64(ValueTypeUtility.Add(tsr.TextSegmentReferenceOffset, i))] != 0xEE)
                                                         throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
                                                 }
                                                 else
                                                 {
-                                                    if (textSegment[Convert.ToInt64(ValueTypeUtility.Add(tsr.TextSegmentReferenceOffset, i))] != 0xFF)
+                                                    if (textSegment[Convert.ToInt64(ValueTypeUtility.Add(tsr.TextSegmentReferenceOffset, i))] != 0xEE)
                                                         throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
 
                                                 }
@@ -344,12 +346,12 @@ namespace picovm.Assembler
                                             {
                                                 if (typeof(TAddrSize) == typeof(UInt32))
                                                 {
-                                                    if (textSegment[Convert.ToInt64(ValueTypeUtility.Add(tsr.TextSegmentReferenceOffset, i))] != 0xFF)
+                                                    if (textSegment[Convert.ToInt64(ValueTypeUtility.Add(tsr.TextSegmentReferenceOffset, i))] != 0xEE)
                                                         throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
                                                 }
                                                 else
                                                 {
-                                                    if (textSegment[Convert.ToInt64(ValueTypeUtility.Add(tsr.TextSegmentReferenceOffset, i))] != 0xFF)
+                                                    if (textSegment[Convert.ToInt64(ValueTypeUtility.Add(tsr.TextSegmentReferenceOffset, i))] != 0xEE)
                                                         throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
                                                 }
                                             }
@@ -452,7 +454,7 @@ namespace picovm.Assembler
                     {
                         bssOffset = ValueTypeUtility.Add(textSegmentBase, textSegmentSize.Value + dataSegmentSize.Value + (UInt32)bssSymbols.Take(bssIndex).Sum(b => b.Size()));
                         for (var i = 0; i < 4; i++)
-                            if (textSegment[(UInt32)(ValueType)tsr.TextSegmentReferenceOffset + i] != 0xFF)
+                            if (textSegment[(UInt32)(ValueType)tsr.TextSegmentReferenceOffset + i] != 0xEE)
                                 throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
                         BinaryPrimitives.WriteUInt32LittleEndian(textSegment.AsSpan((int)(UInt32)(ValueType)tsr.TextSegmentReferenceOffset, 4), (UInt32)(ValueType)bssOffset);
                     }
@@ -463,7 +465,7 @@ namespace picovm.Assembler
                         // copying only four left the upper half of every BSS address holding
                         // the 0xFF placeholder.
                         for (var i = 0; i < 8; i++)
-                            if (textSegment[(long)((UInt64)(ValueType)tsr.TextSegmentReferenceOffset + (UInt64)i)] != 0xFF)
+                            if (textSegment[(long)((UInt64)(ValueType)tsr.TextSegmentReferenceOffset + (UInt64)i)] != 0xEE)
                                 throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
                         BinaryPrimitives.WriteUInt64LittleEndian(textSegment.AsSpan((int)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset, 8), (UInt64)(ValueType)bssOffset);
                     }
@@ -498,9 +500,10 @@ namespace picovm.Assembler
         private CompileTextSectionResult<TAddrSize> CompileTextSectionLinesToBytecode(
             IEnumerable<string> programLines)
         {
+            byte addressSize = (byte)(typeof(TAddrSize) == typeof(UInt32) ? 4 : 8);
             TAddrSize offsetBytes = typeof(TAddrSize) == typeof(UInt32) ? (TAddrSize)(ValueType)(UInt32)0 : (TAddrSize)(ValueType)(UInt64)0;
             var bytecode = new List<byte>();
-            var labelsOffsets = new Dictionary<string, TAddrSize>();
+            var labelsOffsets = new Dictionary<string, TAddrSize>(StringComparer.InvariantCultureIgnoreCase);
             var symbolReferenceOffsets = new List<BytecodeTextSymbol<TAddrSize>>();
 
             Span<byte> buf = stackalloc byte[10]; // once, at top of the compile loop
@@ -660,7 +663,7 @@ namespace picovm.Assembler
                                                 throw new InvalidOperationException($"Unable to determine register length: {regDst}");
 
                                             for (var i = 0; i < textSymbol.ReferenceLength; i++)
-                                                bytecode.Add(0xFF); // UNRESOLVED SYMBOL FOR VARIABLE
+                                                bytecode.Add(0xEE); // UNRESOLVED SYMBOL FOR VARIABLE
 
                                             symbolReferenceOffsets.Add(textSymbol);
                                             offsetBytes = offsetBytes.Add(textSymbol.ReferenceLength);
@@ -729,10 +732,6 @@ namespace picovm.Assembler
                                             if (typeHintSize == null)
                                                 throw new InvalidOperationException("I can't handle unhinted variable loads yet.  I should scan DS!");
 
-                                            // The destination address is always machine-width; the size
-                                            // hint describes the datum stored, not the address locating it.
-                                            var addressSize = (byte)(typeof(TAddrSize) == typeof(UInt32) ? 4 : 8);
-
                                             // A 32-bit agent rejects an 8-byte store when it decodes the size
                                             // byte.  Catching it here turns a runtime crash into a compile error
                                             // that names the offending line.
@@ -749,7 +748,7 @@ namespace picovm.Assembler
                                                 ));
 
                                             for (var i = 0; i < addressSize; i++)
-                                                bytecode.Add(0xFF); // UNRESOLVED SYMBOL FOR VARIABLE
+                                                bytecode.Add(0xEE); // UNRESOLVED SYMBOL FOR VARIABLE
                                             offsetBytes = offsetBytes.Add(addressSize);
 
                                             // Operand size, specified explicitly
@@ -791,6 +790,111 @@ namespace picovm.Assembler
                     }
 
                     throw new Exception($"ERROR: Unable to parse MOV parameters into an opcode: {line}");
+                }
+                else if (string.Compare("CALL", instruction, StringComparison.InvariantCulture) == 0)
+                {
+                    var loc = lineParts[^1];
+                    var locType = AssemblerUtility.GetOperandType(loc);
+
+                    switch (locType)
+                    {
+                        case ParameterType.RegisterReference: // CALL EAX
+                            {
+                                var locReg = registers[loc];
+                                switch (locReg)
+                                {
+                                    case Register.RAX:
+                                    case Register.RBX:
+                                    case Register.RCX:
+                                    case Register.RDX:
+                                    case Register.R8:
+                                    case Register.R9:
+                                    case Register.R10:
+                                    case Register.R11:
+                                    case Register.R12:
+                                    case Register.R13:
+                                    case Register.R14:
+                                    case Register.R15:
+                                        if (addressSize != 8)
+                                            throw new InvalidOperationException($"Register {loc} is only allowed for CALL if the address size is 8, but it is {addressSize}.");
+                                        break;
+                                    case Register.RSP:
+                                    case Register.RSI:
+                                    case Register.RDI:
+                                    case Register.RBP:
+                                    case Register.RIP:
+                                        throw new InvalidOperationException($"Register {loc} is not a permitted register for a CALL.");
+                                    case Register.EAX:
+                                    case Register.EBX:
+                                    case Register.ECX:
+                                    case Register.EDX:
+                                        if (addressSize != 4)
+                                            throw new InvalidOperationException($"Register {loc} is only allowed for CALL if the address size is 4, but it is {addressSize}.");
+                                        break;
+                                    case Register.ESP:
+                                    case Register.ESI:
+                                    case Register.EDI:
+                                    case Register.EBP:
+                                    case Register.EIP:
+                                        throw new InvalidOperationException($"Register {loc} is not a permitted register for a CALL.");
+                                    default:
+                                        throw new InvalidOperationException($"Register {loc} is not the right size for CALL on any platform.");
+                                }
+
+                                bytecode.Add((byte)Bytecode.CALL_REGISTER);
+                                offsetBytes = offsetBytes.Add(1);
+                                bytecode.Add((byte)locReg);
+                                offsetBytes = offsetBytes.Add(1);
+                                continue;
+                            }
+                        case ParameterType.VariableAddress: // CALL functionName
+                            {
+                                TAddrSize instructionOffset = offsetBytes;
+                                bytecode.Add((byte)Bytecode.CALL_IMMEDIATE);
+                                offsetBytes = offsetBytes.Add(1);
+
+                                BytecodeTextSymbol<TAddrSize> textSymbol = new(
+                                        loc,
+                                        instructionOffset,
+                                        offsetBytes,
+                                        addressSize);
+
+                                for (var i = 0; i < textSymbol.ReferenceLength; i++)
+                                    bytecode.Add(0xEE); // UNRESOLVED SYMBOL FOR LABEL
+
+                                symbolReferenceOffsets.Add(textSymbol);
+                                offsetBytes = offsetBytes.Add(textSymbol.ReferenceLength);
+                                continue;
+                            }
+                        case ParameterType.Constant: // CALL 0x2344
+                            {
+                                bytecode.Add((byte)Bytecode.CALL_IMMEDIATE);
+                                offsetBytes = offsetBytes.Add(1);
+
+                                switch (addressSize)
+                                {
+                                    case 8:
+                                        BinaryPrimitives.WriteUInt64LittleEndian(buf, loc.ParseUInt64Constant());
+                                        bytecode.AddRange(buf[..8]);
+                                        offsetBytes = offsetBytes.Add(8);
+                                        continue;
+                                    case 4:
+                                        BinaryPrimitives.WriteUInt32LittleEndian(buf, loc.ParseUInt32Constant());
+                                        bytecode.AddRange(buf[..4]);
+                                        offsetBytes = offsetBytes.Add(4);
+                                        continue;
+                                    default:
+                                        throw new InvalidOperationException($"Unsupported address size {addressSize}, expected 4 or 8.");
+                                }
+                            }
+                        default:
+                            throw new Exception($"ERROR: Unable to parse CALL parameters into an opcode, unhandled location type: {line}");
+                    }
+                }
+                else if (string.Compare("RET", instruction, StringComparison.InvariantCulture) == 0)
+                {
+                    bytecode.Add((byte)Bytecode.RET);
+                    offsetBytes = offsetBytes.Add(1);
                 }
                 else if (string.Compare("POP", instruction, StringComparison.InvariantCulture) == 0)
                 {
@@ -986,7 +1090,7 @@ namespace picovm.Assembler
             TAddrSize offsetBytes = zero;
 
             var bytecode = new List<byte>();
-            var symbolOffsets = new Dictionary<string, BytecodeDataSymbol<TAddrSize>>();
+            var symbolOffsets = new Dictionary<string, BytecodeDataSymbol<TAddrSize>>(StringComparer.InvariantCultureIgnoreCase);
             Span<byte> buf = stackalloc byte[8]; // once, at top of the compile loop
 
             foreach (var dataLine in dataLines)
@@ -1008,7 +1112,7 @@ namespace picovm.Assembler
                             bytecode.AddRange(stringBytes);
 
                             if (dataAllocationDirective.Label != null && !symbolOffsets.ContainsKey(dataAllocationDirective.Label.ToUpperInvariant()))
-                                symbolOffsets.Add(dataAllocationDirective.Label.ToUpperInvariant(),
+                                symbolOffsets.Add(dataAllocationDirective.Label,
                                 typeof(TAddrSize) == typeof(UInt32)
                                 ? new BytecodeDataSymbol<TAddrSize>(offsetBytes, (ushort)stringBytes.Length, false)
                                 : new BytecodeDataSymbol<TAddrSize>(offsetBytes, (ushort)stringBytes.Length, false));

@@ -4,12 +4,14 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using picovm.Assembler;
+using picovm.Commands;
 using picovm.Packager;
 using picovm.Packager.Elf;
 using picovm.Packager.Elf.Elf32;
 using picovm.Packager.Elf.Elf64;
 using picovm.Packager.PE;
 using picovm.VM;
+using Spectre.Console.Cli;
 
 namespace picovm
 {
@@ -21,121 +23,40 @@ namespace picovm
             Console.WriteLine(" (c) 2026 Sean McElroy");
             Console.WriteLine(" Released under the MIT License; all rights reserved.\r\n");
 
-            if (args.Length == 0)
+            var app = new CommandApp();
+            app.Configure(config =>
             {
-                Help();
-                Console.Error.WriteLine("No command specified.");
-                return -1;
-            }
+                config.SetApplicationName("picovm");
 
-            var command = args[0];
-            if (string.Compare(command, "asm", StringComparison.CurrentCultureIgnoreCase) == 0)
-            {
-                if (args.Length != 5)
-                {
-                    Help();
-                    Console.Error.WriteLine("Incorrect options for asm command.");
-                    return -2;
-                }
+                config.AddCommand<AsmCommand>("asm")
+                    .WithDescription("Assembles a source file into a binary output.");
 
-                var output = args[1];
-                var type = args[2];
-                var format = args[3];
-                var input = args[4];
+                config.AddCommand<InspectCommand>("inspect")
+                    .WithDescription("Reads the metadata about an executable.");
 
-                var compilation = Assemble(output, type, format, input);
-            }
-            else if (string.Compare(command, "inspect", StringComparison.CurrentCultureIgnoreCase) == 0)
-            {
-                if (args.Length != 2)
-                {
-                    Help();
-                    Console.Error.WriteLine("Incorrect options for inspect command.");
-                    return -2;
-                }
+                config.AddCommand<RunCommand>("run")
+                    .WithDescription("Runs a binary executable file in the virtual machine.");
 
-                var exec = args[1];
-                PrintInspection(exec);
-                return 0;
-            }
-            else if (string.Compare(command, "run", StringComparison.CurrentCultureIgnoreCase) == 0)
-            {
-                if (args.Length != 2)
-                {
-                    Help();
-                    Console.Error.WriteLine("Incorrect options for run command.");
-                    return -2;
-                }
+                config.AddCommand<AsmRunCommand>("asmrun")
+                    .WithDescription("Combines asm and run into a single command.");
+            });
 
-                var exec = args[1];
-                var type = Inspector.DetectPackageOutputType(exec);
-                var loaded = Load(exec, type);
-                var result = Execute(loaded);
-            }
-            else if (string.Compare(command, "asmrun", StringComparison.CurrentCultureIgnoreCase) == 0)
-            {
-                if (args.Length != 5)
-                {
-                    Help();
-                    Console.Error.WriteLine("Incorrect options for asmrun command.");
-                    return -2;
-                }
-
-                var output = args[1];
-                var type = args[2];
-                var format = args[3];
-                var input = args[4];
-
-                var compilation = Assemble(output, type, format, input);
-                var loaded = Load(output, type);
-                var result = Execute(loaded);
-            }
-            else if (string.Compare(command, "help", StringComparison.CurrentCultureIgnoreCase) == 0)
-            {
-                Help();
-            }
-            else
-            {
-                Help();
-                Console.Error.WriteLine($"Unknown option {command}.");
-                return -3;
-            }
-
-            return 0;
+            return app.Run(args);
         }
 
-        static void Help()
-        {
-            Console.WriteLine(" Usage: picovm <COMMAND> INPUTS... <src.asm> <a.elf>");
-            Console.WriteLine("\r\n\tCommands:");
-            Console.WriteLine("\t\tasm OUTPUT TYPE FORMAT INPUT");
-            Console.WriteLine("\t\t\tAssembles a file into a binary output");
-            Console.WriteLine("\t\t\t OUTPUT - resulting .elf output file");
-            Console.WriteLine("\t\t\t TYPE   - elf32 and elf64 is the only supported package types");
-            Console.WriteLine("\t\t\t FORMAT - pico is the only supported code/text format");
-            Console.WriteLine("\t\t\t INPUT  - source .asm assembly file");
-            Console.WriteLine("\r\n\t\tinspect EXECUTABLE");
-            Console.WriteLine("\t\t\tReads the metadata about an executable");
-            Console.WriteLine("\r\n\t\trun EXECUTABLE");
-            Console.WriteLine("\t\t\tRuns a binary executable file");
-            Console.WriteLine("\t\t\t EXECUTABLE - file to run in the virtual machine");
-            Console.WriteLine("\r\n\t\tasmrun OUTPUT TYPE FORMAT INPUT");
-            Console.WriteLine("\t\t\tCombines asm and run into a single command");
-        }
-
-        static ICompilationResult Assemble(string output, string type, string format, string input)
+        internal static ICompilationResult Assemble(string output, string type, string format, string input, bool noClobber)
         {
             var outputType = Enum.Parse<AssemblerPackageOutputType>(type, true);
-            return Assemble(output, outputType, format, input);
+            return Assemble(output, outputType, format, input, noClobber);
         }
 
-        static ICompilationResult Assemble(string output, AssemblerPackageOutputType outputType, string format, string input)
+        internal static ICompilationResult Assemble(string output, AssemblerPackageOutputType outputType, string format, string input, bool noClobber)
         {
             if (!File.Exists(input))
                 return CompilationResultBase.Error($"Source input file {input} not found.");
 
-            if (File.Exists(output))
-                return CompilationResultBase.Error($"Executable output file {output} already exists.");
+            if (File.Exists(output) && noClobber)
+                return CompilationResultBase.Error($"Executable output file {output} already exists (use without --no-clobber to overwrite).");
 
             // Compile.
             ICompilationResult compilation;
@@ -194,13 +115,13 @@ namespace picovm
             return compilation;
         }
 
-        static ILoaderResult Load(string input, string type)
+        internal static ILoaderResult Load(string input, string type)
         {
             var inputType = Enum.Parse<AssemblerPackageOutputType>(type, true);
             return Load(input, inputType);
         }
 
-        static ILoaderResult Load(string input, AssemblerPackageOutputType inputType)
+        internal static ILoaderResult Load(string input, AssemblerPackageOutputType inputType)
         {
             if (!File.Exists(input))
                 throw new FileNotFoundException($"Source input file {input} not found.", input);
@@ -224,7 +145,7 @@ namespace picovm
 
             return loaded;
         }
-        static ExecutionResult Execute(ILoaderResult loaded)
+        internal static ExecutionResult Execute(ILoaderResult loaded)
         {
             // Loader Stage 2 - setup file
             var image = loaded.Image.ToArray();
@@ -270,7 +191,7 @@ namespace picovm
             return new ExecutionResult((int)ret.ErrorCode, ret.Errors ?? []);
         }
 
-        static void PrintInspection(string target)
+        internal static void PrintInspection(string target)
         {
             if (!File.Exists(target))
                 throw new FileNotFoundException($"Source input file {target} not found.", target);
