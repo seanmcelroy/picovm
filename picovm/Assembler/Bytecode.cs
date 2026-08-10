@@ -276,8 +276,26 @@ namespace picovm.Assembler
         [Description("XOR_REG_REG")]
         XOR_REG_REG = 64,
 
-        [Description("CMP_REG_CON")]
-        CMP_REG_CON = 65,
+        /// <summary>
+        /// Compares two register values
+        /// </summary>
+        /// <example>
+        /// Source: CMP EAX, EBX
+        /// </example>
+        /// <remarks>
+        /// This is essential for any look comparing against a variable
+        /// </remarks>
+        [Description("CMP_REGISTER")]
+        CMP_REGISTER = 66,
+
+        /// <summary>
+        /// Compares a register value with an immediate
+        /// </summary>
+        /// <example>
+        /// Source: CMP EAX, 5
+        /// </example>
+        [Description("CMP_IMMEDIATE")]
+        CMP_IMMEDIATE = 67,
 
         /// <summary>
         /// Call to an address provided by a register value.
@@ -286,7 +304,7 @@ namespace picovm.Assembler
         /// Source: CALL EAX
         /// </example>
         [Description("CALL_REGISTER")]
-        CALL_REGISTER = 66,
+        CALL_REGISTER = 68,
 
         /// <summary>
         /// Call to an address provided by a symbol or literal.
@@ -296,7 +314,7 @@ namespace picovm.Assembler
         /// Opcode: addr (1 + 4/8 bytes, based on machine address width)
         /// </example>
         [Description("CALL_IMMEDIATE")]
-        CALL_IMMEDIATE = 67,
+        CALL_IMMEDIATE = 69,
 
         /// <summary>
         /// Returns by popping a return address into the instruction pointer.
@@ -305,6 +323,6 @@ namespace picovm.Assembler
         /// Source: RET
         /// </example>
         [Description("RET")]
-        RET = 68,
+        RET = 70,
     }
 }

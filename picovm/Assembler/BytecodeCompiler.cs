@@ -1464,32 +1464,37 @@ namespace picovm.Assembler
                         var o1Reg = registers[operand1.ToUpperInvariant()];
                         switch (o2Type)
                         {
-                            case ParameterType.Constant:
+                            case ParameterType.RegisterReference: // CMP reg, reg
+                                dest[0] = (byte)Bytecode.CMP_REGISTER;
+                                dest[1] = (byte)o1Reg;
+                                dest[2] = (byte)registers[operand2.ToUpperInvariant()];
+                                return 3;
+                            case ParameterType.Constant: // CMP reg, imm
                                 {
                                     if (typeHintSize == 8 || (!typeHintSize.HasValue && o1Reg.Size() == 8))
                                     {
-                                        dest[0] = (byte)Bytecode.CMP_REG_CON;
+                                        dest[0] = (byte)Bytecode.CMP_IMMEDIATE;
                                         dest[1] = (byte)o1Reg;
                                         BinaryPrimitives.WriteUInt64LittleEndian(dest[2..], operand2.ParseUInt64Constant());
                                         return 10;
                                     }
                                     else if (typeHintSize == 4 || (!typeHintSize.HasValue && o1Reg.Size() == 4))
                                     {
-                                        dest[0] = (byte)Bytecode.CMP_REG_CON;
+                                        dest[0] = (byte)Bytecode.CMP_IMMEDIATE;
                                         dest[1] = (byte)o1Reg;
                                         BinaryPrimitives.WriteUInt32LittleEndian(dest[2..], operand2.ParseUInt32Constant());
                                         return 6;
                                     }
                                     else if (typeHintSize == 2 || (!typeHintSize.HasValue && o1Reg.Size() == 2))
                                     {
-                                        dest[0] = (byte)Bytecode.CMP_REG_CON;
+                                        dest[0] = (byte)Bytecode.CMP_IMMEDIATE;
                                         dest[1] = (byte)o1Reg;
                                         BinaryPrimitives.WriteUInt16LittleEndian(dest[2..], operand2.ParseUInt16Constant());
                                         return 4;
                                     }
                                     else if (typeHintSize == 1 || (!typeHintSize.HasValue && o1Reg.Size() == 1))
                                     {
-                                        dest[0] = (byte)Bytecode.CMP_REG_CON;
+                                        dest[0] = (byte)Bytecode.CMP_IMMEDIATE;
                                         dest[1] = (byte)o1Reg;
                                         dest[2] = operand2.ParseByteConstant();
                                         return 3;

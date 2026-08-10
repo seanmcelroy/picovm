@@ -478,7 +478,120 @@ namespace picovm.VM
                         }
                         break;
                     }
-                case Bytecode.CMP_REG_CON:
+                case Bytecode.CMP_REGISTER:
+                    {
+                        var operand1 = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+                        var operand2 = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+
+                        switch (operand1.Size())
+                        {
+                            case 8:
+                                switch (operand2.Size())
+                                {
+                                    case 8:
+                                        var operand1value = ReadR64Register(operand1);
+                                        var operand2value = ReadR64Register(operand2);
+
+                                        var result = operand1value - operand2value;
+                                        var operand1Signed = (long)operand1value; // Re-interpret as signed
+                                        var operand2Signed = (long)operand2value; // Re-interpret as signed
+                                        var resultSigned = operand1Signed - operand2Signed;
+
+                                        WriteArithmeticFlags(
+                                            operand1value < operand2value, // CARRY_FLAG
+                                            ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                            (operand1value & 0xF) < (operand2value & 0xF), // AUX_CARRY_FLAG
+                                            resultSigned == 0, // ZERO_FLAG
+                                            resultSigned < 0, // SIGN_FLAG
+                                            ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                        );
+                                        break;
+                                    default:
+                                        throw new InvalidOperationException($"ERROR: CMP must compare registers of same size, but {operand1} and {operand2} were provided.");
+                                }
+                                break;
+                            case 4:
+                                switch (operand2.Size())
+                                {
+                                    case 4:
+                                        var operand1value = ReadExtendedRegister(operand1);
+                                        var operand2value = ReadExtendedRegister(operand2);
+                                        var result = (long)operand1value - operand2value;
+                                        var operand1Signed = (int)operand1value; // Re-interpret as signed
+                                        var operand2Signed = (int)operand2value; // Re-interpret as signed
+                                        var resultSigned = operand1Signed - operand2Signed;
+
+                                        WriteArithmeticFlags(
+                                            operand1value < operand2value, // CARRY_FLAG
+                                            ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                            (operand1value & 0xF) < (operand2value & 0xF), // AUX_CARRY_FLAG
+                                            resultSigned == 0, // ZERO_FLAG
+                                            resultSigned < 0, // SIGN_FLAG
+                                            ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                        );
+                                        break;
+                                    default:
+                                        throw new InvalidOperationException($"ERROR: CMP must compare registers of same size, but {operand1} and {operand2} were provided.");
+                                }
+                                break;
+                            case 2:
+                                switch (operand2.Size())
+                                {
+                                    case 2:
+                                        var operand1value = ReadRegister(operand1);
+                                        var operand2value = ReadRegister(operand2);
+
+                                        var result = operand1value - operand2value;
+                                        var operand1Signed = (short)operand1value; // Re-interpret as signed
+                                        var operand2Signed = (short)operand2value; // Re-interpret as signed
+                                        var resultSigned = (short)(operand1Signed - operand2Signed);
+
+                                        WriteArithmeticFlags(
+                                            operand1value < operand2value, // CARRY_FLAG
+                                            ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                            (operand1value & 0xF) < (operand2value & 0xF), // AUX_CARRY_FLAG
+                                            resultSigned == 0, // ZERO_FLAG
+                                            resultSigned < 0, // SIGN_FLAG
+                                            ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                        );
+                                        break;
+                                    default:
+                                        throw new InvalidOperationException($"ERROR: CMP must compare registers of same size, but {operand1} and {operand2} were provided.");
+                                }
+                                break;
+                            case 1:
+                                switch (operand2.Size())
+                                {
+                                    case 1:
+                                        var operand1value = ReadHalfRegister(operand1);
+                                        var operand2value = ReadHalfRegister(operand2);
+
+                                        var result = operand1value - operand2value;
+                                        var operand1Signed = (sbyte)operand1value; // Re-interpret as signed
+                                        var operand2Signed = (sbyte)operand2value; // Re-interpret as signed
+                                        var resultSigned = (sbyte)(operand1Signed - operand2Signed);
+
+                                        WriteArithmeticFlags(
+                                            operand1value < operand2value, // CARRY_FLAG
+                                            ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                            (operand1value & 0xF) < (operand2value & 0xF), // AUX_CARRY_FLAG
+                                            resultSigned == 0, // ZERO_FLAG
+                                            resultSigned < 0, // SIGN_FLAG
+                                            ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                        );
+                                        break;
+                                    default:
+                                        throw new InvalidOperationException($"ERROR: CMP must compare registers of same size, but {operand1} and {operand2} were provided.");
+                                }
+                                break;
+                            default:
+                                throw new InvalidOperationException($"ERROR: CMP must compare registers of same size, but {operand1} and {operand2} were provided.");
+                        }
+                        break;
+                    }
+                case Bytecode.CMP_IMMEDIATE:
                     {
                         var operand1 = (Register)memory[InstructionPointer];
 
