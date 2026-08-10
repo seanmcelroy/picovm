@@ -136,7 +136,7 @@ namespace picovm.VM
             if (StackPointer < 8)
                 throw new MemoryAccessViolationException(StackPointer, 8, InstructionPointer, isWrite: true);
 
-            BinaryPrimitives.WriteUInt64LittleEndian(memory.AsSpan((int)(StackPointer - 8), 8), value);
+            WriteMemoryUInt64(StackPointer - 8, value);
             StackPointer -= 8;
         }
 
@@ -295,7 +295,7 @@ namespace picovm.VM
                                     var operand1value = ReadMemoryUInt64(loc);
                                     var operand2value = ReadMemoryUInt64(InstructionPointer);
                                     InstructionPointer += 8;
-                                    BinaryPrimitives.WriteUInt64LittleEndian(memory.AsSpan((int)loc, 8), operand1value + operand2value);
+                                    WriteMemoryUInt64(loc, operand1value + operand2value);
 
                                     var result = (BigInteger)operand1value + operand2value;
                                     var operand1Signed = (long)operand1value; // Re-interpret as signed
@@ -318,7 +318,7 @@ namespace picovm.VM
                                     var operand1value = ReadMemoryUInt32(loc);
                                     var operand2value = ReadMemoryUInt32(InstructionPointer);
                                     InstructionPointer += 4;
-                                    BinaryPrimitives.WriteUInt32LittleEndian(memory.AsSpan((int)loc, 4), operand1value + operand2value);
+                                    WriteMemoryUInt32(loc, operand1value + operand2value);
 
                                     var result = (long)operand1value + operand2value;
                                     var operand1Signed = (int)operand1value; // Re-interpret as signed
@@ -341,7 +341,7 @@ namespace picovm.VM
                                     var operand1value = ReadMemoryUInt16(loc);
                                     var operand2value = ReadMemoryUInt16(InstructionPointer);
                                     InstructionPointer += 2;
-                                    BinaryPrimitives.WriteUInt16LittleEndian(memory.AsSpan(loc, 2), (ushort)(operand1value + operand2value));
+                                    WriteMemoryUInt16(loc, (ushort)(operand1value + operand2value));
 
                                     var result = (uint)operand1value + operand2value;
                                     var operand1Signed = (short)operand1value; // Re-interpret as signed
@@ -853,7 +853,7 @@ namespace picovm.VM
                         }
                         break;
                     }
-                case Bytecode.MOV_INDIRECT:
+                case Bytecode.MOV_INDIRECT_LOAD:
                     {
                         var dst = (Register)memory[InstructionPointer];
                         InstructionPointer++;
@@ -886,8 +886,44 @@ namespace picovm.VM
                                 WriteHalfRegister(dst, ReadMemoryByte(addr));
                                 break;
                             default:
-                                Dump();
                                 throw new InvalidOperationException($"ERROR: Unrecognized register for MOV dst: {dst}");
+                        }
+                        break;
+                    }
+                case Bytecode.MOV_INDIRECT_STORE: // MOV [EBX], EAX
+                    {
+                        var dst = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+                        var src = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+
+                        // The destination register holds the address to dereference, not a value.
+                        ulong addr = dst.Size() switch
+                        {
+                            8 => ReadR64Register(dst),
+                            4 => ReadExtendedRegister(dst),
+                            2 => ReadRegister(dst),
+                            1 => ReadHalfRegister(dst),
+                            _ => throw new InvalidOperationException($"ERROR: Unrecognized register for MOV dst: {dst}")
+                        };
+
+                        // The source register's width decides how much to store.
+                        switch (src.Size())
+                        {
+                            case 8:
+                                WriteMemoryUInt64(addr, ReadR64Register(src));
+                                break;
+                            case 4:
+                                WriteMemoryUInt32(addr, ReadExtendedRegister(src));
+                                break;
+                            case 2:
+                                WriteMemoryUInt16(addr, ReadRegister(src));
+                                break;
+                            case 1:
+                                WriteMemoryByte(addr, ReadHalfRegister(src));
+                                break;
+                            default:
+                                throw new InvalidOperationException($"ERROR: Unrecognized register for MOV src: {src}");
                         }
                         break;
                     }
@@ -973,16 +1009,16 @@ namespace picovm.VM
                         switch (operand.Size())
                         {
                             case 8:
-                                BinaryPrimitives.WriteUInt64LittleEndian(memory.AsSpan((int)ReadR64Register(operand), 8), StackPop64());
+                                WriteMemoryUInt64(ReadR64Register(operand), StackPop64());
                                 break;
                             case 4:
-                                BinaryPrimitives.WriteUInt32LittleEndian(memory.AsSpan((int)ReadExtendedRegister(operand), 4), StackPop32());
+                                WriteMemoryUInt32(ReadExtendedRegister(operand), StackPop32());
                                 break;
                             case 2:
-                                BinaryPrimitives.WriteUInt16LittleEndian(memory.AsSpan(ReadRegister(operand), 2), StackPop16());
+                                WriteMemoryUInt16(ReadRegister(operand), StackPop16());
                                 break;
                             case 1:
-                                memory[ReadHalfRegister(operand)] = StackPop8();
+                                WriteMemoryByte(ReadHalfRegister(operand), StackPop8());
                                 break;
                             default:
                                 throw new InvalidOperationException("ERROR: Unrecognized register for POP");
@@ -1008,7 +1044,6 @@ namespace picovm.VM
                                 StackPush(ReadHalfRegister(operand));
                                 break;
                             default:
-                                Dump();
                                 throw new InvalidOperationException("ERROR: Unrecognized register for PUSH");
                         }
                         break;
@@ -1409,6 +1444,14 @@ namespace picovm.VM
                 throw new MemoryAccessViolationException(address, 8, InstructionPointer, isWrite: false);
 
             return BinaryPrimitives.ReadUInt64LittleEndian(memory.AsSpan((int)address, 8));
+        }
+
+        protected void WriteMemoryUInt64(ulong address, ulong value)
+        {
+            if (address > AddressSpaceSize - 8)
+                throw new MemoryAccessViolationException(address, 8, InstructionPointer, isWrite: true);
+
+            BinaryPrimitives.WriteUInt64LittleEndian(memory.AsSpan((int)address, 8), value);
         }
     }
 }

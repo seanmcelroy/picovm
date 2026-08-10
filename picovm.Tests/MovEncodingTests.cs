@@ -93,7 +93,7 @@ namespace picovm.Tests
         [InlineData("MOV AL, [ECX]", Register.AL, Register.ECX)]
         public void MovIndirect_Encoding32(string instruction, Register dst, Register src) =>
             Assert.Equal(
-                [(byte)Bytecode.MOV_INDIRECT, (byte)dst, (byte)src, (byte)Bytecode.END],
+                [(byte)Bytecode.MOV_INDIRECT_LOAD, (byte)dst, (byte)src, (byte)Bytecode.END],
                 Text32(instruction));
 
         [Theory]
@@ -101,7 +101,7 @@ namespace picovm.Tests
         [InlineData("MOV EDX, [RBX]", Register.EDX, Register.RBX)]
         public void MovIndirect_Encoding64(string instruction, Register dst, Register src) =>
             Assert.Equal(
-                [(byte)Bytecode.MOV_INDIRECT, (byte)dst, (byte)src, (byte)Bytecode.END],
+                [(byte)Bytecode.MOV_INDIRECT_LOAD, (byte)dst, (byte)src, (byte)Bytecode.END],
                 Text64(instruction));
 
         #endregion

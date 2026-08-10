@@ -617,7 +617,7 @@ namespace picovm.Assembler
                             {
                                 switch (srcType)
                                 {
-                                    case ParameterType.RegisterReference:
+                                    case ParameterType.RegisterReference: // MOV EAX, EBX
                                         {
                                             bytecode.Add((byte)Bytecode.MOV_REGISTER);
                                             offsetBytes = offsetBytes.Add(1);
@@ -628,9 +628,9 @@ namespace picovm.Assembler
                                             offsetBytes = offsetBytes.Add(1);
                                             continue;
                                         }
-                                    case ParameterType.RegisterIndirect:
+                                    case ParameterType.RegisterIndirect: // MOV EAX, [EBX]
                                         {
-                                            bytecode.Add((byte)Bytecode.MOV_INDIRECT);
+                                            bytecode.Add((byte)Bytecode.MOV_INDIRECT_LOAD);
                                             offsetBytes = offsetBytes.Add(1);
 
                                             bytecode.Add((byte)registers[dst]);
@@ -639,7 +639,7 @@ namespace picovm.Assembler
                                             offsetBytes = offsetBytes.Add(1);
                                             continue;
                                         }
-                                    case ParameterType.VariableAddress:
+                                    case ParameterType.VariableAddress: // MOV ECX, msg
                                         {
                                             TAddrSize instructionOffset = offsetBytes;
                                             bytecode.Add((byte)Bytecode.MOV_IMMEDIATE);
@@ -669,7 +669,7 @@ namespace picovm.Assembler
                                             offsetBytes = offsetBytes.Add(textSymbol.ReferenceLength);
                                             continue;
                                         }
-                                    case ParameterType.Constant:
+                                    case ParameterType.Constant: // MOV AX 3
                                         {
                                             var dstReg = registers[dst.ToUpperInvariant()];
 
@@ -719,11 +719,30 @@ namespace picovm.Assembler
                                         throw new Exception($"ERROR: Unable to parse MOV parameters into an opcode, unhandled src type: {line}");
                                 }
                             }
+                        case ParameterType.RegisterIndirect:
+                            {
+                                switch (srcType)
+                                {
+                                    case ParameterType.RegisterReference: // MOV [EBX], EAX
+                                        {
+                                            bytecode.Add((byte)Bytecode.MOV_INDIRECT_STORE);
+                                            offsetBytes = offsetBytes.Add(1);
+
+                                            bytecode.Add((byte)registers[dst.TrimStart('[').TrimEnd(']')]);
+                                            offsetBytes = offsetBytes.Add(1);
+                                            bytecode.Add((byte)registers[src]);
+                                            offsetBytes = offsetBytes.Add(1);
+                                            continue;
+                                        }
+                                    default:
+                                        throw new Exception($"ERROR: Unable to parse MOV parameters into an opcode, unhandled src type: {line}");
+                                }
+                            }
                         case ParameterType.VariableDirect:
                             {
                                 switch (srcType)
                                 {
-                                    case ParameterType.Constant:
+                                    case ParameterType.Constant: // MOV [symbol], const
                                         {
                                             bytecode.Add((byte)Bytecode.MOV_DIRECT);
                                             offsetBytes = offsetBytes.Add(1);

@@ -48,14 +48,24 @@ namespace picovm.Assembler
         /// <summary>
         /// Register-indirect load.
         /// This opcode loads from an address that is in a register
-        /// dst ← memory[address register].
         /// </summary>
         /// <example>
         /// Source: MOV EAX, [EBX]
         /// Opcode: dstReg, addr (1 + 4/8 bytes, based on machine address width)
         /// </example>
-        [Description("MOV_INDIRECT")]
-        MOV_INDIRECT = 8,
+        [Description("MOV_INDIRECT_LOAD")]
+        MOV_INDIRECT_LOAD = 8,
+
+        /// <summary>
+        /// Register-indirect store.
+        /// This opcode stores to an address in a register
+        /// </summary>
+        /// <example>
+        /// Source: MOV [EBX], EAX
+        /// Opcode: dstAddr (1 + 4/8 bytes, based on machine address width), srcReg
+        /// </example>
+        [Description("MOV_INDIRECT_STORE")]
+        MOV_INDIRECT_STORE = 9,
 
         [Description("PUSH_REG")]
         PUSH_REG = 10,
