@@ -1488,7 +1488,32 @@ namespace picovm.VM
                         }
                         break;
                     }
-                case Bytecode.MOV_DIRECT: // aka MOV [counter], 65 ; Formerly MOV_MEM_CON
+                case Bytecode.MOV_DIRECT_STORE: // aka MOV [counter], EAX
+                    {
+                        // Absolute destination address, always machine width, patched at link time.
+                        var addr = ReadMemoryUInt32(InstructionPointer);
+                        InstructionPointer += 4;
+
+                        var src = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+
+                        switch (src.Size())
+                        {
+                            case 4:
+                                WriteMemoryUInt32(addr, ReadExtendedRegister(src));
+                                break;
+                            case 2:
+                                WriteMemoryUInt16(addr, ReadRegister(src));
+                                break;
+                            case 1:
+                                WriteMemoryByte(addr, ReadHalfRegister(src));
+                                break;
+                            default:
+                                throw new InvalidOperationException($"ERROR: Unrecognized register for MOV src: {src}");
+                        }
+                        break;
+                    }
+                case Bytecode.MOV_DIRECT_IMMEDIATE: // aka MOV [counter], 65
                     {
                         // Absolute destination address, always machine width, patched at link time.
                         var addr = ReadMemoryUInt32(InstructionPointer);

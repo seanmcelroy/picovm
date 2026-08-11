@@ -7,12 +7,12 @@ namespace picovm.Assembler
         Unknown = 0,
 
         [Description("END")]
-        END = 1,
+        END,
 
         [Description("INT")] // Interrupt, can by syscall on x86
-        INT = 2,
+        INT,
         [Description("SYSCALL")] // syscall on x64
-        SYSCALL = 3,
+        SYSCALL,
 
         /// <summary>
         /// Register-to-register.
@@ -22,7 +22,7 @@ namespace picovm.Assembler
         /// Source: MOV EAX, EBX ; eax = ebx
         /// </example>
         [Description("MOV_REGISTER")]
-        MOV_REGISTER = 5,
+        MOV_REGISTER,
 
         /// <summary>
         /// Immediate load of a symbol or literal.
@@ -34,7 +34,25 @@ namespace picovm.Assembler
         /// Opcode: dstReg, addr (1 + 4/8 bytes, based on machine address width)
         /// </example>
         [Description("MOV_IMMEDIATE")]
-        MOV_IMMEDIATE = 6,
+        MOV_IMMEDIATE,
+
+        /// <summary>
+        /// Direct load of a symbol resolved at compile time into a register.
+        /// </summary>
+        /// <example>
+        /// Source: MOV EAX, [symbol]
+        /// </example>
+        [Description("MOV_DIRECT_LOAD")] // TODO!!!
+        MOV_DIRECT_LOAD,
+
+        /// <summary>
+        /// Direct load of register value into a symbol resolved at compile time.
+        /// </summary>
+        /// <example>
+        /// Source: MOV [symbol], EAX
+        /// </example>
+        [Description("MOV_DIRECT_STORE")]
+        MOV_DIRECT_STORE,
 
         /// <summary>
         /// Direct load of constant into a symbol resolved at compile time.
@@ -42,8 +60,8 @@ namespace picovm.Assembler
         /// <example>
         /// Source: MOV [symbol], const
         /// </example>
-        [Description("MOV_DIRECT")]
-        MOV_DIRECT = 7,
+        [Description("MOV_DIRECT_IMMEDIATE")]
+        MOV_DIRECT_IMMEDIATE,
 
         /// <summary>
         /// Register-indirect load.
@@ -54,7 +72,7 @@ namespace picovm.Assembler
         /// Opcode: dstReg, addr (1 + 4/8 bytes, based on machine address width)
         /// </example>
         [Description("MOV_INDIRECT_LOAD")]
-        MOV_INDIRECT_LOAD = 8,
+        MOV_INDIRECT_LOAD,
 
         /// <summary>
         /// Register-indirect store.
@@ -65,19 +83,19 @@ namespace picovm.Assembler
         /// Opcode: dstAddr (1 + 4/8 bytes, based on machine address width), srcReg
         /// </example>
         [Description("MOV_INDIRECT_STORE")]
-        MOV_INDIRECT_STORE = 9,
+        MOV_INDIRECT_STORE,
 
         [Description("PUSH_REG")]
-        PUSH_REG = 10,
+        PUSH_REG,
         [Description("PUSH_MEM")]
-        PUSH_MEM = 11,
+        PUSH_MEM,
         [Description("PUSH_CON")]
-        PUSH_CON = 12,
+        PUSH_CON,
 
         [Description("POP_REG")]
-        POP_REG = 15,
+        POP_REG,
         [Description("POP_MEM")]
-        POP_MEM = 16,
+        POP_MEM,
 
         /// <summary>
         /// This adds the value in the second register to the value in
@@ -88,7 +106,7 @@ namespace picovm.Assembler
         /// Source: ADD EAX, EBX
         /// </example>
         [Description("ADD_REGISTER")]
-        ADD_REGISTER = 19,
+        ADD_REGISTER,
 
         /// <summary>
         /// This adds the value in the second operand (a memory location)
@@ -100,7 +118,7 @@ namespace picovm.Assembler
         /// Source: ADD EAX, [EBX]
         /// </example>
         [Description("ADD_INDIRECT_REGISTER")]
-        ADD_INDIRECT_REGISTER = 20,
+        ADD_INDIRECT_REGISTER,
 
         /// <summary>
         /// This adds the value in the second operand (a register)
@@ -112,7 +130,7 @@ namespace picovm.Assembler
         /// Source: ADD [EAX], EBX
         /// </example>
         [Description("ADD_INDIRECT_MEMORY_REGISTER")]
-        ADD_INDIRECT_MEMORY_REGISTER = 21,
+        ADD_INDIRECT_MEMORY_REGISTER,
 
         /// <summary>
         /// This adds the value in the second operand (a literal)
@@ -124,7 +142,7 @@ namespace picovm.Assembler
         /// Source: ADD [EAX], 2345
         /// </example>
         [Description("ADD_INDIRECT_MEMORY_IMMEDIATE")]
-        ADD_INDIRECT_MEMORY_IMMEDIATE = 22,
+        ADD_INDIRECT_MEMORY_IMMEDIATE,
 
         /// <summary>
         /// This adds the literal value in the second operand to the value in
@@ -134,7 +152,7 @@ namespace picovm.Assembler
         /// Source: ADD EAX, 2345
         /// </example>
         [Description("ADD_IMMEDIATE")]
-        ADD_IMMEDIATE = 23,
+        ADD_IMMEDIATE,
 
         /// <summary>
         /// Bitwise AND of two registers
@@ -144,7 +162,7 @@ namespace picovm.Assembler
         /// </example>
         /// <seealso cref="TEST_REGISTER"/>
         [Description("AND_REGISTER")]
-        AND_REGISTER = 24,
+        AND_REGISTER,
 
         /// <summary>
         /// Bitwise AND of a register and an immediate
@@ -154,7 +172,7 @@ namespace picovm.Assembler
         /// </example>
         /// <seealso cref="TEST_IMMEDIATE"/>
         [Description("AND_IMMEDIATE")]
-        AND_IMMEDIATE = 25,
+        AND_IMMEDIATE,
 
         /// <summary>
         /// Bitwise AND of two registers,
@@ -166,7 +184,7 @@ namespace picovm.Assembler
         /// </example>
         /// <seealso cref="AND_REGISTER"/>
         [Description("TEST_REGISTER")]
-        TEST_REGISTER = 26,
+        TEST_REGISTER,
 
         /// <summary>
         /// Bitwise AND of a register and an immediate,
@@ -178,205 +196,205 @@ namespace picovm.Assembler
         /// </example>
         /// <seealso cref="AND_IMMEDIATE"/>
         [Description("TEST_IMMEDIATE")]
-        TEST_IMMEDIATE = 27,
+        TEST_IMMEDIATE,
 
         /// <summary>
         /// Jump if zero (used after a CMP, ZF=1)
         /// </summary>
         [Description("JZ")]
-        JZ = 31,
+        JZ,
 
         /// <summary>
         /// Jump if equal (used after a CMP, ZF=1)
         /// </summary>
         [Description("JE")]
-        JE = 32,
+        JE,
 
         /// <summary>
         /// Jump if not zero (used after a CMP, ZF=0)
         /// </summary>
         [Description("JNZ")]
-        JNZ = 33,
+        JNZ,
 
         /// <summary>
         /// Jump if not equal (used after a CMP, ZF=0)
         /// </summary>
         [Description("JNE")]
-        JNE = 34,
+        JNE,
 
         /// <summary>
         /// Jump if overflow (OF=1)
         /// </summary>
         [Description("JO")]
-        JO = 35,
+        JO,
 
         /// <summary>
         /// Jump if not overflow (OF=0)
         /// </summary>
         [Description("JNO")]
-        JNO = 36,
+        JNO,
 
         /// <summary>
         /// Jump if sign (SF=1)
         /// </summary>
         [Description("JS")]
-        JS = 37,
+        JS,
 
         /// <summary>
         /// Jump if not sign (SF=0)
         /// </summary>
         [Description("JNS")]
-        JNS = 38,
+        JNS,
 
         /// <summary>
         /// Jump if below (CF=1)
         /// </summary>
         [Description("JB")]
-        JB = 39,
+        JB,
 
         /// <summary>
         /// Jump if not above or equal (CF=1)
         /// </summary>
         [Description("JNAE")]
-        JNAE = 40,
+        JNAE,
 
         /// <summary>
         /// Jump if carry (CF=1)
         /// </summary>
         [Description("JC")]
-        JC = 41,
+        JC,
 
         /// <summary>
         /// Jump if not below (CF=0)
         /// </summary>
         [Description("JNB")]
-        JNB = 42,
+        JNB,
 
         /// <summary>
         /// Jump if above or equal (CF=0)
         /// </summary>
         [Description("JAE")]
-        JAE = 43,
+        JAE,
 
         /// <summary>
         /// Jump if not carry (CF=0)
         /// </summary>
         [Description("JNC")]
-        JNC = 44,
+        JNC,
 
         /// <summary>
-        /// Jump if below or equal (CF = 1 or ZF = 1)
+        /// Jump if below or equal (CF=1 or ZF=1)
         /// </summary>
         [Description("JBE")]
-        JBE = 45,
+        JBE,
 
         /// <summary>
-        /// Jump if not above (CF = 1 or ZF = 1)
+        /// Jump if not above (CF=1 or ZF=1)
         /// </summary>
         [Description("JNA")]
-        JNA = 46,
+        JNA,
 
         /// <summary>
         /// Jump if above (CF=0 and ZF=0)
         /// </summary>
         [Description("JA")]
-        JA = 47,
+        JA,
 
         /// <summary>
         /// Jump if not below or equal (CF=0 and ZF=0)
         /// </summary>
         [Description("JNBE")]
-        JNBE = 48,
+        JNBE,
 
         /// <summary>
         /// Jump if less (SF <> OF)
         /// </summary>
         [Description("JL")]
-        JL = 49,
+        JL,
 
         /// <summary>
         /// Jump if not greater or equal (SF <> OF)
         /// </summary>
         [Description("JNGE")]
-        JNGE = 50,
+        JNGE,
 
         /// <summary>
         /// Jump if greater or equal (SF = OF)
         /// </summary>
         [Description("JGE")]
-        JGE = 51,
+        JGE,
 
         /// <summary>
         /// Jump if not less (SF = OF)
         /// </summary>
         [Description("JNL")]
-        JNL = 52,
+        JNL,
 
         /// <summary>
         /// Jump if less or equal (ZF=1 or SF<>OF)
         /// </summary>
         [Description("JLE")]
-        JLE  = 53,
+        JLE ,
 
         /// <summary>
         /// Jump if not greater (ZF=1 or SF<>OF)
         /// </summary>
         [Description("JNG")]
-        JNG = 54,
+        JNG,
 
         /// <summary>
         /// Jump if greater (ZF=0 and SF=OF)
         /// </summary>
         [Description("JG")]
-        JG = 55,
+        JG,
 
         /// <summary>
         /// Jump if not less or equal (ZF=0 and SF=OF)
         /// </summary>
         [Description("JNLE")]
-        JNLE = 56,
+        JNLE,
 
         /// <summary>
         /// Jump if parity (PF=1)
         /// </summary>
         [Description("JP")]
-        JP = 57,
+        JP,
 
         /// <summary>
         /// Jump if parity even (PF=1)
         /// </summary>
         [Description("JPE")]
-        JPE = 58,
+        JPE,
 
         /// <summary>
         /// Jump if not parity (PF=0)
         /// </summary>
         [Description("JNP")]
-        JNP = 59,
+        JNP,
 
         /// <summary>
         /// Jump if parity odd (PF=0)
         /// </summary>
         [Description("JPO")]
-        JPO = 60,
+        JPO,
 
         /// <summary>
         /// Jump if %CX register is 0
         /// </summary>
         [Description("JCXZ")]
-        JCXZ = 61,
+        JCXZ,
 
         /// <summary>
         /// Jump if %ECX register is 0
         /// </summary>
         [Description("JECXZ")]
-        JECXZ = 62,
+        JECXZ,
 
         [Description("JMP")]
-        JMP = 63,
+        JMP,
 
         [Description("XOR_REG_REG")]
-        XOR_REG_REG = 64,
+        XOR_REG_REG,
 
         /// <summary>
         /// Compares two register values
@@ -388,7 +406,7 @@ namespace picovm.Assembler
         /// This is essential for any look comparing against a variable
         /// </remarks>
         [Description("CMP_REGISTER")]
-        CMP_REGISTER = 66,
+        CMP_REGISTER,
 
         /// <summary>
         /// Compares a register value with an immediate
@@ -397,7 +415,7 @@ namespace picovm.Assembler
         /// Source: CMP EAX, 5
         /// </example>
         [Description("CMP_IMMEDIATE")]
-        CMP_IMMEDIATE = 67,
+        CMP_IMMEDIATE,
 
         /// <summary>
         /// Call to an address provided by a register value.
@@ -406,7 +424,7 @@ namespace picovm.Assembler
         /// Source: CALL EAX
         /// </example>
         [Description("CALL_REGISTER")]
-        CALL_REGISTER = 68,
+        CALL_REGISTER,
 
         /// <summary>
         /// Call to an address provided by a symbol or literal.
@@ -416,7 +434,7 @@ namespace picovm.Assembler
         /// Opcode: addr (1 + 4/8 bytes, based on machine address width)
         /// </example>
         [Description("CALL_IMMEDIATE")]
-        CALL_IMMEDIATE = 69,
+        CALL_IMMEDIATE,
 
         /// <summary>
         /// Returns by popping a return address into the instruction pointer.
@@ -425,6 +443,6 @@ namespace picovm.Assembler
         /// Source: RET
         /// </example>
         [Description("RET")]
-        RET = 70,
+        RET,
     }
 }

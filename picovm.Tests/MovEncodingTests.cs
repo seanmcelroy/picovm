@@ -126,7 +126,7 @@ namespace picovm.Tests
 
             byte[] expected =
             [
-                (byte)Bytecode.MOV_DIRECT,
+                (byte)Bytecode.MOV_DIRECT_IMMEDIATE,
                 .. BitConverter.GetBytes(address),      // 4-byte address
                 (byte)expectedImmediate.Length,          // explicit operand size
                 .. expectedImmediate,
@@ -150,7 +150,7 @@ namespace picovm.Tests
 
             byte[] expected =
             [
-                (byte)Bytecode.MOV_DIRECT,
+                (byte)Bytecode.MOV_DIRECT_IMMEDIATE,
                 .. BitConverter.GetBytes(address),      // 8-byte address
                 (byte)expectedImmediate.Length,
                 .. expectedImmediate,

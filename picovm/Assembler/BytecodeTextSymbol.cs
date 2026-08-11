@@ -1,10 +1,11 @@
 using System;
+using System.Numerics;
 
 namespace picovm.Assembler
 {
     public readonly struct BytecodeTextSymbol<TAddrSize>(string name, TAddrSize textSegmentInstructionOffset, TAddrSize textSegmentReferenceOffset, byte referenceLength)
         : IComparable<BytecodeTextSymbol<TAddrSize>>
-        where TAddrSize : struct, IComparable, IComparable<TAddrSize>, IConvertible, IEquatable<TAddrSize>, IFormattable 
+        where TAddrSize : struct, INumber<TAddrSize>
     {
         public string Name { get; } = name;
         // The offset for the beginning of the instruction.  Useful if we need to change the opcode

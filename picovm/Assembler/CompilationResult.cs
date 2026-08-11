@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Numerics;
 
 namespace picovm.Assembler
 {
@@ -25,7 +26,7 @@ namespace picovm.Assembler
             dataSegment,
             bssSymbols,
             errors), ICompilationResult
-        where TAddrSize : struct, IComparable, IComparable<TAddrSize>, IConvertible, IEquatable<TAddrSize>, IFormattable
+        where TAddrSize : struct, INumber<TAddrSize>
     {
         public readonly TAddrSize? EntryPoint = entryPoint;
         public readonly TAddrSize? TextSegmentBase = textSegmentBase;

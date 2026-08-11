@@ -184,7 +184,6 @@ namespace picovm.Tests
         /// Characterisation: convert these to behavioural assertions when the feature lands.
         /// </summary>
         [Theory]
-        [InlineData("MOV DWORD [counter], EAX")]
         [InlineData("MOV DWORD [counter], [EBX]")]
         public void UnimplementedSourceForms_Throw(string instruction) =>
             Assert.Throws<NotImplementedException>(() =>

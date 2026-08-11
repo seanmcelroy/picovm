@@ -1,10 +1,11 @@
 using System;
+using System.Numerics;
 
 namespace picovm.Assembler
 {
     public struct BytecodeDataSymbol<TAddrSize>(TAddrSize dataSegmentOffset, ushort length, bool constant)
         : IComparable<BytecodeDataSymbol<TAddrSize>>
-        where TAddrSize : struct, IComparable, IComparable<TAddrSize>, IConvertible, IEquatable<TAddrSize>, IFormattable 
+        where TAddrSize : struct, INumber<TAddrSize>
     {
         public TAddrSize DataSegmentOffset { readonly get; internal set; } = dataSegmentOffset;
         public ushort Length { get; } = length;

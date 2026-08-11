@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Numerics;
 
 namespace picovm.Assembler
 {
@@ -230,7 +231,7 @@ namespace picovm.Assembler
         }
 
         public static TAddrSize ResolveDataAllocationReference<TAddrSize>(string operandPart, Dictionary<string, BytecodeDataSymbol<TAddrSize>> symbolOffsets)
-            where TAddrSize : struct, IComparable, IComparable<TAddrSize>, IConvertible, IEquatable<TAddrSize>, IFormattable
+            where TAddrSize : struct, INumber<TAddrSize>
         {
             if (TryResolveDataAllocationReference(operandPart, symbolOffsets, out TAddrSize result))
                 return result;
@@ -239,7 +240,7 @@ namespace picovm.Assembler
         }
 
         public static bool TryResolveDataAllocationReference<TAddrSize>(string operandPart, Dictionary<string, BytecodeDataSymbol<TAddrSize>> symbolOffsets, out TAddrSize result)
-            where TAddrSize : struct, IComparable, IComparable<TAddrSize>, IConvertible, IEquatable<TAddrSize>, IFormattable
+            where TAddrSize : struct, INumber<TAddrSize>
         {
             var unboxAttempt = UnboxParsedOperand(operandPart);
             if (unboxAttempt is TAddrSize vt)
