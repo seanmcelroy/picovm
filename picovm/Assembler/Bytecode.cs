@@ -79,14 +79,106 @@ namespace picovm.Assembler
         [Description("POP_MEM")]
         POP_MEM = 16,
 
-        [Description("ADD_MEM_CON")]
-        ADD_MEM_CON = 21,
+        /// <summary>
+        /// This adds the value in the second register to the value in
+        /// the first, and stores the result back in the first. Both
+        /// operands are registers, only operating directly on the register contents.
+        /// </summary>
+        /// <example>
+        /// Source: ADD EAX, EBX
+        /// </example>
+        [Description("ADD_REGISTER")]
+        ADD_REGISTER = 19,
 
-        [Description("ADD_REG_CON")]
-        ADD_REG_CON = 22,
+        /// <summary>
+        /// This adds the value in the second operand (a memory location)
+        /// to the register noted in the first operand.
+        /// It adds them together, then writes the result
+        /// back to that register.
+        /// </summary>
+        /// <example>
+        /// Source: ADD EAX, [EBX]
+        /// </example>
+        [Description("ADD_INDIRECT_REGISTER")]
+        ADD_INDIRECT_REGISTER = 20,
 
-        [Description("AND_REG_CON")]
-        AND_REG_CON = 23,
+        /// <summary>
+        /// This adds the value in the second operand (a register)
+        /// to the memory location who address is stored in the first
+        /// operand.  It adds them together, then writes the result
+        /// back to that memory address.
+        /// </summary>
+        /// <example>
+        /// Source: ADD [EAX], EBX
+        /// </example>
+        [Description("ADD_INDIRECT_MEMORY_REGISTER")]
+        ADD_INDIRECT_MEMORY_REGISTER = 21,
+
+        /// <summary>
+        /// This adds the value in the second operand (a literal)
+        /// to the memory location who address is stored in the first
+        /// operand.  It adds them together, then writes the result
+        /// back to that memory address.
+        /// </summary>
+        /// <example>
+        /// Source: ADD [EAX], 2345
+        /// </example>
+        [Description("ADD_INDIRECT_MEMORY_IMMEDIATE")]
+        ADD_INDIRECT_MEMORY_IMMEDIATE = 22,
+
+        /// <summary>
+        /// This adds the literal value in the second operand to the value in
+        /// the first (a register), and stores the result back in the first.
+        /// </summary>
+        /// <example>
+        /// Source: ADD EAX, 2345
+        /// </example>
+        [Description("ADD_IMMEDIATE")]
+        ADD_IMMEDIATE = 23,
+
+        /// <summary>
+        /// Bitwise AND of two registers
+        /// </summary>
+        /// <example>
+        /// Source: AND EAX, EBX
+        /// </example>
+        /// <seealso cref="TEST_REGISTER"/>
+        [Description("AND_REGISTER")]
+        AND_REGISTER = 24,
+
+        /// <summary>
+        /// Bitwise AND of a register and an immediate
+        /// </summary>
+        /// <example>
+        /// Source: AND EAX, 0x4372
+        /// </example>
+        /// <seealso cref="TEST_IMMEDIATE"/>
+        [Description("AND_IMMEDIATE")]
+        AND_IMMEDIATE = 25,
+
+        /// <summary>
+        /// Bitwise AND of two registers,
+        /// but the result is not written back, only
+        /// logic status flags are updated
+        /// </summary>
+        /// <example>
+        /// Source: TEST EAX, EBX
+        /// </example>
+        /// <seealso cref="AND_REGISTER"/>
+        [Description("TEST_REGISTER")]
+        TEST_REGISTER = 26,
+
+        /// <summary>
+        /// Bitwise AND of a register and an immediate,
+        /// but the result is not written back, only
+        /// logic status flags are updated
+        /// </summary>
+        /// <example>
+        /// Source: TEST EAX, 0x4372
+        /// </example>
+        /// <seealso cref="AND_IMMEDIATE"/>
+        [Description("TEST_IMMEDIATE")]
+        TEST_IMMEDIATE = 27,
 
         /// <summary>
         /// Jump if zero (used after a CMP, ZF=1)

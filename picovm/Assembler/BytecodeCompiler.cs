@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Linq;
+using System.Net.Sockets;
 
 namespace picovm.Assembler
 {
@@ -304,109 +305,103 @@ namespace picovm.Assembler
                         switch (dataSymbol.Length)
                         {
                             case 2:
+                                switch (tsr.ReferenceLength)
                                 {
-                                    switch (tsr.ReferenceLength)
-                                    {
-                                        case 1:
-                                            throw new InvalidOperationException("Unable to inline constant size of 2 bytes into reserved text section of 1 byte");
-                                        case 2:
-                                            // 2 to 2, straight array copy.
-                                            ReadOnlySpan<byte> dataSpan = dataSegment.AsSpan(); // zero copy
-                                            int srcOffset = (int)Convert.ToInt64(dataSymbolAddress.Sub(dataSegmentBase));
-                                            int dstOffset;
+                                    case 1:
+                                        throw new InvalidOperationException("Unable to inline constant size of 2 bytes into reserved text section of 1 byte");
+                                    case 2:
+                                        // 2 to 2, straight array copy.
+                                        ReadOnlySpan<byte> dataSpan = dataSegment.AsSpan(); // zero copy
+                                        int srcOffset = (int)Convert.ToInt64(dataSymbolAddress.Sub(dataSegmentBase));
+                                        int dstOffset;
 
+                                        if (typeof(TAddrSize) == typeof(UInt32))
+                                            dstOffset = (int)(UInt32)(ValueType)tsr.TextSegmentReferenceOffset;
+                                        else
+                                            dstOffset = (int)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset;
+
+                                        dataSpan.Slice(srcOffset, 2).CopyTo(textSegment.AsSpan(dstOffset, 2));
+
+                                        for (var i = 0; i < 2; i++)
+                                        {
                                             if (typeof(TAddrSize) == typeof(UInt32))
-                                                dstOffset = (int)(UInt32)(ValueType)tsr.TextSegmentReferenceOffset;
+                                            {
+                                                if (textSegment[Convert.ToInt64(ValueTypeUtility.Add(tsr.TextSegmentReferenceOffset, i))] != 0xEE)
+                                                    throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
+                                            }
                                             else
-                                                dstOffset = (int)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset;
-
-                                            dataSpan.Slice(srcOffset, 2).CopyTo(textSegment.AsSpan(dstOffset, 2));
-
-                                            for (var i = 0; i < 2; i++)
                                             {
-                                                if (typeof(TAddrSize) == typeof(UInt32))
-                                                {
-                                                    if (textSegment[Convert.ToInt64(ValueTypeUtility.Add(tsr.TextSegmentReferenceOffset, i))] != 0xEE)
-                                                        throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
-                                                }
-                                                else
-                                                {
-                                                    if (textSegment[Convert.ToInt64(ValueTypeUtility.Add(tsr.TextSegmentReferenceOffset, i))] != 0xEE)
-                                                        throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
+                                                if (textSegment[Convert.ToInt64(ValueTypeUtility.Add(tsr.TextSegmentReferenceOffset, i))] != 0xEE)
+                                                    throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
 
-                                                }
                                             }
-                                            break;
-                                        case 4:
-                                            // 2 to 4 upsize
-                                            var dataSymbolValue = BinaryPrimitives.ReadUInt16LittleEndian(dataSegment.AsSpan(Convert.ToInt32(dataSymbolAddress.Sub(dataSegmentBase)), 2));
-                                            var tsrValue = Convert.ToUInt32(dataSymbolValue);
-                                            // Validate we're overwriting the right place
-                                            for (var i = 0; i < 4; i++)
-                                            {
-                                                if (typeof(TAddrSize) == typeof(UInt32))
-                                                {
-                                                    if (textSegment[Convert.ToInt64(ValueTypeUtility.Add(tsr.TextSegmentReferenceOffset, i))] != 0xEE)
-                                                        throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
-                                                }
-                                                else
-                                                {
-                                                    if (textSegment[Convert.ToInt64(ValueTypeUtility.Add(tsr.TextSegmentReferenceOffset, i))] != 0xEE)
-                                                        throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
-                                                }
-                                            }
+                                        }
+                                        break;
+                                    case 4:
+                                        // 2 to 4 upsize
+                                        var dataSymbolValue = BinaryPrimitives.ReadUInt16LittleEndian(dataSegment.AsSpan(Convert.ToInt32(dataSymbolAddress.Sub(dataSegmentBase)), 2));
+                                        var tsrValue = Convert.ToUInt32(dataSymbolValue);
+                                        // Validate we're overwriting the right place
+                                        for (var i = 0; i < 4; i++)
+                                        {
                                             if (typeof(TAddrSize) == typeof(UInt32))
-                                                BinaryPrimitives.WriteUInt32LittleEndian(textSegment.AsSpan((int)(UInt32)(ValueType)tsr.TextSegmentReferenceOffset, 4), tsrValue);
+                                            {
+                                                if (textSegment[Convert.ToInt64(ValueTypeUtility.Add(tsr.TextSegmentReferenceOffset, i))] != 0xEE)
+                                                    throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
+                                            }
                                             else
-                                                BinaryPrimitives.WriteUInt32LittleEndian(textSegment.AsSpan((int)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset, 4), tsrValue);
+                                            {
+                                                if (textSegment[Convert.ToInt64(ValueTypeUtility.Add(tsr.TextSegmentReferenceOffset, i))] != 0xEE)
+                                                    throw new InvalidOperationException($"Attempted to overwrite placeholder for {tsr.Name} which did not contain placeholder values!");
+                                            }
+                                        }
+                                        if (typeof(TAddrSize) == typeof(UInt32))
+                                            BinaryPrimitives.WriteUInt32LittleEndian(textSegment.AsSpan((int)(UInt32)(ValueType)tsr.TextSegmentReferenceOffset, 4), tsrValue);
+                                        else
+                                            BinaryPrimitives.WriteUInt32LittleEndian(textSegment.AsSpan((int)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset, 4), tsrValue);
 
-                                            break;
-                                        default:
-                                            throw new NotImplementedException();
-                                    }
-                                    break;
+                                        break;
+                                    default:
+                                        throw new NotImplementedException();
                                 }
+                                break;
                             case 4:
+                                switch (tsr.ReferenceLength)
                                 {
-                                    switch (tsr.ReferenceLength)
-                                    {
-                                        case 1:
-                                        case 2:
-                                            throw new InvalidOperationException($"Unable to inline constant size of 4 bytes into reserved text section of {tsr.ReferenceLength} bytes");
-                                        case 4:
-                                            // 4 to 4, straight array copy.
-                                            var srcOffset = Convert.ToInt32(dataSymbolAddress.Sub(dataSegmentBase));
-                                            var dstOffset = typeof(TAddrSize) == typeof(UInt32)
-                                                ? (int)(UInt32)(ValueType)tsr.TextSegmentReferenceOffset
-                                                : (int)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset;
-                                            dataSegment.AsSpan(srcOffset, 4).CopyTo(textSegment.AsSpan(dstOffset, 4));
-                                            break;
-                                        default:
-                                            throw new NotImplementedException();
-                                    }
-                                    break;
+                                    case 1:
+                                    case 2:
+                                        throw new InvalidOperationException($"Unable to inline constant size of 4 bytes into reserved text section of {tsr.ReferenceLength} bytes");
+                                    case 4:
+                                        // 4 to 4, straight array copy.
+                                        var srcOffset = Convert.ToInt32(dataSymbolAddress.Sub(dataSegmentBase));
+                                        var dstOffset = typeof(TAddrSize) == typeof(UInt32)
+                                            ? (int)(UInt32)(ValueType)tsr.TextSegmentReferenceOffset
+                                            : (int)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset;
+                                        dataSegment.AsSpan(srcOffset, 4).CopyTo(textSegment.AsSpan(dstOffset, 4));
+                                        break;
+                                    default:
+                                        throw new NotImplementedException();
                                 }
+                                break;
                             case 8:
+                                switch (tsr.ReferenceLength)
                                 {
-                                    switch (tsr.ReferenceLength)
-                                    {
-                                        case 1:
-                                        case 2:
-                                        case 4:
-                                            throw new InvalidOperationException($"Unable to inline constant size of 8 bytes into reserved text section of {tsr.ReferenceLength} bytes");
-                                        case 8:
-                                            // 8 to 8, straight array copy.
-                                            var srcOffset = Convert.ToInt32(dataSymbolAddress.Sub(dataSegmentBase));
-                                            var dstOffset = typeof(TAddrSize) == typeof(UInt32)
-                                                ? (int)(UInt32)(ValueType)tsr.TextSegmentReferenceOffset
-                                                : (int)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset;
-                                            dataSegment.AsSpan(srcOffset, 8).CopyTo(textSegment.AsSpan(dstOffset, 8));
-                                            break;
-                                        default:
-                                            throw new NotImplementedException();
-                                    }
-                                    break;
+                                    case 1:
+                                    case 2:
+                                    case 4:
+                                        throw new InvalidOperationException($"Unable to inline constant size of 8 bytes into reserved text section of {tsr.ReferenceLength} bytes");
+                                    case 8:
+                                        // 8 to 8, straight array copy.
+                                        var srcOffset = Convert.ToInt32(dataSymbolAddress.Sub(dataSegmentBase));
+                                        var dstOffset = typeof(TAddrSize) == typeof(UInt32)
+                                            ? (int)(UInt32)(ValueType)tsr.TextSegmentReferenceOffset
+                                            : (int)(UInt64)(ValueType)tsr.TextSegmentReferenceOffset;
+                                        dataSegment.AsSpan(srcOffset, 8).CopyTo(textSegment.AsSpan(dstOffset, 8));
+                                        break;
+                                    default:
+                                        throw new NotImplementedException();
                                 }
+                                break;
                             default:
                                 throw new NotImplementedException($"Cannot handle symbol of length: {dataSymbol.Length}");
                         }
@@ -514,14 +509,15 @@ namespace picovm.Assembler
                 var line = programLine.Split(';')[0].TrimEnd();
 
                 // Fix any missing whitespace between type operators and brackets.
-                line = line.Replace("BYTE[", "BYTE [", StringComparison.InvariantCultureIgnoreCase)
-                            .Replace("BYTE PTR[", "BYTE PTR [", StringComparison.InvariantCultureIgnoreCase)
-                            .Replace("WORD[", "WORD [", StringComparison.InvariantCultureIgnoreCase)
-                            .Replace("WORD PTR[", "WORD PTR [", StringComparison.InvariantCultureIgnoreCase)
-                            .Replace("DWORD[", "DWORD [", StringComparison.InvariantCultureIgnoreCase)
-                            .Replace("DWORD PTR[", "DWORD PTR [", StringComparison.InvariantCultureIgnoreCase)
-                            .Replace("QWORD[", "QWORD [", StringComparison.InvariantCultureIgnoreCase)
-                            .Replace("QWORD PTR[", "QWORD PTR [", StringComparison.InvariantCultureIgnoreCase);
+                line = line
+                    .Replace("BYTE[", "BYTE [", StringComparison.InvariantCultureIgnoreCase)
+                    .Replace("BYTE PTR[", "BYTE PTR [", StringComparison.InvariantCultureIgnoreCase)
+                    .Replace("WORD[", "WORD [", StringComparison.InvariantCultureIgnoreCase)
+                    .Replace("WORD PTR[", "WORD PTR [", StringComparison.InvariantCultureIgnoreCase)
+                    .Replace("DWORD[", "DWORD [", StringComparison.InvariantCultureIgnoreCase)
+                    .Replace("DWORD PTR[", "DWORD PTR [", StringComparison.InvariantCultureIgnoreCase)
+                    .Replace("QWORD[", "QWORD [", StringComparison.InvariantCultureIgnoreCase)
+                    .Replace("QWORD PTR[", "QWORD PTR [", StringComparison.InvariantCultureIgnoreCase);
 
                 var lineParts = line.TrimStart(' ', '\t').Split(new char[] { ' ', '\t', ',' }, StringSplitOptions.RemoveEmptyEntries).ToList();
 
@@ -614,196 +610,188 @@ namespace picovm.Assembler
                     switch (dstType)
                     {
                         case ParameterType.RegisterReference:
+                            switch (srcType)
                             {
-                                switch (srcType)
-                                {
-                                    case ParameterType.RegisterReference: // MOV EAX, EBX
+                                case ParameterType.RegisterReference: // MOV EAX, EBX
+                                    {
+                                        bytecode.Add((byte)Bytecode.MOV_REGISTER);
+                                        offsetBytes = offsetBytes.Add(1);
+
+                                        bytecode.Add((byte)registers[dst]);
+                                        offsetBytes = offsetBytes.Add(1);
+                                        bytecode.Add((byte)registers[src]);
+                                        offsetBytes = offsetBytes.Add(1);
+                                        continue;
+                                    }
+                                case ParameterType.RegisterIndirect: // MOV EAX, [EBX]
+                                    {
+                                        bytecode.Add((byte)Bytecode.MOV_INDIRECT_LOAD);
+                                        offsetBytes = offsetBytes.Add(1);
+
+                                        bytecode.Add((byte)registers[dst]);
+                                        offsetBytes = offsetBytes.Add(1);
+                                        bytecode.Add((byte)registers[src.TrimStart('[').TrimEnd(']')]);
+                                        offsetBytes = offsetBytes.Add(1);
+                                        continue;
+                                    }
+                                case ParameterType.VariableAddress: // MOV ECX, msg
+                                    {
+                                        TAddrSize instructionOffset = offsetBytes;
+                                        bytecode.Add((byte)Bytecode.MOV_IMMEDIATE);
+                                        offsetBytes = offsetBytes.Add(1);
+
+                                        var regDst = registers[dst.ToUpperInvariant()];
+                                        bytecode.Add((byte)regDst);
+                                        offsetBytes = offsetBytes.Add(1);
+
+                                        BytecodeTextSymbol<TAddrSize> textSymbol = new(
+                                                src,
+                                                instructionOffset,
+                                                offsetBytes,
+                                            (typeHintSize == 8 || (!typeHintSize.HasValue && regDst.Size() == 8)) ? (byte)8 :
+                                            ((typeHintSize == 4 || (!typeHintSize.HasValue && regDst.Size() == 4)) ? (byte)4 :
+                                            ((typeHintSize == 2 || (!typeHintSize.HasValue && regDst.Size() == 2)) ? (byte)2 :
+                                            ((typeHintSize == 1 || (!typeHintSize.HasValue && regDst.Size() == 1)) ? (byte)1 : (byte)0)))
+                                        );
+
+                                        if (textSymbol.ReferenceLength == 0)
+                                            throw new InvalidOperationException($"Unable to determine register length: {regDst}");
+
+                                        for (var i = 0; i < textSymbol.ReferenceLength; i++)
+                                            bytecode.Add(0xEE); // UNRESOLVED SYMBOL FOR VARIABLE
+
+                                        symbolReferenceOffsets.Add(textSymbol);
+                                        offsetBytes = offsetBytes.Add(textSymbol.ReferenceLength);
+                                        continue;
+                                    }
+                                case ParameterType.Constant: // MOV AX 3
+                                    {
+                                        var dstReg = registers[dst.ToUpperInvariant()];
+
+                                        // A hint that disagrees with the destination register would size the
+                                        // immediate one way while the VM, which infers the width from the
+                                        // register alone, reads it another -- silently desynchronising the
+                                        // instruction stream from that point on.  There is no sensible
+                                        // interpretation of the mismatch, so reject it.
+                                        if (typeHintSize.HasValue && typeHintSize.Value != dstReg.Size())
+                                            throw new InvalidOperationException($"ERROR: MOV operand size hint of {typeHintSize.Value} byte(s) disagrees with destination register {dstReg} of {dstReg.Size()} byte(s): {line}");
+
+                                        bytecode.Add((byte)Bytecode.MOV_IMMEDIATE);
+                                        offsetBytes = offsetBytes.Add(1);
+
+                                        bytecode.Add((byte)dstReg);
+                                        offsetBytes = offsetBytes.Add(1);
+
+                                        if (typeHintSize == 8 || (!typeHintSize.HasValue && dstReg.Size() == 8))
                                         {
-                                            bytecode.Add((byte)Bytecode.MOV_REGISTER);
-                                            offsetBytes = offsetBytes.Add(1);
-
-                                            bytecode.Add((byte)registers[dst]);
-                                            offsetBytes = offsetBytes.Add(1);
-                                            bytecode.Add((byte)registers[src]);
-                                            offsetBytes = offsetBytes.Add(1);
-                                            continue;
+                                            BinaryPrimitives.WriteUInt64LittleEndian(buf, src.ParseUInt64Constant());
+                                            bytecode.AddRange(buf[..8]);
+                                            offsetBytes = offsetBytes.Add(8);
                                         }
-                                    case ParameterType.RegisterIndirect: // MOV EAX, [EBX]
+                                        else if (typeHintSize == 4 || (!typeHintSize.HasValue && dstReg.Size() == 4))
                                         {
-                                            bytecode.Add((byte)Bytecode.MOV_INDIRECT_LOAD);
-                                            offsetBytes = offsetBytes.Add(1);
-
-                                            bytecode.Add((byte)registers[dst]);
-                                            offsetBytes = offsetBytes.Add(1);
-                                            bytecode.Add((byte)registers[src.TrimStart('[').TrimEnd(']')]);
-                                            offsetBytes = offsetBytes.Add(1);
-                                            continue;
+                                            BinaryPrimitives.WriteUInt32LittleEndian(buf, src.ParseUInt32Constant());
+                                            bytecode.AddRange(buf[..4]);
+                                            offsetBytes = offsetBytes.Add(4);
                                         }
-                                    case ParameterType.VariableAddress: // MOV ECX, msg
+                                        else if (typeHintSize == 2 || (!typeHintSize.HasValue && dstReg.Size() == 2))
                                         {
-                                            TAddrSize instructionOffset = offsetBytes;
-                                            bytecode.Add((byte)Bytecode.MOV_IMMEDIATE);
-                                            offsetBytes = offsetBytes.Add(1);
-
-                                            var regDst = registers[dst.ToUpperInvariant()];
-                                            bytecode.Add((byte)regDst);
-                                            offsetBytes = offsetBytes.Add(1);
-
-                                            BytecodeTextSymbol<TAddrSize> textSymbol = new(
-                                                    src,
-                                                    instructionOffset,
-                                                    offsetBytes,
-                                                (typeHintSize == 8 || (!typeHintSize.HasValue && regDst.Size() == 8)) ? (byte)8 :
-                                                ((typeHintSize == 4 || (!typeHintSize.HasValue && regDst.Size() == 4)) ? (byte)4 :
-                                                ((typeHintSize == 2 || (!typeHintSize.HasValue && regDst.Size() == 2)) ? (byte)2 :
-                                                ((typeHintSize == 1 || (!typeHintSize.HasValue && regDst.Size() == 1)) ? (byte)1 : (byte)0)))
-                                            );
-
-                                            if (textSymbol.ReferenceLength == 0)
-                                                throw new InvalidOperationException($"Unable to determine register length: {regDst}");
-
-                                            for (var i = 0; i < textSymbol.ReferenceLength; i++)
-                                                bytecode.Add(0xEE); // UNRESOLVED SYMBOL FOR VARIABLE
-
-                                            symbolReferenceOffsets.Add(textSymbol);
-                                            offsetBytes = offsetBytes.Add(textSymbol.ReferenceLength);
-                                            continue;
+                                            BinaryPrimitives.WriteUInt16LittleEndian(buf, src.ParseUInt16Constant());
+                                            bytecode.AddRange(buf[..2]);
+                                            offsetBytes = offsetBytes.Add(2);
                                         }
-                                    case ParameterType.Constant: // MOV AX 3
+                                        else if (typeHintSize == 1 || (!typeHintSize.HasValue && dstReg.Size() == 1))
                                         {
-                                            var dstReg = registers[dst.ToUpperInvariant()];
-
-                                            // A hint that disagrees with the destination register would size the
-                                            // immediate one way while the VM, which infers the width from the
-                                            // register alone, reads it another -- silently desynchronising the
-                                            // instruction stream from that point on.  There is no sensible
-                                            // interpretation of the mismatch, so reject it.
-                                            if (typeHintSize.HasValue && typeHintSize.Value != dstReg.Size())
-                                                throw new InvalidOperationException($"ERROR: MOV operand size hint of {typeHintSize.Value} byte(s) disagrees with destination register {dstReg} of {dstReg.Size()} byte(s): {line}");
-
-                                            bytecode.Add((byte)Bytecode.MOV_IMMEDIATE);
+                                            bytecode.Add(src.ParseByteConstant());
                                             offsetBytes = offsetBytes.Add(1);
-
-                                            bytecode.Add((byte)dstReg);
-                                            offsetBytes = offsetBytes.Add(1);
-
-                                            if (typeHintSize == 8 || (!typeHintSize.HasValue && dstReg.Size() == 8))
-                                            {
-                                                BinaryPrimitives.WriteUInt64LittleEndian(buf, src.ParseUInt64Constant());
-                                                bytecode.AddRange(buf[..8]);
-                                                offsetBytes = offsetBytes.Add(8);
-                                            }
-                                            else if (typeHintSize == 4 || (!typeHintSize.HasValue && dstReg.Size() == 4))
-                                            {
-                                                BinaryPrimitives.WriteUInt32LittleEndian(buf, src.ParseUInt32Constant());
-                                                bytecode.AddRange(buf[..4]);
-                                                offsetBytes = offsetBytes.Add(4);
-                                            }
-                                            else if (typeHintSize == 2 || (!typeHintSize.HasValue && dstReg.Size() == 2))
-                                            {
-                                                BinaryPrimitives.WriteUInt16LittleEndian(buf, src.ParseUInt16Constant());
-                                                bytecode.AddRange(buf[..2]);
-                                                offsetBytes = offsetBytes.Add(2);
-                                            }
-                                            else if (typeHintSize == 1 || (!typeHintSize.HasValue && dstReg.Size() == 1))
-                                            {
-                                                bytecode.Add(src.ParseByteConstant());
-                                                offsetBytes = offsetBytes.Add(1);
-                                            }
-                                            else
-                                                throw new InvalidOperationException($"Unable to determin destination register type: {dstReg}");
-
-                                            continue;
                                         }
-                                    default:
-                                        throw new Exception($"ERROR: Unable to parse MOV parameters into an opcode, unhandled src type: {line}");
-                                }
+                                        else
+                                            throw new InvalidOperationException($"Unable to determin destination register type: {dstReg}");
+
+                                        continue;
+                                    }
+                                default:
+                                    throw new Exception($"ERROR: Unable to parse MOV parameters into an opcode, unhandled src type: {line}");
                             }
                         case ParameterType.RegisterIndirect:
+                            switch (srcType)
                             {
-                                switch (srcType)
-                                {
-                                    case ParameterType.RegisterReference: // MOV [EBX], EAX
-                                        {
-                                            bytecode.Add((byte)Bytecode.MOV_INDIRECT_STORE);
-                                            offsetBytes = offsetBytes.Add(1);
+                                case ParameterType.RegisterReference: // MOV [EBX], EAX
+                                    bytecode.Add((byte)Bytecode.MOV_INDIRECT_STORE);
+                                    offsetBytes = offsetBytes.Add(1);
 
-                                            bytecode.Add((byte)registers[dst.TrimStart('[').TrimEnd(']')]);
-                                            offsetBytes = offsetBytes.Add(1);
-                                            bytecode.Add((byte)registers[src]);
-                                            offsetBytes = offsetBytes.Add(1);
-                                            continue;
-                                        }
-                                    default:
-                                        throw new Exception($"ERROR: Unable to parse MOV parameters into an opcode, unhandled src type: {line}");
-                                }
+                                    bytecode.Add((byte)registers[dst.TrimStart('[').TrimEnd(']')]);
+                                    offsetBytes = offsetBytes.Add(1);
+                                    bytecode.Add((byte)registers[src]);
+                                    offsetBytes = offsetBytes.Add(1);
+                                    continue;
+                                default:
+                                    throw new Exception($"ERROR: Unable to parse MOV parameters into an opcode, unhandled src type: {line}");
                             }
                         case ParameterType.VariableDirect:
+                            switch (srcType)
                             {
-                                switch (srcType)
-                                {
-                                    case ParameterType.Constant: // MOV [symbol], const
+                                case ParameterType.Constant: // MOV [symbol], const
+                                    {
+                                        bytecode.Add((byte)Bytecode.MOV_DIRECT);
+                                        offsetBytes = offsetBytes.Add(1);
+
+                                        // TODO: HOW BIG?
+                                        if (typeHintSize == null)
+                                            throw new InvalidOperationException("I can't handle unhinted variable loads yet.  I should scan DS!");
+
+                                        // A 32-bit agent rejects an 8-byte store when it decodes the size
+                                        // byte.  Catching it here turns a runtime crash into a compile error
+                                        // that names the offending line.
+                                        if (typeHintSize.Value > addressSize)
+                                            throw new InvalidOperationException($"ERROR: MOV operand size of {typeHintSize.Value} bytes exceeds the {addressSize}-byte machine width: {line}");
+
+                                        symbolReferenceOffsets.Add(
+                                            new BytecodeTextSymbol<TAddrSize>
+                                            (
+                                                 dst[1..^1], // Strip brackets
+                                                 offsetBytes.Sub(1),
+                                                 offsetBytes,
+                                                 addressSize
+                                            ));
+
+                                        for (var i = 0; i < addressSize; i++)
+                                            bytecode.Add(0xEE); // UNRESOLVED SYMBOL FOR VARIABLE
+                                        offsetBytes = offsetBytes.Add(addressSize);
+
+                                        // Operand size, specified explicitly
+                                        bytecode.Add(typeHintSize.Value);
+                                        offsetBytes = offsetBytes.Add(1);
+
+                                        var variableSize = typeHintSize.Value;
+                                        switch (variableSize)
                                         {
-                                            bytecode.Add((byte)Bytecode.MOV_DIRECT);
-                                            offsetBytes = offsetBytes.Add(1);
-
-                                            // TODO: HOW BIG?
-                                            if (typeHintSize == null)
-                                                throw new InvalidOperationException("I can't handle unhinted variable loads yet.  I should scan DS!");
-
-                                            // A 32-bit agent rejects an 8-byte store when it decodes the size
-                                            // byte.  Catching it here turns a runtime crash into a compile error
-                                            // that names the offending line.
-                                            if (typeHintSize.Value > addressSize)
-                                                throw new InvalidOperationException($"ERROR: MOV operand size of {typeHintSize.Value} bytes exceeds the {addressSize}-byte machine width: {line}");
-
-                                            symbolReferenceOffsets.Add(
-                                                new BytecodeTextSymbol<TAddrSize>
-                                                (
-                                                     dst[1..^1], // Strip brackets
-                                                     offsetBytes.Sub(1),
-                                                     offsetBytes,
-                                                     addressSize
-                                                ));
-
-                                            for (var i = 0; i < addressSize; i++)
-                                                bytecode.Add(0xEE); // UNRESOLVED SYMBOL FOR VARIABLE
-                                            offsetBytes = offsetBytes.Add(addressSize);
-
-                                            // Operand size, specified explicitly
-                                            bytecode.Add(typeHintSize.Value);
-                                            offsetBytes = offsetBytes.Add(1);
-
-                                            var variableSize = typeHintSize.Value;
-                                            switch (variableSize)
-                                            {
-                                                case 8:
-                                                    BinaryPrimitives.WriteUInt64LittleEndian(buf, src.ParseUInt64Constant());
-                                                    bytecode.AddRange(buf[..8]);
-                                                    break;
-                                                case 4:
-                                                    BinaryPrimitives.WriteUInt32LittleEndian(buf, src.ParseUInt32Constant());
-                                                    bytecode.AddRange(buf[..4]);
-                                                    break;
-                                                case 2:
-                                                    BinaryPrimitives.WriteUInt16LittleEndian(buf, src.ParseUInt16Constant());
-                                                    bytecode.AddRange(buf[..2]);
-                                                    break;
-                                                case 1:
-                                                    bytecode.Add(src.ParseByteConstant());
-                                                    break;
-                                                default:
-                                                    throw new InvalidOperationException();
-                                            }
-                                            offsetBytes = offsetBytes.Add(variableSize);
-                                            continue;
+                                            case 8:
+                                                BinaryPrimitives.WriteUInt64LittleEndian(buf, src.ParseUInt64Constant());
+                                                bytecode.AddRange(buf[..8]);
+                                                break;
+                                            case 4:
+                                                BinaryPrimitives.WriteUInt32LittleEndian(buf, src.ParseUInt32Constant());
+                                                bytecode.AddRange(buf[..4]);
+                                                break;
+                                            case 2:
+                                                BinaryPrimitives.WriteUInt16LittleEndian(buf, src.ParseUInt16Constant());
+                                                bytecode.AddRange(buf[..2]);
+                                                break;
+                                            case 1:
+                                                bytecode.Add(src.ParseByteConstant());
+                                                break;
+                                            default:
+                                                throw new InvalidOperationException();
                                         }
-                                    default:
-                                        throw new NotImplementedException();
-                                }
-
-                                throw new NotImplementedException();
+                                        offsetBytes = offsetBytes.Add(variableSize);
+                                        continue;
+                                    }
+                                default:
+                                    throw new NotImplementedException();
                             }
+
+                            throw new NotImplementedException();
                         default:
                             throw new Exception($"ERROR: Unable to parse MOV parameters into an opcode, unhandled dst type: {line}");
                     }
@@ -886,25 +874,23 @@ namespace picovm.Assembler
                                 continue;
                             }
                         case ParameterType.Constant: // CALL 0x2344
-                            {
-                                bytecode.Add((byte)Bytecode.CALL_IMMEDIATE);
-                                offsetBytes = offsetBytes.Add(1);
+                            bytecode.Add((byte)Bytecode.CALL_IMMEDIATE);
+                            offsetBytes = offsetBytes.Add(1);
 
-                                switch (addressSize)
-                                {
-                                    case 8:
-                                        BinaryPrimitives.WriteUInt64LittleEndian(buf, loc.ParseUInt64Constant());
-                                        bytecode.AddRange(buf[..8]);
-                                        offsetBytes = offsetBytes.Add(8);
-                                        continue;
-                                    case 4:
-                                        BinaryPrimitives.WriteUInt32LittleEndian(buf, loc.ParseUInt32Constant());
-                                        bytecode.AddRange(buf[..4]);
-                                        offsetBytes = offsetBytes.Add(4);
-                                        continue;
-                                    default:
-                                        throw new InvalidOperationException($"Unsupported address size {addressSize}, expected 4 or 8.");
-                                }
+                            switch (addressSize)
+                            {
+                                case 8:
+                                    BinaryPrimitives.WriteUInt64LittleEndian(buf, loc.ParseUInt64Constant());
+                                    bytecode.AddRange(buf[..8]);
+                                    offsetBytes = offsetBytes.Add(8);
+                                    continue;
+                                case 4:
+                                    BinaryPrimitives.WriteUInt32LittleEndian(buf, loc.ParseUInt32Constant());
+                                    bytecode.AddRange(buf[..4]);
+                                    offsetBytes = offsetBytes.Add(4);
+                                    continue;
+                                default:
+                                    throw new InvalidOperationException($"Unsupported address size {addressSize}, expected 4 or 8.");
                             }
                         default:
                             throw new Exception($"ERROR: Unable to parse CALL parameters into an opcode, unhandled location type: {line}");
@@ -968,6 +954,12 @@ namespace picovm.Assembler
                 else if (string.Compare("AND", instruction, StringComparison.InvariantCulture) == 0)
                 {
                     var written = And(buf, typeHintSize, lineParts[^2], lineParts[^1]);
+                    bytecode.AddRange(buf[..written]);
+                    offsetBytes = offsetBytes.Add(written);
+                }
+                else if (string.Compare("TEST", instruction, StringComparison.InvariantCulture) == 0)
+                {
+                    var written = Test(buf, typeHintSize, lineParts[^2], lineParts[^1]);
                     bytecode.AddRange(buf[..written]);
                     offsetBytes = offsetBytes.Add(written);
                 }
@@ -1358,56 +1350,102 @@ namespace picovm.Assembler
                         var o1Reg = registers[operand1.ToUpperInvariant()];
                         switch (o2Type)
                         {
-                            case ParameterType.Constant:
+                            case ParameterType.RegisterReference: // ADD EAX, EBX
                                 {
-                                    if (typeHintSize == 8 || (!typeHintSize.HasValue && o1Reg.Size() == 8))
-                                    {
-                                        dest[0] = (byte)Bytecode.ADD_REG_CON;
-                                        dest[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                        BinaryPrimitives.WriteUInt64LittleEndian(dest[2..], operand2.ParseUInt64Constant());
-                                        return 10;
-                                    }
-                                    else if (typeHintSize == 4 || (!typeHintSize.HasValue && o1Reg.Size() == 4))
-                                    {
-                                        dest[0] = (byte)Bytecode.ADD_REG_CON;
-                                        dest[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                        BinaryPrimitives.WriteUInt32LittleEndian(dest[2..], operand2.ParseUInt32Constant());
-                                        return 6;
-                                    }
-                                    else if (typeHintSize == 2 || (!typeHintSize.HasValue && o1Reg.Size() == 2))
-                                    {
-                                        dest[0] = (byte)Bytecode.ADD_REG_CON;
-                                        dest[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                        BinaryPrimitives.WriteUInt16LittleEndian(dest[2..], operand2.ParseUInt16Constant());
-                                        return 4;
-                                    }
-                                    else if (typeHintSize == 1 || (!typeHintSize.HasValue && o1Reg.Size() == 1))
-                                    {
-                                        dest[0] = (byte)Bytecode.ADD_REG_CON;
-                                        dest[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                        dest[2] = operand2.ParseByteConstant();
-                                        return 3;
-                                    }
-
-                                    throw new NotImplementedException();
+                                    var o2Reg = registers[operand2.ToUpperInvariant()];
+                                    if (o1Reg.Size() != o2Reg.Size())
+                                        throw new Exception($"ERROR: Source operand {o2Reg} is not the same size as the destination operand {o1Reg}");
+                                    dest[0] = (byte)Bytecode.ADD_REGISTER;
+                                    dest[1] = (byte)o1Reg;
+                                    dest[2] = (byte)o2Reg;
+                                    return 3;
                                 }
+                            case ParameterType.Constant: // ADD EAX, 2344
+                                if (typeHintSize == 8 || (!typeHintSize.HasValue && o1Reg.Size() == 8))
+                                {
+                                    dest[0] = (byte)Bytecode.ADD_IMMEDIATE;
+                                    dest[1] = (byte)o1Reg;
+                                    BinaryPrimitives.WriteUInt64LittleEndian(dest[2..], operand2.ParseUInt64Constant());
+                                    return 10;
+                                }
+                                else if (typeHintSize == 4 || (!typeHintSize.HasValue && o1Reg.Size() == 4))
+                                {
+                                    dest[0] = (byte)Bytecode.ADD_IMMEDIATE;
+                                    dest[1] = (byte)o1Reg;
+                                    BinaryPrimitives.WriteUInt32LittleEndian(dest[2..], operand2.ParseUInt32Constant());
+                                    return 6;
+                                }
+                                else if (typeHintSize == 2 || (!typeHintSize.HasValue && o1Reg.Size() == 2))
+                                {
+                                    dest[0] = (byte)Bytecode.ADD_IMMEDIATE;
+                                    dest[1] = (byte)o1Reg;
+                                    BinaryPrimitives.WriteUInt16LittleEndian(dest[2..], operand2.ParseUInt16Constant());
+                                    return 4;
+                                }
+                                else if (typeHintSize == 1 || (!typeHintSize.HasValue && o1Reg.Size() == 1))
+                                {
+                                    dest[0] = (byte)Bytecode.ADD_IMMEDIATE;
+                                    dest[1] = (byte)o1Reg;
+                                    dest[2] = operand2.ParseByteConstant();
+                                    return 3;
+                                }
+
+                                throw new NotImplementedException();
+                            case ParameterType.RegisterIndirect: // ADD EAX, [EBX]
+                                {
+                                    var o2Reg = registers[operand2.TrimStart('[').TrimEnd(']').ToUpperInvariant()];
+                                    dest[0] = (byte)Bytecode.ADD_INDIRECT_REGISTER;
+                                    dest[1] = (byte)o1Reg;
+                                    dest[2] = (byte)o2Reg;
+                                    return 3;
+                                }
+
+                            default:
+                                throw new NotImplementedException($"Unable to handle operand2 type {o2Type}");
                         }
                     }
-                    break;
                 case ParameterType.RegisterIndirect:
                     {
                         switch (o2Type)
                         {
-                            case ParameterType.Constant:
+                            case ParameterType.RegisterReference: // ADD [EBX], EBX
                                 {
-                                    dest[0] = (byte)Bytecode.ADD_MEM_CON;
-                                    dest[1] = (byte)registers[operand1.TrimStart('[').TrimEnd(']').ToUpperInvariant()];
-                                    BinaryPrimitives.WriteUInt32LittleEndian(dest[2..], operand2.ParseUInt32Constant());
-                                    return 6;
+                                    var o1Reg = registers[operand1.TrimStart('[').TrimEnd(']').ToUpperInvariant()];
+                                    var o2Reg = registers[operand2.ToUpperInvariant()];
+                                    dest[0] = (byte)Bytecode.ADD_INDIRECT_MEMORY_REGISTER;
+                                    dest[1] = (byte)o1Reg;
+                                    dest[2] = (byte)o2Reg;
+                                    return 3;
                                 }
+                            case ParameterType.Constant: // ADD [EBX], 2423
+                                {
+                                    var o1Reg = registers[operand1.TrimStart('[').TrimEnd(']').ToUpperInvariant()];
+                                    dest[0] = (byte)Bytecode.ADD_INDIRECT_MEMORY_IMMEDIATE;
+                                    dest[1] = (byte)o1Reg;
+                                    var o1RegSize = o1Reg.Size();
+                                    switch (o1RegSize)
+                                    {
+                                        case 8:
+                                            BinaryPrimitives.WriteUInt64LittleEndian(dest[2..], operand2.ParseUInt64Constant());
+                                            break;
+                                        case 4:
+                                            BinaryPrimitives.WriteUInt32LittleEndian(dest[2..], operand2.ParseUInt32Constant());
+                                            break;
+                                        case 2:
+                                            BinaryPrimitives.WriteUInt16LittleEndian(dest[2..], operand2.ParseUInt16Constant());
+                                            break;
+                                        case 1:
+                                            dest[2] = operand2.ParseByteConstant();
+                                            break;
+                                        default:
+                                            throw new NotSupportedException($"ERROR: Unsupported operand1 {operand1} register size: {o1RegSize}");
+                                    }
+                                    return 2 + o1RegSize;
+                                }
+                            default:
+                                throw new NotImplementedException($"Unable to handle operand2 type {o2Type}");
                         }
                     }
-                    break;
                 default:
                     throw new Exception($"ERROR: Unable to parse ADD parameters into an opcode, unhandled operand: {operand1}");
             }
@@ -1423,52 +1461,59 @@ namespace picovm.Assembler
             switch (o1Type)
             {
                 case ParameterType.RegisterReference:
+                    var o1Reg = registers[operand1.ToUpperInvariant()];
+                    switch (o2Type)
                     {
-                        var o1Reg = registers[operand1.ToUpperInvariant()];
-                        switch (o2Type)
-                        {
-                            case ParameterType.Constant:
-                                {
-                                    if (typeHintSize == 8 || (!typeHintSize.HasValue && o1Reg.Size() == 8))
-                                    {
-                                        dest[0] = (byte)Bytecode.AND_REG_CON;
-                                        dest[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                        BinaryPrimitives.WriteUInt64LittleEndian(dest[2..], operand2.ParseUInt64Constant());
-                                        return 10;
-                                    }
-                                    else if (typeHintSize == 4 || (!typeHintSize.HasValue && o1Reg.Size() == 4))
-                                    {
-                                        dest[0] = (byte)Bytecode.AND_REG_CON;
-                                        dest[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                        BinaryPrimitives.WriteUInt32LittleEndian(dest[2..], operand2.ParseUInt32Constant());
-                                        return 6;
-                                    }
-                                    else if (typeHintSize == 2 || (!typeHintSize.HasValue && o1Reg.Size() == 2))
-                                    {
-                                        dest[0] = (byte)Bytecode.AND_REG_CON;
-                                        dest[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                        BinaryPrimitives.WriteUInt16LittleEndian(dest[2..], operand2.ParseUInt16Constant());
-                                        return 4;
-                                    }
-                                    else if (typeHintSize == 1 || (!typeHintSize.HasValue && o1Reg.Size() == 1))
-                                    {
-                                        dest[0] = (byte)Bytecode.AND_REG_CON;
-                                        dest[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                        dest[2] = operand2.ParseByteConstant();
-                                        return 3;
-                                    }
+                        case ParameterType.RegisterReference: // AND EAX, EBX
+                            {
+                                var o2Reg = registers[operand2.ToUpperInvariant()];
+                                if (o1Reg.Size() != o2Reg.Size())
+                                    throw new Exception($"ERROR: Source operand {o2Reg} is not the same size as the destination operand {o1Reg}");
 
-                                    throw new NotImplementedException();
+                                dest[0] = (byte)Bytecode.AND_REGISTER;
+                                dest[1] = (byte)o1Reg;
+                                dest[2] = (byte)o2Reg;
+                                return 3;
+                            }
+                        case ParameterType.Constant: // AND EAX, 0x2344
+                            {
+                                if (typeHintSize == 8 || (!typeHintSize.HasValue && o1Reg.Size() == 8))
+                                {
+                                    dest[0] = (byte)Bytecode.AND_IMMEDIATE;
+                                    dest[1] = (byte)o1Reg;
+                                    BinaryPrimitives.WriteUInt64LittleEndian(dest[2..], operand2.ParseUInt64Constant());
+                                    return 10;
                                 }
-                            default:
+                                else if (typeHintSize == 4 || (!typeHintSize.HasValue && o1Reg.Size() == 4))
+                                {
+                                    dest[0] = (byte)Bytecode.AND_IMMEDIATE;
+                                    dest[1] = (byte)o1Reg;
+                                    BinaryPrimitives.WriteUInt32LittleEndian(dest[2..], operand2.ParseUInt32Constant());
+                                    return 6;
+                                }
+                                else if (typeHintSize == 2 || (!typeHintSize.HasValue && o1Reg.Size() == 2))
+                                {
+                                    dest[0] = (byte)Bytecode.AND_IMMEDIATE;
+                                    dest[1] = (byte)o1Reg;
+                                    BinaryPrimitives.WriteUInt16LittleEndian(dest[2..], operand2.ParseUInt16Constant());
+                                    return 4;
+                                }
+                                else if (typeHintSize == 1 || (!typeHintSize.HasValue && o1Reg.Size() == 1))
+                                {
+                                    dest[0] = (byte)Bytecode.AND_IMMEDIATE;
+                                    dest[1] = (byte)o1Reg;
+                                    dest[2] = operand2.ParseByteConstant();
+                                    return 3;
+                                }
+
                                 throw new NotImplementedException();
-                        }
+                            }
+                        default:
+                            throw new NotImplementedException($"Unable to handle operand2 type {o2Type}");
                     }
                 default:
                     throw new Exception($"ERROR: Unable to parse AND parameters into an opcode, unhandled operand: {operand1}");
             }
-
-            throw new Exception($"ERROR: Unable to parse AND into an opcode");
         }
 
         private int Cmp(Span<byte> dest, byte? typeHintSize, string operand1, string operand2)
@@ -1479,56 +1524,112 @@ namespace picovm.Assembler
             switch (o1Type)
             {
                 case ParameterType.RegisterReference:
+                    var o1Reg = registers[operand1.ToUpperInvariant()];
+                    switch (o2Type)
                     {
-                        var o1Reg = registers[operand1.ToUpperInvariant()];
-                        switch (o2Type)
-                        {
-                            case ParameterType.RegisterReference: // CMP reg, reg
-                                dest[0] = (byte)Bytecode.CMP_REGISTER;
+                        case ParameterType.RegisterReference: // CMP reg, reg
+                            dest[0] = (byte)Bytecode.CMP_REGISTER;
+                            dest[1] = (byte)o1Reg;
+                            dest[2] = (byte)registers[operand2.ToUpperInvariant()];
+                            return 3;
+                        case ParameterType.Constant: // CMP reg, imm
+                            if (typeHintSize == 8 || (!typeHintSize.HasValue && o1Reg.Size() == 8))
+                            {
+                                dest[0] = (byte)Bytecode.CMP_IMMEDIATE;
                                 dest[1] = (byte)o1Reg;
-                                dest[2] = (byte)registers[operand2.ToUpperInvariant()];
+                                BinaryPrimitives.WriteUInt64LittleEndian(dest[2..], operand2.ParseUInt64Constant());
+                                return 10;
+                            }
+                            else if (typeHintSize == 4 || (!typeHintSize.HasValue && o1Reg.Size() == 4))
+                            {
+                                dest[0] = (byte)Bytecode.CMP_IMMEDIATE;
+                                dest[1] = (byte)o1Reg;
+                                BinaryPrimitives.WriteUInt32LittleEndian(dest[2..], operand2.ParseUInt32Constant());
+                                return 6;
+                            }
+                            else if (typeHintSize == 2 || (!typeHintSize.HasValue && o1Reg.Size() == 2))
+                            {
+                                dest[0] = (byte)Bytecode.CMP_IMMEDIATE;
+                                dest[1] = (byte)o1Reg;
+                                BinaryPrimitives.WriteUInt16LittleEndian(dest[2..], operand2.ParseUInt16Constant());
+                                return 4;
+                            }
+                            else if (typeHintSize == 1 || (!typeHintSize.HasValue && o1Reg.Size() == 1))
+                            {
+                                dest[0] = (byte)Bytecode.CMP_IMMEDIATE;
+                                dest[1] = (byte)o1Reg;
+                                dest[2] = operand2.ParseByteConstant();
                                 return 3;
-                            case ParameterType.Constant: // CMP reg, imm
-                                {
-                                    if (typeHintSize == 8 || (!typeHintSize.HasValue && o1Reg.Size() == 8))
-                                    {
-                                        dest[0] = (byte)Bytecode.CMP_IMMEDIATE;
-                                        dest[1] = (byte)o1Reg;
-                                        BinaryPrimitives.WriteUInt64LittleEndian(dest[2..], operand2.ParseUInt64Constant());
-                                        return 10;
-                                    }
-                                    else if (typeHintSize == 4 || (!typeHintSize.HasValue && o1Reg.Size() == 4))
-                                    {
-                                        dest[0] = (byte)Bytecode.CMP_IMMEDIATE;
-                                        dest[1] = (byte)o1Reg;
-                                        BinaryPrimitives.WriteUInt32LittleEndian(dest[2..], operand2.ParseUInt32Constant());
-                                        return 6;
-                                    }
-                                    else if (typeHintSize == 2 || (!typeHintSize.HasValue && o1Reg.Size() == 2))
-                                    {
-                                        dest[0] = (byte)Bytecode.CMP_IMMEDIATE;
-                                        dest[1] = (byte)o1Reg;
-                                        BinaryPrimitives.WriteUInt16LittleEndian(dest[2..], operand2.ParseUInt16Constant());
-                                        return 4;
-                                    }
-                                    else if (typeHintSize == 1 || (!typeHintSize.HasValue && o1Reg.Size() == 1))
-                                    {
-                                        dest[0] = (byte)Bytecode.CMP_IMMEDIATE;
-                                        dest[1] = (byte)o1Reg;
-                                        dest[2] = operand2.ParseByteConstant();
-                                        return 3;
-                                    }
+                            }
 
-                                    throw new NotImplementedException();
-                                }
-                        }
+                            throw new NotImplementedException();
+                        default:
+                            throw new NotImplementedException($"Unable to handle operand2 type {o2Type}");
                     }
-                    break;
                 default:
                     throw new Exception($"ERROR: Unable to parse CMP parameters into an opcode, unhandled operand: {operand1}");
             }
+        }
 
-            throw new Exception($"ERROR: Unable to parse CMP into an opcode");
+        private int Test(Span<byte> dest, byte? typeHintSize, string operand1, string operand2)
+        {
+            var o1Type = AssemblerUtility.GetOperandType(operand1);
+            var o2Type = AssemblerUtility.GetOperandType(operand2);
+
+            switch (o1Type)
+            {
+                case ParameterType.RegisterReference:
+                    var o1Reg = registers[operand1.ToUpperInvariant()];
+                    switch (o2Type)
+                    {
+                        case ParameterType.RegisterReference: // TEST EAX, EBX
+                            {
+                                var o2Reg = registers[operand2.ToUpperInvariant()];
+                                if (o1Reg.Size() != o2Reg.Size())
+                                    throw new Exception($"ERROR: Source operand {o2Reg} is not the same size as the destination operand {o1Reg}");
+
+                                dest[0] = (byte)Bytecode.TEST_REGISTER;
+                                dest[1] = (byte)o1Reg;
+                                dest[2] = (byte)o2Reg;
+                                return 3;
+                            }
+                        case ParameterType.Constant:
+                            if (typeHintSize == 8 || (!typeHintSize.HasValue && o1Reg.Size() == 8))
+                            {
+                                dest[0] = (byte)Bytecode.TEST_IMMEDIATE;
+                                dest[1] = (byte)o1Reg;
+                                BinaryPrimitives.WriteUInt64LittleEndian(dest[2..], operand2.ParseUInt64Constant());
+                                return 10;
+                            }
+                            else if (typeHintSize == 4 || (!typeHintSize.HasValue && o1Reg.Size() == 4))
+                            {
+                                dest[0] = (byte)Bytecode.TEST_IMMEDIATE;
+                                dest[1] = (byte)o1Reg;
+                                BinaryPrimitives.WriteUInt32LittleEndian(dest[2..], operand2.ParseUInt32Constant());
+                                return 6;
+                            }
+                            else if (typeHintSize == 2 || (!typeHintSize.HasValue && o1Reg.Size() == 2))
+                            {
+                                dest[0] = (byte)Bytecode.TEST_IMMEDIATE;
+                                dest[1] = (byte)o1Reg;
+                                BinaryPrimitives.WriteUInt16LittleEndian(dest[2..], operand2.ParseUInt16Constant());
+                                return 4;
+                            }
+                            else if (typeHintSize == 1 || (!typeHintSize.HasValue && o1Reg.Size() == 1))
+                            {
+                                dest[0] = (byte)Bytecode.TEST_IMMEDIATE;
+                                dest[1] = (byte)o1Reg;
+                                dest[2] = operand2.ParseByteConstant();
+                                return 3;
+                            }
+
+                            throw new NotImplementedException();
+                        default:
+                            throw new NotImplementedException();
+                    }
+                default:
+                    throw new Exception($"ERROR: Unable to parse TEST parameters into an opcode, unhandled operand: {operand1}");
+            }
         }
 
         private int XOr(Span<byte> dest, string operand1, string operand2)
@@ -1539,19 +1640,15 @@ namespace picovm.Assembler
             switch (o1Type)
             {
                 case ParameterType.RegisterReference:
+                    switch (o2Type)
                     {
-                        switch (o2Type)
-                        {
-                            case ParameterType.RegisterReference:
-                                {
-                                    dest[0] = (byte)Bytecode.XOR_REG_REG;
-                                    dest[1] = (byte)registers[operand1.ToUpperInvariant()];
-                                    dest[2] = (byte)registers[operand2.ToUpperInvariant()];
-                                    return 3;
-                                }
-                            default:
-                                throw new NotImplementedException();
-                        }
+                        case ParameterType.RegisterReference:
+                            dest[0] = (byte)Bytecode.XOR_REG_REG;
+                            dest[1] = (byte)registers[operand1.ToUpperInvariant()];
+                            dest[2] = (byte)registers[operand2.ToUpperInvariant()];
+                            return 3;
+                        default:
+                            throw new NotImplementedException();
                     }
                 default:
                     throw new Exception($"ERROR: Unable to parse XOR parameters into an opcode, unhandled operand: {operand1}");
@@ -1567,17 +1664,13 @@ namespace picovm.Assembler
             switch (operandType)
             {
                 case ParameterType.RegisterReference:
-                    {
-                        dest[0] = (byte)Bytecode.POP_REG;
-                        dest[1] = (byte)registers[operand.ToUpperInvariant()];
-                        break;
-                    }
+                    dest[0] = (byte)Bytecode.POP_REG;
+                    dest[1] = (byte)registers[operand.ToUpperInvariant()];
+                    break;
                 case ParameterType.RegisterIndirect:
-                    {
-                        dest[0] = (byte)Bytecode.POP_MEM;
-                        dest[1] = (byte)registers[operand.TrimStart('[').TrimEnd(']').ToUpperInvariant()];
-                        break;
-                    }
+                    dest[0] = (byte)Bytecode.POP_MEM;
+                    dest[1] = (byte)registers[operand.TrimStart('[').TrimEnd(']').ToUpperInvariant()];
+                    break;
                 default:
                     throw new Exception($"ERROR: Unable to parse POP parameters into an opcode, unhandled operand: {operand}");
             }

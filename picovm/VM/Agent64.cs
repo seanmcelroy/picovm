@@ -182,7 +182,125 @@ namespace picovm.VM
             {
                 case Bytecode.END:
                     return new TickResult(TickErrorCode.Ok, true);
-                case Bytecode.ADD_REG_CON:
+                case Bytecode.ADD_REGISTER:
+                    {
+                        var operand1 = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+                        var operand2 = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+
+                        switch (operand1.Size())
+                        {
+                            case 8:
+                                switch (operand2.Size())
+                                {
+                                    case 8:
+                                        var operand1value = ReadR64Register(operand1);
+                                        var operand2value = ReadR64Register(operand2);
+                                        WriteR64Register(operand1, operand1value + operand2value);
+
+                                        var result = (BigInteger)operand1value + operand2value;
+                                        var operand1Signed = (long)operand1value; // Re-interpret as signed
+                                        var operand2Signed = (long)operand2value; // Re-interpret as signed
+                                        var resultSigned = operand1Signed + operand2Signed;
+
+                                        WriteArithmeticFlags(
+                                            result > ulong.MaxValue, // CARRY_FLAG
+                                            ByteUtility.CountBits((ulong)(result & 0xFF)) % 2 == 0, // PARITY_FLAG
+                                            (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                            resultSigned == 0, // ZERO_FLAG
+                                            resultSigned < 0, // SIGN_FLAG
+                                            ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                        );
+                                        break;
+                                    default:
+                                        throw new InvalidOperationException($"ERROR: ADD must compare registers of same size, but {operand1} and {operand2} were provided.");
+                                }
+                                break;
+                            case 4:
+                                switch (operand2.Size())
+                                {
+                                    case 4:
+                                        var operand1value = ReadExtendedRegister(operand1);
+                                        var operand2value = ReadExtendedRegister(operand2);
+                                        WriteExtendedRegister(operand1, operand1value + operand2value);
+
+                                        var result = (long)operand1value + operand2value;
+                                        var operand1Signed = (int)operand1value; // Re-interpret as signed
+                                        var operand2Signed = (int)operand2value; // Re-interpret as signed
+                                        var resultSigned = operand1Signed + operand2Signed;
+
+                                        WriteArithmeticFlags(
+                                            result > uint.MaxValue, // CARRY_FLAG
+                                            ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                            (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                            resultSigned == 0, // ZERO_FLAG
+                                            resultSigned < 0, // SIGN_FLAG
+                                            ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                        );
+                                        break;
+                                    default:
+                                        throw new InvalidOperationException($"ERROR: ADD must compare registers of same size, but {operand1} and {operand2} were provided.");
+                                }
+                                break;
+                            case 2:
+                                switch (operand2.Size())
+                                {
+                                    case 2:
+                                        var operand1value = ReadRegister(operand1);
+                                        var operand2value = ReadRegister(operand2);
+                                        WriteRegister(operand1, (ushort)(operand1value + operand2value));
+
+                                        var result = (uint)operand1value + operand2value;
+                                        var operand1Signed = (short)operand1value; // Re-interpret as signed
+                                        var operand2Signed = (short)operand2value; // Re-interpret as signed
+                                        var resultSigned = (short)(operand1Signed + operand2Signed);
+
+                                        WriteArithmeticFlags(
+                                            result > ushort.MaxValue, // CARRY_FLAG
+                                            ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                            (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                            resultSigned == 0, // ZERO_FLAG
+                                            resultSigned < 0, // SIGN_FLAG
+                                            ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                        );
+                                        break;
+                                    default:
+                                        throw new InvalidOperationException($"ERROR: ADD must compare registers of same size, but {operand1} and {operand2} were provided.");
+                                }
+                                break;
+                            case 1:
+                                switch (operand2.Size())
+                                {
+                                    case 1:
+                                        var operand1value = ReadHalfRegister(operand1);
+                                        var operand2value = ReadHalfRegister(operand2);
+                                        WriteHalfRegister(operand1, (byte)(operand1value + operand2value));
+
+                                        var result = operand1value + operand2value;
+                                        var operand1Signed = (sbyte)operand1value; // Re-interpret as signed
+                                        var operand2Signed = (sbyte)operand2value; // Re-interpret as signed
+                                        var resultSigned = (sbyte)(operand1Signed + operand2Signed);
+
+                                        WriteArithmeticFlags(
+                                            result > byte.MaxValue, // CARRY_FLAG
+                                            ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                            (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                            resultSigned == 0, // ZERO_FLAG
+                                            resultSigned < 0, // SIGN_FLAG
+                                            ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                        );
+                                        break;
+                                    default:
+                                        throw new InvalidOperationException($"ERROR: ADD must compare registers of same size, but {operand1} and {operand2} were provided.");
+                                }
+                                break;
+                            default:
+                                throw new InvalidOperationException($"ERROR: ADD must compare registers of same size, but {operand1} and {operand2} were provided.");
+                        }
+                        break;
+                    }
+                case Bytecode.ADD_IMMEDIATE:
                     {
                         var operand1 = (Register)memory[InstructionPointer];
                         InstructionPointer++;
@@ -282,16 +400,218 @@ namespace picovm.VM
                         }
                         break;
                     }
-                case Bytecode.ADD_MEM_CON:
+                case Bytecode.ADD_INDIRECT_REGISTER: // ADD EAX, [EBX]
                     {
-                        var operand1 = (Register)memory[InstructionPointer];
+                        var operand1 = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+                        var operand2 = (Register)ReadMemoryByte(InstructionPointer);
                         InstructionPointer++;
 
                         switch (operand1.Size())
                         {
                             case 8:
                                 {
-                                    var loc = ReadR64Register(operand1);
+                                    var operand1value = ReadR64Register(operand1);
+                                    var loc = ReadRegisterAsPointer(operand2);
+                                    var operand2value = ReadMemoryUInt64(loc);
+                                    WriteR64Register(operand1, operand1value + operand2value);
+
+                                    var result = (BigInteger)operand1value + operand2value;
+                                    var operand1Signed = (long)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (long)operand2value; // Re-interpret as signed
+                                    var resultSigned = operand1Signed + operand2Signed;
+
+                                    WriteArithmeticFlags(
+                                        result > ulong.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits((ulong)(result & 0xFF)) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            case 4:
+                                {
+                                    var operand1value = ReadExtendedRegister(operand1);
+                                    var loc = ReadRegisterAsPointer(operand2);
+                                    var operand2value = ReadMemoryUInt32(loc);
+                                    WriteExtendedRegister(operand1, operand1value + operand2value);
+
+                                    var result = (long)operand1value + operand2value;
+                                    var operand1Signed = (int)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (int)operand2value; // Re-interpret as signed
+                                    var resultSigned = operand1Signed + operand2Signed;
+
+                                    WriteArithmeticFlags(
+                                        result > uint.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            case 2:
+                                {
+                                    var operand1value = ReadRegister(operand1);
+                                    var loc = ReadRegisterAsPointer(operand2);
+                                    var operand2value = ReadMemoryUInt16(loc);
+                                    WriteRegister(operand1, (ushort)(operand1value + operand2value));
+
+                                    var result = (uint)operand1value + operand2value;
+                                    var operand1Signed = (short)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (short)operand2value; // Re-interpret as signed
+                                    var resultSigned = (short)(operand1Signed + operand2Signed);
+
+                                    WriteArithmeticFlags(
+                                        result > ushort.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            case 1:
+                                {
+                                    var operand1value = ReadHalfRegister(operand1);
+                                    var loc = ReadRegisterAsPointer(operand2);
+                                    var operand2value = ReadMemoryByte(loc);
+                                    WriteHalfRegister(operand1, (byte)(operand1value + operand2value));
+
+                                    var result = operand1value + operand2value;
+                                    var operand1Signed = (sbyte)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (sbyte)operand2value; // Re-interpret as signed
+                                    var resultSigned = (sbyte)(operand1Signed + operand2Signed);
+
+                                    WriteArithmeticFlags(
+                                        result > byte.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            default:
+                                throw new InvalidOperationException($"ERROR: ADD cannot handle the type of register targeted: {operand1}");
+                        }
+                        break;
+                    }
+                case Bytecode.ADD_INDIRECT_MEMORY_REGISTER: // ADD [EAX], EBX
+                    {
+                        var operand1 = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+                        var operand2 = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+
+                        var loc = ReadRegisterAsPointer(operand1);
+
+                        switch (operand2.Size())
+                        {
+                            case 8:
+                                {
+                                    var operand1value = ReadMemoryUInt64(loc);
+                                    var operand2value = ReadR64Register(operand2);
+                                    WriteMemoryUInt64(loc, operand1value + operand2value);
+
+                                    var result = (BigInteger)operand1value + operand2value;
+                                    var operand1Signed = (long)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (long)operand2value; // Re-interpret as signed
+                                    var resultSigned = operand1Signed + operand2Signed;
+
+                                    WriteArithmeticFlags(
+                                        result > ulong.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits((ulong)(result & 0xFF)) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            case 4:
+                                {
+                                    var operand1value = ReadMemoryUInt32(loc);
+                                    var operand2value = ReadExtendedRegister(operand2);
+                                    WriteMemoryUInt32(loc, operand1value + operand2value);
+
+                                    var result = (long)operand1value + operand2value;
+                                    var operand1Signed = (int)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (int)operand2value; // Re-interpret as signed
+                                    var resultSigned = operand1Signed + operand2Signed;
+
+                                    WriteArithmeticFlags(
+                                        result > uint.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            case 2:
+                                {
+                                    var operand1value = ReadMemoryUInt16(loc);
+                                    var operand2value = ReadRegister(operand2);
+                                    WriteMemoryUInt16(loc, (ushort)(operand1value + operand2value));
+
+                                    var result = (uint)operand1value + operand2value;
+                                    var operand1Signed = (short)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (short)operand2value; // Re-interpret as signed
+                                    var resultSigned = (short)(operand1Signed + operand2Signed);
+
+                                    WriteArithmeticFlags(
+                                        result > ushort.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            case 1:
+                                {
+                                    var operand1value = ReadMemoryByte(loc);
+                                    var operand2value = ReadHalfRegister(operand2);
+                                    memory[loc] = (byte)(operand1value + operand2value);
+
+                                    var result = operand1value + operand2value;
+                                    var operand1Signed = (sbyte)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (sbyte)operand2value; // Re-interpret as signed
+                                    var resultSigned = (sbyte)(operand1Signed + operand2Signed);
+
+                                    WriteArithmeticFlags(
+                                        result > byte.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            default:
+                                throw new InvalidOperationException($"ERROR: ADD cannot handle the type of register targeted: {operand1}");
+                        }
+                        break;
+                    }
+                case Bytecode.ADD_INDIRECT_MEMORY_IMMEDIATE: // ADD [EAX], 2344
+                    {
+                        var operand1 = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+
+                        switch (operand1.Size())
+                        {
+                            case 8:
+                                {
+                                    var loc = ReadRegisterAsPointer(operand1);
                                     var operand1value = ReadMemoryUInt64(loc);
                                     var operand2value = ReadMemoryUInt64(InstructionPointer);
                                     InstructionPointer += 8;
@@ -314,7 +634,7 @@ namespace picovm.VM
                                 }
                             case 4:
                                 {
-                                    var loc = ReadExtendedRegister(operand1);
+                                    var loc = ReadRegisterAsPointer(operand1);
                                     var operand1value = ReadMemoryUInt32(loc);
                                     var operand2value = ReadMemoryUInt32(InstructionPointer);
                                     InstructionPointer += 4;
@@ -337,7 +657,7 @@ namespace picovm.VM
                                 }
                             case 2:
                                 {
-                                    var loc = ReadRegister(operand1);
+                                    var loc = ReadRegisterAsPointer(operand1);
                                     var operand1value = ReadMemoryUInt16(loc);
                                     var operand2value = ReadMemoryUInt16(InstructionPointer);
                                     InstructionPointer += 2;
@@ -360,7 +680,7 @@ namespace picovm.VM
                                 }
                             case 1:
                                 {
-                                    var loc = ReadHalfRegister(operand1);
+                                    var loc = ReadRegisterAsPointer(operand1);
                                     var operand1value = ReadMemoryByte(loc);
                                     var operand2value = ReadMemoryByte(InstructionPointer);
                                     InstructionPointer += 1;
@@ -386,7 +706,68 @@ namespace picovm.VM
                         }
                         break;
                     }
-                case Bytecode.AND_REG_CON:
+                case Bytecode.AND_REGISTER:
+                    {
+                        var operand1 = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+                        var operand2 = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+                        var o1Size = operand1.Size();
+                        if (o1Size != operand2.Size())
+                            throw new Exception($"ERROR: Source operand {operand2} is not the same size as the destination operand {operand1}");
+
+                        switch (o1Size)
+                        {
+                            case 8:
+                                {
+                                    var result = ReadR64Register(operand1) & ReadR64Register(operand2);
+                                    WriteR64Register(operand1, result);
+                                    WriteLogicFlags(
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        result == 0, // ZERO_FLAG
+                                        (result & 0x8000000000000000ul) != 0 // SIGN_FLAG
+                                    );
+                                    break;
+                                }
+                            case 4:
+                                {
+                                    var result = ReadExtendedRegister(operand1) & ReadExtendedRegister(operand2);
+                                    WriteExtendedRegister(operand1, result);
+                                    WriteLogicFlags(
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        result == 0, // ZERO_FLAG
+                                        (result & 0x80000000u) != 0 // SIGN_FLAG
+                                    );
+                                    break;
+                                }
+                            case 2:
+                                {
+                                    var result = (ushort)(ReadRegister(operand1) & ReadRegister(operand2));
+                                    WriteRegister(operand1, result);
+                                    WriteLogicFlags(
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        result == 0, // ZERO_FLAG
+                                        (result & 0x8000) != 0 // SIGN_FLAG
+                                    );
+                                    break;
+                                }
+                            case 1:
+                                {
+                                    var result = (byte)(ReadHalfRegister(operand1) & ReadHalfRegister(operand2));
+                                    WriteHalfRegister(operand1, result);
+                                    WriteLogicFlags(
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        result == 0, // ZERO_FLAG
+                                        (result & 0x80) != 0 // SIGN_FLAG
+                                    );
+                                    break;
+                                }
+                            default:
+                                throw new InvalidOperationException($"ERROR: AND cannot handle the type of register targeted: {operand1}");
+                        }
+                        break;
+                    }
+                case Bytecode.AND_IMMEDIATE:
                     {
                         var operand1 = (Register)memory[InstructionPointer];
                         InstructionPointer++;
@@ -398,18 +779,12 @@ namespace picovm.VM
                                     var operand1value = ReadR64Register(operand1);
                                     var operand2value = ReadMemoryUInt64(InstructionPointer);
                                     InstructionPointer += 8;
-                                    var val = operand1value & operand2value;
-                                    WriteR64Register(operand1, val);
-
                                     var result = operand1value & operand2value;
-                                    var operand1Signed = (long)operand1value; // Re-interpret as signed
-                                    var operand2Signed = (long)operand2value; // Re-interpret as signed
-                                    var resultSigned = operand1Signed & operand2Signed;
-
+                                    WriteR64Register(operand1, result);
                                     WriteLogicFlags(
                                         ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
-                                        resultSigned == 0, // ZERO_FLAG
-                                        resultSigned < 0 // SIGN_FLAG
+                                        result == 0, // ZERO_FLAG
+                                        (result & 0x8000000000000000ul) != 0 // SIGN_FLAG
                                     );
                                     break;
                                 }
@@ -418,18 +793,12 @@ namespace picovm.VM
                                     var operand1value = ReadExtendedRegister(operand1);
                                     var operand2value = ReadMemoryUInt32(InstructionPointer);
                                     InstructionPointer += 4;
-                                    var val = operand1value & operand2value;
-                                    WriteExtendedRegister(operand1, val);
-
-                                    var result = (long)operand1value & operand2value;
-                                    var operand1Signed = (int)operand1value; // Re-interpret as signed
-                                    var operand2Signed = (int)operand2value; // Re-interpret as signed
-                                    var resultSigned = operand1Signed & operand2Signed;
-
+                                    var result = operand1value & operand2value;
+                                    WriteExtendedRegister(operand1, result);
                                     WriteLogicFlags(
                                         ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
-                                        resultSigned == 0, // ZERO_FLAG
-                                        resultSigned < 0 // SIGN_FLAG
+                                        result == 0, // ZERO_FLAG
+                                        (result & 0x80000000u) != 0 // SIGN_FLAG
                                     );
                                     break;
                                 }
@@ -438,18 +807,12 @@ namespace picovm.VM
                                     var operand1value = ReadRegister(operand1);
                                     var operand2value = ReadMemoryUInt16(InstructionPointer);
                                     InstructionPointer += 2;
-                                    var val = (ushort)(operand1value & operand2value);
-                                    WriteRegister(operand1, val);
-
-                                    var result = (uint)operand1value & operand2value;
-                                    var operand1Signed = (short)operand1value; // Re-interpret as signed
-                                    var operand2Signed = (short)operand2value; // Re-interpret as signed
-                                    var resultSigned = (short)(operand1Signed & operand2Signed);
-
+                                    var result = (ushort)(operand1value & operand2value);
+                                    WriteRegister(operand1, result);
                                     WriteLogicFlags(
                                         ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
-                                        resultSigned == 0, // ZERO_FLAG
-                                        resultSigned < 0 // SIGN_FLAG
+                                        result == 0, // ZERO_FLAG
+                                        (result & 0x8000) != 0 // SIGN_FLAG
                                     );
                                     break;
                                 }
@@ -458,23 +821,130 @@ namespace picovm.VM
                                     var operand1value = ReadHalfRegister(operand1);
                                     var operand2value = ReadMemoryByte(InstructionPointer);
                                     InstructionPointer++;
-                                    var val = (byte)(operand1value & operand2value);
-                                    WriteHalfRegister(operand1, val);
-
-                                    var result = operand1value & operand2value;
-                                    var operand1Signed = (sbyte)operand1value; // Re-interpret as signed
-                                    var operand2Signed = (sbyte)operand2value; // Re-interpret as signed
-                                    var resultSigned = (sbyte)(operand1Signed & operand2Signed);
-
+                                    var result = (byte)(operand1value & operand2value);
+                                    WriteHalfRegister(operand1, result);
                                     WriteLogicFlags(
                                         ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
-                                        resultSigned == 0, // ZERO_FLAG
-                                        resultSigned < 0 // SIGN_FLAG
+                                        result == 0, // ZERO_FLAG
+                                        (result & 0x80) != 0 // SIGN_FLAG
                                     );
                                     break;
                                 }
                             default:
                                 throw new InvalidOperationException($"ERROR: AND cannot handle the type of register targeted: {operand1}");
+                        }
+                        break;
+                    }
+                case Bytecode.TEST_REGISTER:
+                    {
+                        var operand1 = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+                        var operand2 = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+                        var o1Size = operand1.Size();
+                        if (o1Size != operand2.Size())
+                            throw new Exception($"ERROR: Source operand {operand2} is not the same size as the destination operand {operand1}");
+
+                        switch (o1Size)
+                        {
+                            case 8:
+                                {
+                                    var result = ReadR64Register(operand1) & ReadR64Register(operand2);
+                                    WriteLogicFlags(
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        result == 0, // ZERO_FLAG
+                                        (result & 0x8000000000000000ul) != 0 // SIGN_FLAG
+                                    );
+                                    break;
+                                }
+                            case 4:
+                                {
+                                    var result = ReadExtendedRegister(operand1) & ReadExtendedRegister(operand2);
+                                    WriteLogicFlags(
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        result == 0, // ZERO_FLAG
+                                        (result & 0x80000000u) != 0 // SIGN_FLAG
+                                    );
+                                    break;
+                                }
+                            case 2:
+                                {
+                                    var result = ReadRegister(operand1) & ReadRegister(operand2);
+                                    WriteLogicFlags(
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        result == 0, // ZERO_FLAG
+                                        (result & 0x8000) != 0 // SIGN_FLAG
+                                    );
+                                    break;
+                                }
+                            case 1:
+                                {
+                                    var result = ReadHalfRegister(operand1) & ReadHalfRegister(operand2);
+                                    WriteLogicFlags(
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        result == 0, // ZERO_FLAG
+                                        (result & 0x80) != 0 // SIGN_FLAG
+                                    );
+                                    break;
+                                }
+                            default:
+                                throw new InvalidOperationException($"ERROR: TEST cannot handle the type of register targeted: {operand1}");
+                        }
+                        break;
+                    }
+                case Bytecode.TEST_IMMEDIATE: // TEST RAX, 01H
+                    {
+                        var operand1 = (Register)memory[InstructionPointer];
+                        InstructionPointer++;
+
+                        switch (operand1.Size())
+                        {
+                            case 8:
+                                {
+                                    var result = ReadR64Register(operand1) & ReadMemoryUInt64(InstructionPointer);
+                                    InstructionPointer += 8;
+                                    WriteLogicFlags(
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        result == 0, // ZERO_FLAG
+                                        (result & 0x8000000000000000ul) != 0 // SIGN_FLAG
+                                    );
+                                    break;
+                                }
+                            case 4:
+                                {
+                                    var result = ReadExtendedRegister(operand1) & ReadMemoryUInt32(InstructionPointer);
+                                    InstructionPointer += 4;
+                                    WriteLogicFlags(
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        result == 0, // ZERO_FLAG
+                                        (result & 0x80000000u) != 0 // SIGN_FLAG
+                                    );
+                                    break;
+                                }
+                            case 2:
+                                {
+                                    var result = ReadRegister(operand1) & ReadMemoryUInt16(InstructionPointer);
+                                    InstructionPointer += 2;
+                                    WriteLogicFlags(
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        result == 0, // ZERO_FLAG
+                                        (result & 0x8000) != 0 // SIGN_FLAG
+                                    );
+                                    break;
+                                }
+                            case 1:
+                                {
+                                    var result = ReadHalfRegister(operand1) & ReadMemoryByte(InstructionPointer);
+                                    InstructionPointer++;
+                                    WriteLogicFlags(
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        result == 0, // ZERO_FLAG
+                                        (result & 0x80) != 0 // SIGN_FLAG
+                                    );
+                                    break;
+                                }
+                            default:
+                                throw new InvalidOperationException($"ERROR: TEST cannot handle the type of register targeted: {operand1}");
                         }
                         break;
                     }
@@ -861,14 +1331,7 @@ namespace picovm.VM
                         InstructionPointer++;
 
                         // The source register holds the address to dereference, not a value.
-                        ulong addr = src.Size() switch
-                        {
-                            8 => ReadR64Register(src),
-                            4 => ReadExtendedRegister(src),
-                            2 => ReadRegister(src),
-                            1 => ReadHalfRegister(src),
-                            _ => throw new InvalidOperationException($"ERROR: Unrecognized register for MOV src: {src}")
-                        };
+                        ulong addr = ReadRegisterAsPointer(src);
 
                         // The destination register's width decides how much to load.
                         switch (dst.Size())
@@ -898,14 +1361,7 @@ namespace picovm.VM
                         InstructionPointer++;
 
                         // The destination register holds the address to dereference, not a value.
-                        ulong addr = dst.Size() switch
-                        {
-                            8 => ReadR64Register(dst),
-                            4 => ReadExtendedRegister(dst),
-                            2 => ReadRegister(dst),
-                            1 => ReadHalfRegister(dst),
-                            _ => throw new InvalidOperationException($"ERROR: Unrecognized register for MOV dst: {dst}")
-                        };
+                        ulong addr = ReadRegisterAsPointer(dst);
 
                         // The source register's width decides how much to store.
                         switch (src.Size())
@@ -1453,5 +1909,14 @@ namespace picovm.VM
 
             BinaryPrimitives.WriteUInt64LittleEndian(memory.AsSpan((int)address, 8), value);
         }
+
+        private ulong ReadRegisterAsPointer(Register reg) => reg.Size() switch
+        {
+            8 => ReadR64Register(reg),
+            4 => ReadExtendedRegister(reg),
+            2 => ReadRegister(reg),
+            1 => ReadHalfRegister(reg),
+            _ => throw new InvalidOperationException($"Register {reg} cannot be used as a pointer."),
+        };
     }
 }
