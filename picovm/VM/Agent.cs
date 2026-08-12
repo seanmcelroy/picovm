@@ -694,7 +694,7 @@ namespace picovm.VM
                         }
                         break;
                     }
-                case Bytecode.ADD_INDIRECT_REGISTER: // ADD EAX, [EBX]
+                case Bytecode.ADD_INDIRECT_REGISTER: // ADD reg, [reg]
                     {
                         var operand1 = (Register)ReadMemoryByte(InstructionPointer);
                         InstructionPointer++;
@@ -931,6 +931,85 @@ namespace picovm.VM
                                 }
                             default:
                                 throw new InvalidOperationException($"ERROR: ADD cannot handle the type of register targeted: {operand1}");
+                        }
+                        break;
+                    }
+                case Bytecode.ADD_DIRECT_LOAD: // ADD reg, [symbol]
+                    {
+                        var operand1 = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+
+                        // Absolute source address, always machine width, patched at link time.
+                        var addr = ReadMemoryUInt32(InstructionPointer);
+                        InstructionPointer += 4;
+
+                        switch (operand1.Size())
+                        {
+                            case 4:
+                                {
+                                    var operand1value = ReadExtendedRegister(operand1);
+                                    var operand2value = ReadMemoryUInt32(addr);
+                                    WriteExtendedRegister(operand1, operand1value + operand2value);
+
+                                    var result = (long)operand1value + operand2value;
+                                    var operand1Signed = (int)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (int)operand2value; // Re-interpret as signed
+                                    var resultSigned = operand1Signed + operand2Signed;
+
+                                    WriteArithmeticFlags(
+                                        result > uint.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            case 2:
+                                {
+                                    var operand1value = ReadRegister(operand1);
+                                    var operand2value = ReadMemoryUInt16(addr);
+                                    WriteRegister(operand1, (ushort)(operand1value + operand2value));
+
+                                    var result = (uint)operand1value + operand2value;
+                                    var operand1Signed = (short)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (short)operand2value; // Re-interpret as signed
+                                    var resultSigned = (short)(operand1Signed + operand2Signed);
+
+                                    WriteArithmeticFlags(
+                                        result > ushort.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            case 1:
+                                {
+                                    var operand1value = ReadHalfRegister(operand1);
+                                    var operand2value = ReadMemoryByte(addr);
+                                    WriteHalfRegister(operand1, (byte)(operand1value + operand2value));
+
+                                    var result = operand1value + operand2value;
+                                    var operand1Signed = (sbyte)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (sbyte)operand2value; // Re-interpret as signed
+                                    var resultSigned = (sbyte)(operand1Signed + operand2Signed);
+
+                                    WriteArithmeticFlags(
+                                        result > byte.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            default:
+                                throw new InvalidOperationException($"ERROR: Unrecognized register for ADD {nameof(operand1)}: {operand1}");
                         }
                         break;
                     }
@@ -1226,7 +1305,7 @@ namespace picovm.VM
                         {
                             case 4:
                                 {
-                                    // For example: CMP EAX, imm32
+                                    // For example: CMP reg, imm32
                                     var operand1value = ReadExtendedRegister(operand1);
                                     InstructionPointer++;
                                     var operand2value = ReadMemoryUInt32(InstructionPointer);
@@ -1249,7 +1328,7 @@ namespace picovm.VM
                                 }
                             case 2:
                                 {
-                                    // For example: CMP AX, imm16
+                                    // For example: CMP reg, imm16
                                     var operand1value = ReadRegister(operand1);
                                     InstructionPointer++;
                                     var operand2value = ReadMemoryUInt16(InstructionPointer);
@@ -1272,10 +1351,10 @@ namespace picovm.VM
                                 }
                             case 1:
                                 {
-                                    // For example: CMP AL, imm8
+                                    // For example: CMP reg, imm8
                                     var operand1value = ReadHalfRegister(operand1);
                                     InstructionPointer++;
-                                    var operand2value = memory[(int)InstructionPointer];
+                                    var operand2value = ReadMemoryByte(InstructionPointer);
                                     InstructionPointer++;
 
                                     var result = operand1value - operand2value;
@@ -1306,7 +1385,7 @@ namespace picovm.VM
                 case Bytecode.INT:
                     {
                         // Interrupt number
-                        var interruptVector = memory[(int)InstructionPointer];
+                        var interruptVector = ReadMemoryByte(InstructionPointer);
                         InstructionPointer++;
 
                         switch (interruptVector)
@@ -1321,7 +1400,7 @@ namespace picovm.VM
 
                         break;
                     }
-                case Bytecode.MOV_REGISTER: // aka MOV EAX, EBX
+                case Bytecode.MOV_REGISTER: // aka MOV reg, reg
                     {
                         var dst = (Register)ReadMemoryByte(InstructionPointer);
                         InstructionPointer++;
@@ -1390,7 +1469,7 @@ namespace picovm.VM
                         }
                         break;
                     }
-                case Bytecode.MOV_IMMEDIATE: // aka MOV EAX, 65 (or) MOV EAX, counter
+                case Bytecode.MOV_IMMEDIATE: // aka MOV reg, const (or) MOV reg, counter
                     {
                         var dst = (Register)ReadMemoryByte(InstructionPointer);
                         InstructionPointer++;
@@ -1413,7 +1492,7 @@ namespace picovm.VM
                                 }
                             case 1:
                                 {
-                                    var val = memory[(int)InstructionPointer];
+                                    var val = ReadMemoryByte(InstructionPointer);
                                     InstructionPointer++;
                                     WriteHalfRegister(dst, val);
                                     break;
@@ -1424,7 +1503,7 @@ namespace picovm.VM
                         }
                         break;
                     }
-                case Bytecode.MOV_INDIRECT_LOAD: // aka MOV EAX, [EBX]
+                case Bytecode.MOV_INDIRECT_LOAD: // aka MOV reg, [reg]
                     {
                         var dst = (Register)ReadMemoryByte(InstructionPointer);
                         InstructionPointer++;
@@ -1519,7 +1598,7 @@ namespace picovm.VM
                         InstructionPointer += size;
                         break;
                     }
-                case Bytecode.MOV_DIRECT_LOAD: // aka MOV EAX, [counter]
+                case Bytecode.MOV_DIRECT_LOAD: // aka MOV reg, [symbol]
                     {
                         var dst = (Register)ReadMemoryByte(InstructionPointer);
                         InstructionPointer++;
@@ -1544,7 +1623,7 @@ namespace picovm.VM
                         }
                         break;
                     }
-                case Bytecode.MOV_DIRECT_STORE: // aka MOV [counter], EAX
+                case Bytecode.MOV_DIRECT_STORE: // aka MOV [symbol], EAX
                     {
                         // Absolute destination address, always machine width, patched at link time.
                         var addr = ReadMemoryUInt32(InstructionPointer);
@@ -1569,7 +1648,7 @@ namespace picovm.VM
                         }
                         break;
                     }
-                case Bytecode.MOV_DIRECT_IMMEDIATE: // aka MOV [counter], 65
+                case Bytecode.MOV_DIRECT_IMMEDIATE: // aka MOV [symbol], 65
                     {
                         // Absolute destination address, always machine width, patched at link time.
                         var addr = ReadMemoryUInt32(InstructionPointer);

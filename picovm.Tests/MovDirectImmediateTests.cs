@@ -164,7 +164,7 @@ namespace picovm.Tests
             var ex = Assert.Throws<InvalidOperationException>(() =>
                 MovTestHarness.TryCompile32(Asm.WithData([Counter], "MOV [counter], 5")));
 
-            Assert.Contains("unhinted variable loads", ex.Message);
+            Assert.Contains("unhinted symbol immediates", ex.Message);
         }
 
         /// <summary>

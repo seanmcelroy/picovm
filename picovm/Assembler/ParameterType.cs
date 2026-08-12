@@ -25,7 +25,7 @@ namespace picovm.Assembler
         VariableAddress = 4,
         /// <summary>
         /// Direct addressing mode.
-        /// Instruction holds the address (e.g.: [counter])
+        /// Instruction holds the address (e.g.: [symbol])
         /// </summary>
         VariableDirect = 5
     }
