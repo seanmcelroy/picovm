@@ -820,7 +820,7 @@ namespace picovm.Assembler
 
                     switch (locType)
                     {
-                        case ParameterType.RegisterReference: // CALL EAX
+                        case ParameterType.RegisterReference: // CALL reg
                             {
                                 var locReg = registers[loc];
                                 switch (locReg)
@@ -888,7 +888,7 @@ namespace picovm.Assembler
                                 offsetBytes += TAddrSize.CreateTruncating(textSymbol.ReferenceLength);
                                 continue;
                             }
-                        case ParameterType.Constant: // CALL 0x2344
+                        case ParameterType.Constant: // CALL const
                             bytecode.Add((byte)Bytecode.CALL_IMMEDIATE);
                             offsetBytes++;
 

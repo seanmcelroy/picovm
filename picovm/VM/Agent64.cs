@@ -502,7 +502,7 @@ namespace picovm.VM
                         }
                         break;
                     }
-                case Bytecode.ADD_INDIRECT_MEMORY_REGISTER: // ADD [EAX], EBX
+                case Bytecode.ADD_INDIRECT_MEMORY_REGISTER: // ADD [reg], reg
                     {
                         var operand1 = (Register)ReadMemoryByte(InstructionPointer);
                         InstructionPointer++;
@@ -602,7 +602,7 @@ namespace picovm.VM
                         }
                         break;
                     }
-                case Bytecode.ADD_INDIRECT_MEMORY_IMMEDIATE: // ADD [EAX], 2344
+                case Bytecode.ADD_INDIRECT_MEMORY_IMMEDIATE: // ADD [reg], const
                     {
                         var operand1 = (Register)ReadMemoryByte(InstructionPointer);
                         InstructionPointer++;
@@ -614,8 +614,8 @@ namespace picovm.VM
                                     var loc = ReadRegisterAsPointer(operand1);
                                     var operand1value = ReadMemoryUInt64(loc);
                                     var operand2value = ReadMemoryUInt64(InstructionPointer);
-                                    InstructionPointer += 8;
                                     WriteMemoryUInt64(loc, operand1value + operand2value);
+                                    InstructionPointer += 8;
 
                                     var result = (BigInteger)operand1value + operand2value;
                                     var operand1Signed = (long)operand1value; // Re-interpret as signed
@@ -637,8 +637,8 @@ namespace picovm.VM
                                     var loc = ReadRegisterAsPointer(operand1);
                                     var operand1value = ReadMemoryUInt32(loc);
                                     var operand2value = ReadMemoryUInt32(InstructionPointer);
-                                    InstructionPointer += 4;
                                     WriteMemoryUInt32(loc, operand1value + operand2value);
+                                    InstructionPointer += 4;
 
                                     var result = (long)operand1value + operand2value;
                                     var operand1Signed = (int)operand1value; // Re-interpret as signed
@@ -660,8 +660,8 @@ namespace picovm.VM
                                     var loc = ReadRegisterAsPointer(operand1);
                                     var operand1value = ReadMemoryUInt16(loc);
                                     var operand2value = ReadMemoryUInt16(InstructionPointer);
-                                    InstructionPointer += 2;
                                     WriteMemoryUInt16(loc, (ushort)(operand1value + operand2value));
+                                    InstructionPointer += 2;
 
                                     var result = (uint)operand1value + operand2value;
                                     var operand1Signed = (short)operand1value; // Re-interpret as signed
@@ -683,8 +683,8 @@ namespace picovm.VM
                                     var loc = ReadRegisterAsPointer(operand1);
                                     var operand1value = ReadMemoryByte(loc);
                                     var operand2value = ReadMemoryByte(InstructionPointer);
+                                    WriteMemoryByte(loc, (byte)(operand1value + operand2value));
                                     InstructionPointer += 1;
-                                    memory[loc] = (byte)(operand1value + operand2value);
 
                                     var result = operand1value + operand2value;
                                     var operand1Signed = (sbyte)operand1value; // Re-interpret as signed
@@ -803,6 +803,211 @@ namespace picovm.VM
                                 }
                             default:
                                 throw new InvalidOperationException($"ERROR: Unrecognized register for ADD {nameof(operand1)}: {operand1}");
+                        }
+                        break;
+                    }
+                case Bytecode.ADD_DIRECT_STORE: // ADD [symbol], reg
+                    {
+                        // Absolute destination address, always machine width, patched at link time.
+                        var addr = ReadMemoryUInt64(InstructionPointer);
+                        InstructionPointer += 8;
+                        var operand2 = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+
+                        switch (operand2.Size())
+                        {
+                            case 8:
+                                {
+                                    var operand1value = ReadMemoryUInt64(addr);
+                                    var operand2value = ReadR64Register(operand2);
+                                    WriteMemoryUInt64(addr, operand1value + operand2value);
+
+                                    var result = (BigInteger)operand1value + operand2value;
+                                    var operand1Signed = (long)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (long)operand2value; // Re-interpret as signed
+                                    var resultSigned = operand1Signed + operand2Signed;
+
+                                    WriteArithmeticFlags(
+                                        result > ulong.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits((ulong)(result & 0xFF)) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            case 4:
+                                {
+                                    var operand1value = ReadMemoryUInt32(addr);
+                                    var operand2value = ReadExtendedRegister(operand2);
+                                    WriteMemoryUInt32(addr, operand1value + operand2value);
+
+                                    var result = (long)operand1value + operand2value;
+                                    var operand1Signed = (int)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (int)operand2value; // Re-interpret as signed
+                                    var resultSigned = operand1Signed + operand2Signed;
+
+                                    WriteArithmeticFlags(
+                                        result > uint.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            case 2:
+                                {
+                                    var operand1value = ReadMemoryUInt16(addr);
+                                    var operand2value = ReadRegister(operand2);
+                                    WriteMemoryUInt16(addr, (ushort)(operand1value + operand2value));
+
+                                    var result = (uint)operand1value + operand2value;
+                                    var operand1Signed = (short)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (short)operand2value; // Re-interpret as signed
+                                    var resultSigned = (short)(operand1Signed + operand2Signed);
+
+                                    WriteArithmeticFlags(
+                                        result > ushort.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            case 1:
+                                {
+                                    var operand1value = ReadMemoryByte(addr);
+                                    var operand2value = ReadHalfRegister(operand2);
+                                    WriteMemoryByte(addr, (byte)(operand1value + operand2value));
+
+                                    var result = operand1value + operand2value;
+                                    var operand1Signed = (sbyte)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (sbyte)operand2value; // Re-interpret as signed
+                                    var resultSigned = (sbyte)(operand1Signed + operand2Signed);
+
+                                    WriteArithmeticFlags(
+                                        result > byte.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            default:
+                                throw new InvalidOperationException($"ERROR: Unrecognized register for ADD {nameof(operand2)}: {operand2}");
+                        }
+                        break;
+                    }
+                case Bytecode.ADD_DIRECT_IMMEDIATE: // ADD [symbol], const
+                    {
+                        // Absolute destination address, always machine width, patched at link time.
+                        var addr = ReadMemoryUInt64(InstructionPointer);
+                        InstructionPointer += 8;
+
+                        // Width of the store.  Unlike every other ADD, no operand implies it: the
+                        // destination is a bare address, so the assembler states it explicitly.
+                        var size = ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+
+                        switch (size)
+                        {
+                            case 8:
+                                {
+                                    var operand1value = ReadMemoryUInt64(addr);
+                                    var operand2value = ReadMemoryUInt64(InstructionPointer);
+                                    WriteMemoryUInt64(addr, operand1value + operand2value);
+                                    InstructionPointer += size;
+
+                                    var result = (BigInteger)operand1value + operand2value;
+                                    var operand1Signed = (long)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (long)operand2value; // Re-interpret as signed
+                                    var resultSigned = operand1Signed + operand2Signed;
+
+                                    WriteArithmeticFlags(
+                                        result > ulong.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits((ulong)(result & 0xFF)) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            case 4:
+                                {
+                                    var operand1value = ReadMemoryUInt32(addr);
+                                    var operand2value = ReadMemoryUInt32(InstructionPointer);
+                                    WriteMemoryUInt32(addr, operand1value + operand2value);
+                                    InstructionPointer += size;
+
+                                    var result = (long)operand1value + operand2value;
+                                    var operand1Signed = (int)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (int)operand2value; // Re-interpret as signed
+                                    var resultSigned = operand1Signed + operand2Signed;
+
+                                    WriteArithmeticFlags(
+                                        result > uint.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            case 2:
+                                {
+                                    var operand1value = ReadMemoryUInt16(addr);
+                                    var operand2value = ReadMemoryUInt16(InstructionPointer);
+                                    WriteMemoryUInt16(addr, (ushort)(operand1value + operand2value));
+                                    InstructionPointer += size;
+
+                                    var result = (uint)operand1value + operand2value;
+                                    var operand1Signed = (short)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (short)operand2value; // Re-interpret as signed
+                                    var resultSigned = (short)(operand1Signed + operand2Signed);
+
+                                    WriteArithmeticFlags(
+                                        result > ushort.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            case 1:
+                                {
+                                    var operand1value = ReadMemoryByte(addr);
+                                    var operand2value = ReadMemoryByte(InstructionPointer);
+                                    WriteMemoryByte(addr, (byte)(operand1value + operand2value));
+                                    InstructionPointer += size;
+
+                                    var result = operand1value + operand2value;
+                                    var operand1Signed = (sbyte)operand1value; // Re-interpret as signed
+                                    var operand2Signed = (sbyte)operand2value; // Re-interpret as signed
+                                    var resultSigned = (sbyte)(operand1Signed + operand2Signed);
+
+                                    WriteArithmeticFlags(
+                                        result > byte.MaxValue, // CARRY_FLAG
+                                        ByteUtility.CountBits(result & 0xFF) % 2 == 0, // PARITY_FLAG
+                                        (operand1value & 0xF) + (operand2value & 0xF) > 0xF, // AUX_CARRY_FLAG
+                                        resultSigned == 0, // ZERO_FLAG
+                                        resultSigned < 0, // SIGN_FLAG
+                                        ((operand1Signed ^ operand2Signed) & (operand1Signed ^ resultSigned)) < 0 // OVERFLOW_FLAG
+                                    );
+                                    break;
+                                }
+                            default:
+                                throw new InvalidOperationException($"ERROR: Unrecognized size for ADD: {size}");
                         }
                         break;
                     }
@@ -992,7 +1197,7 @@ namespace picovm.VM
                         }
                         break;
                     }
-                case Bytecode.TEST_IMMEDIATE: // TEST RAX, 01H
+                case Bytecode.TEST_IMMEDIATE: // TEST reg, const
                     {
                         var operand1 = (Register)memory[InstructionPointer];
                         InstructionPointer++;
@@ -1546,7 +1751,7 @@ namespace picovm.VM
                         }
                         break;
                     }
-                case Bytecode.MOV_DIRECT_STORE: // aka MOV [symbol], EAX
+                case Bytecode.MOV_DIRECT_STORE: // aka MOV [symbol], reg
                     {
                         // Absolute destination address, always machine width, patched at link time.
                         var addr = ReadMemoryUInt64(InstructionPointer);
