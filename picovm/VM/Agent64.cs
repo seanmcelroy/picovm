@@ -1353,7 +1353,7 @@ namespace picovm.VM
                         }
                         break;
                     }
-                case Bytecode.MOV_INDIRECT_STORE: // MOV [EBX], EAX
+                case Bytecode.MOV_INDIRECT_STORE_REGISTER: // MOV [reg], reg
                     {
                         var dst = (Register)ReadMemoryByte(InstructionPointer);
                         InstructionPointer++;
@@ -1380,6 +1380,69 @@ namespace picovm.VM
                                 break;
                             default:
                                 throw new InvalidOperationException($"ERROR: Unrecognized register for MOV src: {src}");
+                        }
+                        break;
+                    }
+                case Bytecode.MOV_INDIRECT_STORE_IMMEDIATE: // MOV [reg], const
+                    {
+                        var dst = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+
+                        // The destination register holds the address to dereference, not a value.
+                        ulong addr = ReadRegisterAsPointer(dst);
+
+                        // Width of the store.  Unlike every other MOV, no operand implies it: the
+                        // destination is a bare address, so the assembler states it explicitly.
+                        var size = ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+
+                        switch (size)
+                        {
+                            case 8:
+                                WriteMemoryUInt64(addr, ReadMemoryUInt64(InstructionPointer));
+                                break;
+                            case 4:
+                                WriteMemoryUInt32(addr, ReadMemoryUInt32(InstructionPointer));
+                                break;
+                            case 2:
+                                WriteMemoryUInt16(addr, ReadMemoryUInt16(InstructionPointer));
+                                break;
+                            case 1:
+                                WriteMemoryByte(addr, ReadMemoryByte(InstructionPointer));
+                                break;
+                            default:
+                                Dump();
+                                throw new InvalidOperationException($"ERROR: Unsupported size for {nameof(Bytecode.MOV_INDIRECT_STORE_IMMEDIATE)}: {size}");
+                        }
+                        InstructionPointer += size;
+                        break;
+
+                    }
+                case Bytecode.MOV_DIRECT_LOAD: // aka MOV EAX, [counter]
+                    {
+                        var dst = (Register)ReadMemoryByte(InstructionPointer);
+                        InstructionPointer++;
+
+                        // Absolute source address, always machine width, patched at link time.
+                        var addr = ReadMemoryUInt64(InstructionPointer);
+                        InstructionPointer += 8;
+
+                        switch (dst.Size())
+                        {
+                            case 8:
+                                WriteR64Register(dst, ReadMemoryUInt64(addr));
+                                break;
+                            case 4:
+                                WriteExtendedRegister(dst, ReadMemoryUInt32(addr));
+                                break;
+                            case 2:
+                                WriteRegister(dst, ReadMemoryUInt16(addr));
+                                break;
+                            case 1:
+                                WriteHalfRegister(dst, ReadMemoryByte(addr));
+                                break;
+                            default:
+                                throw new InvalidOperationException($"ERROR: Unrecognized register for MOV dst: {dst}");
                         }
                         break;
                     }
@@ -1411,7 +1474,7 @@ namespace picovm.VM
                         }
                         break;
                     }
-                case Bytecode.MOV_DIRECT_IMMEDIATE: // aka MOV [counter], 65
+                case Bytecode.MOV_DIRECT_IMMEDIATE: // aka MOV [counter], const
                     {
                         // Absolute destination address, always machine width, patched at link time.
                         var addr = ReadMemoryUInt64(InstructionPointer);

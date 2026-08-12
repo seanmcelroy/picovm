@@ -19,7 +19,7 @@ namespace picovm.Assembler
         /// dst ← src
         /// </summary>
         /// <example>
-        /// Source: MOV EAX, EBX ; eax = ebx
+        /// Source: MOV reg, reg
         /// </example>
         [Description("MOV_REGISTER")]
         MOV_REGISTER,
@@ -30,7 +30,7 @@ namespace picovm.Assembler
         /// dst ← imm
         /// </summary>
         /// <example>
-        /// Source: MOV ECX, msg (or) MOV AX 3
+        /// Source: MOV reg, symbol (or) MOV reg const
         /// Opcode: dstReg, addr (1 + 4/8 bytes, based on machine address width)
         /// </example>
         [Description("MOV_IMMEDIATE")]
@@ -40,16 +40,16 @@ namespace picovm.Assembler
         /// Direct load of a symbol resolved at compile time into a register.
         /// </summary>
         /// <example>
-        /// Source: MOV EAX, [symbol]
+        /// Source: MOV reg, [symbol]
         /// </example>
-        [Description("MOV_DIRECT_LOAD")] // TODO!!!
+        [Description("MOV_DIRECT_LOAD")]
         MOV_DIRECT_LOAD,
 
         /// <summary>
         /// Direct load of register value into a symbol resolved at compile time.
         /// </summary>
         /// <example>
-        /// Source: MOV [symbol], EAX
+        /// Source: MOV [symbol], reg
         /// </example>
         [Description("MOV_DIRECT_STORE")]
         MOV_DIRECT_STORE,
@@ -68,22 +68,33 @@ namespace picovm.Assembler
         /// This opcode loads from an address that is in a register
         /// </summary>
         /// <example>
-        /// Source: MOV EAX, [EBX]
+        /// Source: MOV reg, [reg]
         /// Opcode: dstReg, addr (1 + 4/8 bytes, based on machine address width)
         /// </example>
         [Description("MOV_INDIRECT_LOAD")]
         MOV_INDIRECT_LOAD,
 
         /// <summary>
-        /// Register-indirect store.
+        /// Register-indirect store from register.
         /// This opcode stores to an address in a register
         /// </summary>
         /// <example>
-        /// Source: MOV [EBX], EAX
+        /// Source: MOV [reg], reg
         /// Opcode: dstAddr (1 + 4/8 bytes, based on machine address width), srcReg
         /// </example>
-        [Description("MOV_INDIRECT_STORE")]
-        MOV_INDIRECT_STORE,
+        [Description("MOV_INDIRECT_STORE_REGISTER")]
+        MOV_INDIRECT_STORE_REGISTER,
+
+        /// <summary>
+        /// Register-indirect store from immediate.
+        /// This opcode stores to an address in a register
+        /// </summary>
+        /// <example>
+        /// Source: MOV [reg], const
+        /// </example>
+        [Description("MOV_INDIRECT_STORE_IMMEDIATE")]
+        MOV_INDIRECT_STORE_IMMEDIATE,
+
 
         [Description("PUSH_REG")]
         PUSH_REG,
@@ -103,7 +114,7 @@ namespace picovm.Assembler
         /// operands are registers, only operating directly on the register contents.
         /// </summary>
         /// <example>
-        /// Source: ADD EAX, EBX
+        /// Source: ADD reg, reg
         /// </example>
         [Description("ADD_REGISTER")]
         ADD_REGISTER,
@@ -115,7 +126,7 @@ namespace picovm.Assembler
         /// back to that register.
         /// </summary>
         /// <example>
-        /// Source: ADD EAX, [EBX]
+        /// Source: ADD reg, [reg]
         /// </example>
         [Description("ADD_INDIRECT_REGISTER")]
         ADD_INDIRECT_REGISTER,
@@ -127,7 +138,7 @@ namespace picovm.Assembler
         /// back to that memory address.
         /// </summary>
         /// <example>
-        /// Source: ADD [EAX], EBX
+        /// Source: ADD [reg], reg
         /// </example>
         [Description("ADD_INDIRECT_MEMORY_REGISTER")]
         ADD_INDIRECT_MEMORY_REGISTER,
@@ -139,7 +150,7 @@ namespace picovm.Assembler
         /// back to that memory address.
         /// </summary>
         /// <example>
-        /// Source: ADD [EAX], 2345
+        /// Source: ADD [reg], const
         /// </example>
         [Description("ADD_INDIRECT_MEMORY_IMMEDIATE")]
         ADD_INDIRECT_MEMORY_IMMEDIATE,
@@ -149,16 +160,48 @@ namespace picovm.Assembler
         /// the first (a register), and stores the result back in the first.
         /// </summary>
         /// <example>
-        /// Source: ADD EAX, 2345
+        /// Source: ADD reg, const
         /// </example>
         [Description("ADD_IMMEDIATE")]
         ADD_IMMEDIATE,
 
         /// <summary>
+        /// Direct load of a symbol resolved at compile time
+        /// which is added to the value in a register and stored back into it.
+        /// </summary>
+        /// <example>
+        /// Source: ADD reg, [symbol]
+        /// </example>
+        [Description("ADD_DIRECT_LOAD")]
+        ADD_DIRECT_LOAD,
+
+        /// <summary>
+        /// Direct load of register value which is added to the value
+        /// stored in a symbol resolved at compile time, then
+        /// written back into that address.
+        /// </summary>
+        /// <example>
+        /// Source: ADD [symbol], reg
+        /// </example>
+        [Description("ADD_DIRECT_STORE")]
+        ADD_DIRECT_STORE,
+
+        /// <summary>
+        /// Direct load of constant which is added to the value
+        /// stored in a symbol resolved at compile time, then
+        /// written back into that address.
+        /// </summary>
+        /// <example>
+        /// Source: ADD [symbol], const
+        /// </example>
+        [Description("ADD_DIRECT_IMMEDIATE")]
+        ADD_DIRECT_IMMEDIATE,
+
+        /// <summary>
         /// Bitwise AND of two registers
         /// </summary>
         /// <example>
-        /// Source: AND EAX, EBX
+        /// Source: AND reg, reg
         /// </example>
         /// <seealso cref="TEST_REGISTER"/>
         [Description("AND_REGISTER")]
@@ -168,7 +211,7 @@ namespace picovm.Assembler
         /// Bitwise AND of a register and an immediate
         /// </summary>
         /// <example>
-        /// Source: AND EAX, 0x4372
+        /// Source: AND reg, const
         /// </example>
         /// <seealso cref="TEST_IMMEDIATE"/>
         [Description("AND_IMMEDIATE")]
@@ -180,7 +223,7 @@ namespace picovm.Assembler
         /// logic status flags are updated
         /// </summary>
         /// <example>
-        /// Source: TEST EAX, EBX
+        /// Source: TEST reg, reg
         /// </example>
         /// <seealso cref="AND_REGISTER"/>
         [Description("TEST_REGISTER")]
@@ -192,7 +235,7 @@ namespace picovm.Assembler
         /// logic status flags are updated
         /// </summary>
         /// <example>
-        /// Source: TEST EAX, 0x4372
+        /// Source: TEST reg, const
         /// </example>
         /// <seealso cref="AND_IMMEDIATE"/>
         [Description("TEST_IMMEDIATE")]
@@ -400,7 +443,7 @@ namespace picovm.Assembler
         /// Compares two register values
         /// </summary>
         /// <example>
-        /// Source: CMP EAX, EBX
+        /// Source: CMP reg, reg
         /// </example>
         /// <remarks>
         /// This is essential for any look comparing against a variable
@@ -412,7 +455,7 @@ namespace picovm.Assembler
         /// Compares a register value with an immediate
         /// </summary>
         /// <example>
-        /// Source: CMP EAX, 5
+        /// Source: CMP reg, const
         /// </example>
         [Description("CMP_IMMEDIATE")]
         CMP_IMMEDIATE,
@@ -421,7 +464,7 @@ namespace picovm.Assembler
         /// Call to an address provided by a register value.
         /// </summary>
         /// <example>
-        /// Source: CALL EAX
+        /// Source: CALL reg
         /// </example>
         [Description("CALL_REGISTER")]
         CALL_REGISTER,
@@ -430,7 +473,7 @@ namespace picovm.Assembler
         /// Call to an address provided by a symbol or literal.
         /// </summary>
         /// <example>
-        /// Source: CALL 23434
+        /// Source: CALL const
         /// Opcode: addr (1 + 4/8 bytes, based on machine address width)
         /// </example>
         [Description("CALL_IMMEDIATE")]

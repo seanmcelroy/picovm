@@ -6,15 +6,16 @@ using Xunit;
 namespace picovm.Tests
 {
     /// <summary>
-    /// Coverage for <c>MOV_DIRECT</c> (<c>MOV DWORD [counter], 0xDEADBEEF</c>) -- a store to an
-    /// absolute address resolved at compile time.
+    /// Coverage for <c>MOV_DIRECT_IMMEDIATE</c> (<c>MOV DWORD [counter], 0xDEADBEEF</c>) -- a
+    /// store of a literal to an absolute address resolved at compile time.
     /// </summary>
     /// <remarks>
-    /// This opcode is unique in carrying an explicit operand size: its destination is a bare
-    /// address with no register to imply a width.  It also had no test coverage whatsoever
-    /// before this suite.
+    /// This opcode is unique in carrying an explicit operand size: neither operand is a
+    /// register that could imply a width, so the assembler bakes the size into the instruction
+    /// stream and the VM decodes it.  Sister opcodes <c>MOV_DIRECT_STORE</c> and
+    /// <c>MOV_DIRECT_LOAD</c> take their width from the register operand instead.
     /// </remarks>
-    public class MovDirectTests
+    public class MovDirectImmediateTests
     {
         /// <summary>Eight zero bytes, so narrow stores have neighbours that can be clobbered.</summary>
         private const string Counter = "counter db 0, 0, 0, 0, 0, 0, 0, 0";
